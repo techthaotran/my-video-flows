@@ -1,0 +1,12 @@
+node_modules
+dist
+*.local
+.DS_Store
+*.log
+coverage
+.vite
+release
+*.zip
+.env
+.env.*
+!*.xflow.json

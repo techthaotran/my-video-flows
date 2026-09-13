@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 84 81% 44%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 84 60% 35%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 84 81% 44%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .dot-grid {
+    background-image: radial-gradient(circle, hsl(217 33% 22%) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+}
+
+/* Running workflow edges — stronger dash motion than RF default */
+.react-flow__edge.edge-running .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+  animation: edge-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px rgb(132 204 22 / 0.55));
+}
+
+/* Edge delete button (HTML via EdgeLabelRenderer — not blocked by SVG visibleStroke) */
+.workflow-edge-delete-btn {
+  display: flex;
+  height: 20px;
+  width: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid hsl(215 20% 35%);
+  background: hsl(222 47% 11%);
+  color: hsl(215 20% 70%);
+  opacity: 0.55;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  z-index: 10;
+}
+.workflow-edge-delete-btn:hover,
+.workflow-edge-delete-btn.is-selected {
+  opacity: 1;
+  background: hsl(0 72% 40%);
+  border-color: hsl(0 72% 55%);
+  color: white;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* Generate node: placeholder sweep while a render is in progress */
+.media-shimmer {
+  background: linear-gradient(110deg, transparent 30%, hsl(84 81% 44% / 0.08) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: media-shimmer 1.8s linear infinite;
+}
+
+@keyframes media-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
