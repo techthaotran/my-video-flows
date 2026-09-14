@@ -1,5 +1,5 @@
 import { CAPTCHA_SLOT } from '@/providers/flow/rpc/batch';
-import { solveCaptcha, type CaptchaAction } from '@/providers/flow/rpc/captcha';
+import { ensureFlowMainBridge, solveCaptcha, type CaptchaAction } from '@/providers/flow/rpc/captcha';
 
 const FLOW_URLS = ['https://flow.google.com/*', 'https://labs.google/fx/*'];
 const BATCH_RPC_TIMEOUT_MS = 120_000;
@@ -40,6 +40,8 @@ export async function runBatchRpc(
       return { error: `CAPTCHA_FAILED: ${solved?.error || 'no token'}` };
     }
     freq = freq.split(CAPTCHA_SLOT).join(solved.token);
+  } else {
+    await ensureFlowMainBridge(tabId);
   }
 
   try {

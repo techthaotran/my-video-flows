@@ -72,9 +72,10 @@ describe('prompt node', () => {
     const { outputs } = await runGraph(wf, ['char', 'outfit', 'p1', 'p2']);
     const [text, ...forwarded] = outputs.get('p2')!;
     expect(text!.text).toBe(
-      `Scene 1: [Character] walks in.\n\n` +
-        `Scene 2: [Character] wears [Outfit]. [Background] stays.\n\n` +
-        `[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}\n` +
+      `Scene 2: [Character] wears [Outfit]. [Background] stays.\n\n` +
+        `Scene 1: [Character] walks in.\n\n` +
+        `Danh sách tham chiếu\n` +
+        `[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}\n\n` +
         `[Outfit]: Tham khảo https://flow-content.google/image/${OUTFIT}`,
     );
     // Both assets travel on to the generator, the upstream one via p1.
@@ -100,7 +101,7 @@ describe('generate node', () => {
     });
     const payload = calls[0]!.payload as FlowGeneratePayload;
     expect(payload?.prompt).toBe(
-      `[Character] dances\n\n[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}`,
+      `[Character] dances\n\nDanh sách tham chiếu\n[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}`,
     );
     expect(payload?.refs).toEqual([{ kind: 'image', label: 'Character', mediaId: CHARACTER }]);
     expect(outputs.get('g')![0]!.flowMediaId).toBe('new-image');

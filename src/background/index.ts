@@ -161,18 +161,21 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
     }
     case 'provider.listFlowMedia': {
       try {
-        const result = await router.execute(
-          'flow',
-          { name: 'listMedia', payload: { kind: message.kind ?? 'any' } },
-          new AbortController().signal,
-          () => undefined,
-        );
-        return { ok: true, data: result.raw ?? { items: [] } };
+        const data = await router.listFlowMedia(message.kind ?? 'any');
+        return { ok: true, data };
       } catch (e) {
         return {
           ok: false,
           error: e instanceof Error ? e.message : String(e),
         };
+      }
+    }
+    case 'provider.signFlowMedia': {
+      try {
+        const data = await router.signFlowMedia(message.mediaIds);
+        return { ok: true, data };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     }
     case 'provider.fetchFlowMedia': {

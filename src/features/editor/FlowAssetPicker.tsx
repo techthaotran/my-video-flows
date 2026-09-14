@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,17 @@ export interface FlowAssetPickResult {
   originalName: string;
 }
 
+/** Assets per picker page; each unsigned one costs an `as29s` call when its page opens. */
+const PAGE_SIZE = 20;
+
+interface SignedFlowMedia {
+  mediaId: string;
+  kind: 'image' | 'video' | null;
+  url: string | null;
+}
+
+type PickerItem = FlowMediaItem & { signFailed?: boolean };
+
 interface FlowAssetPickerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -29,7 +40,12 @@ interface FlowAssetPickerProps {
 
 export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: FlowAssetPickerProps) {
   const listKind = kind === 'audio' ? 'any' : kind;
-  const [items, setItems] = useState<FlowMediaItem[]>([]);
+  const [items, setItems] = useState<PickerItem[]>([]);
+  const [page, setPage] = useState(0);
+  const [signing, setSigning] = useState(false);
+  /** Ids already sent for signing — never re-requested, so a failing id can't loop. */
+  const signRequested = useRef(new Set<string>());
+  const signInFlight = useRef(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [openingLogin, setOpeningLogin] = useState(false);
@@ -40,6 +56,8 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
     setLoading(true);
     setError(null);
     setSelected(null);
+    setPage(0);
+    signRequested.current = new Set();
     try {
       const auth = await sendToSw<{ authenticated: boolean; error?: string }>({
         type: 'provider.checkAuth',
@@ -93,6 +111,43 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
     if (open) void refresh();
   }, [open, refresh]);
 
+  // Items whose kind turned out (on signing) not to match the node are dropped.
+  const visible = useMemo(
+    () => items.filter((i) => listKind === 'any' || i.kindKnown === false || i.kind === listKind),
+    [items, listKind],
+  );
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = visible.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  // Sign the urls of the page on screen (listing records carry ids only).
+  useEffect(() => {
+    if (!open || loading) return;
+    const ids = pageItems
+      .filter((i) => i.mediaId && !i.url && !signRequested.current.has(i.mediaId))
+      .map((i) => i.mediaId!);
+    if (!ids.length) return;
+    for (const id of ids) signRequested.current.add(id);
+    signInFlight.current++;
+    setSigning(true);
+    void sendToSw<{ items: SignedFlowMedia[] }>({ type: 'provider.signFlowMedia', mediaIds: ids })
+      .then((res) => {
+        const signed = new Map((res.ok ? res.data?.items ?? [] : []).map((m) => [m.mediaId, m]));
+        setItems((prev) =>
+          prev.map((item) => {
+            if (!item.mediaId || !ids.includes(item.mediaId)) return item;
+            const m = signed.get(item.mediaId);
+            if (!m?.url) return { ...item, signFailed: true };
+            return { ...item, url: m.url, thumbUrl: m.url, kind: m.kind ?? item.kind, kindKnown: true, signFailed: false };
+          }),
+        );
+      })
+      .finally(() => {
+        signInFlight.current--;
+        setSigning(signInFlight.current > 0);
+      });
+  }, [open, loading, pageItems]);
+
   const openLogin = async () => {
     setOpeningLogin(true);
     setError(null);
@@ -124,7 +179,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(92vw,520px)]">
+      <DialogContent className="w-[min(94vw,880px)] max-w-none">
         <DialogHeader>
           <DialogTitle>{strings.flowPickerTitle}</DialogTitle>
         </DialogHeader>
@@ -150,6 +205,11 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
               {openingLogin ? strings.flowPickerOpeningLogin : strings.flowPickerLogin}
             </Button>
           )}
+          {!loading && visible.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {visible.length} asset{signing ? ` · ${strings.flowPickerSigning}` : ''}
+            </span>
+          )}
         </div>
 
         {error && (
@@ -158,7 +218,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
           </div>
         )}
 
-        <div className="max-h-[360px] overflow-y-auto rounded border border-border">
+        <div className="max-h-[min(60vh,560px)] overflow-y-auto rounded border border-border">
           {loading ? (
             <div className="p-6 text-center text-xs text-muted-foreground">{strings.flowPickerLoading}</div>
           ) : authenticated === false ? (
@@ -173,15 +233,16 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
                 {openingLogin ? strings.flowPickerOpeningLogin : strings.flowPickerLogin}
               </Button>
             </div>
-          ) : items.length === 0 ? (
+          ) : visible.length === 0 ? (
             <div className="p-6 text-center text-xs text-muted-foreground">{strings.flowPickerEmpty}</div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 p-2">
-              {items.map((item) => (
+            <div className="grid grid-cols-3 gap-2 p-2 sm:grid-cols-4 md:grid-cols-5">
+              {pageItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  disabled={!item.mediaId}
+                  // Kind unsettled (preview not signed) — can't tell image from video yet.
+                  disabled={!item.mediaId || item.kindKnown === false}
                   title={item.mediaId ? item.mediaId : strings.flowPickerNoMediaId}
                   className={cn(
                     'overflow-hidden rounded border bg-muted text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40',
@@ -191,21 +252,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
                   )}
                   onClick={() => setSelected(item.id)}
                 >
-                  {item.kind === 'video' ? (
-                    <video
-                      src={item.thumbUrl || item.url}
-                      className="aspect-square w-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                    />
-                  ) : (
-                    <img
-                      src={item.thumbUrl || item.url}
-                      alt={item.label ?? ''}
-                      className="aspect-square w-full object-cover"
-                    />
-                  )}
+                  <FlowThumb key={item.url || 'pending'} item={item} />
                   <div className="truncate px-1.5 py-1 text-[10px] text-muted-foreground">
                     {item.kind === 'video' ? 'Video' : 'Ảnh'}
                     {item.mediaId ? ` · ${item.mediaId.slice(0, 8)}` : ` · ${strings.flowPickerNoMediaId}`}
@@ -215,6 +262,49 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
             </div>
           )}
         </div>
+
+        {!loading && visible.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, visible.length)} / {visible.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button type="button" variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage(0)}>
+                «
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                {strings.flowPickerPrev}
+              </Button>
+              <span className="px-2">
+                {strings.flowPickerPage} {currentPage + 1}/{pageCount}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= pageCount - 1}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                {strings.flowPickerNext}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= pageCount - 1}
+                onClick={() => setPage(pageCount - 1)}
+              >
+                »
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
@@ -231,5 +321,37 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Square thumbnail; a url the CDN refuses shows a neutral tile instead of a broken image. */
+function FlowThumb({ item }: { item: PickerItem }) {
+  const [failed, setFailed] = useState(false);
+  const src = item.thumbUrl || item.url;
+  return (
+    <div className="flex aspect-square w-full items-center justify-center bg-muted">
+      {!src && !item.signFailed ? (
+        <span className="animate-pulse text-[10px] text-muted-foreground">{strings.flowPickerSigning}</span>
+      ) : failed || !src ? (
+        <span className="text-[10px] text-muted-foreground">{strings.flowPickerNoPreview}</span>
+      ) : item.kind === 'video' ? (
+        <video
+          src={src}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <img
+          src={src}
+          alt={item.label ?? ''}
+          loading="lazy"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
   );
 }

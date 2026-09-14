@@ -120,7 +120,7 @@ const PRESET_SYSTEM: Record<string, string> = {
 
 /**
  * Prompt node:
- * - upstream Prompts are concatenated ahead of this node's instruction;
+ * - this node's instruction comes first, upstream Prompts are concatenated after it;
  * - `[Label]` stays in the body; a trailing legend maps each linked asset to its Flow URL;
  * - references and the previous clip are forwarded so the generator receives them.
  */

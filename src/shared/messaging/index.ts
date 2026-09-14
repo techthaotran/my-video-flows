@@ -14,6 +14,7 @@ export type UiToSwMessage =
   | { type: 'provider.capabilities'; provider: 'flow' | 'gemini' }
   | { type: 'provider.listFlowMedia'; kind?: 'image' | 'video' | 'any' }
   | { type: 'provider.fetchFlowMedia'; url: string }
+  | { type: 'provider.signFlowMedia'; mediaIds: string[] }
   | { type: 'provider.openLogin'; provider: 'flow' | 'gemini' }
   | { type: 'settings.get' }
   | { type: 'settings.set'; settings: Record<string, unknown> }
@@ -69,6 +70,10 @@ export interface FlowMediaItem {
   label?: string;
   /** Flow media id read from the CDN url; items without one can't be referenced. */
   mediaId?: string;
+  /** Creation time (epoch ms) when the Flow listing reports one. */
+  createdAt?: number;
+  /** False when the listing had no url to tell image from video — settled on signing. */
+  kindKnown?: boolean;
 }
 
 export interface FlowGenerateRef {

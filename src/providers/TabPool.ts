@@ -4,8 +4,10 @@ import type {
   FlowGeneratePayload,
   SwToUiEvent,
   DriverError,
+  FlowMediaItem,
 } from '@/shared/messaging';
 import { generateViaRpc } from '@/providers/flow/rpc/generate';
+import { listProjectMediaViaRpc, signFlowMedia, type SignedFlowMedia } from '@/providers/flow/rpc/listing';
 import { createLogger } from '@/shared/log';
 
 const log = createLogger('driver');
@@ -297,6 +299,54 @@ export class ProviderRouter {
     }
   }
 
+  /**
+   * Flow media for the asset picker, newest first: media only the tab shows (fresh
+   * renders not yet on the listing, already with signed urls) lead, then the
+   * project listing RPC (every item, urls signed per page via `signFlowMedia`).
+   * Items without a media id can't be referenced by generation, so they're dropped.
+   */
+  async listFlowMedia(kind: 'image' | 'video' | 'any'): Promise<{ items: FlowMediaItem[] }> {
+    const tabId = await this.pool.acquire('flow');
+    const [rpc, dom] = await Promise.allSettled([
+      listProjectMediaViaRpc(tabId),
+      this.execute('flow', { name: 'listMedia', payload: { kind: 'any' } }, new AbortController().signal, () => undefined),
+    ]);
+    if (rpc.status === 'rejected') log.warn(`listFlowMedia RPC lỗi: ${errMessage(rpc.reason)}`);
+    if (rpc.status === 'rejected' && dom.status === 'rejected') throw dom.reason;
+
+    const rpcItems = rpc.status === 'fulfilled' ? rpc.value : [];
+    const domItems =
+      dom.status === 'fulfilled' ? ((dom.value.raw as { items?: FlowMediaItem[] })?.items ?? []) : [];
+    const domById = new Map(domItems.filter((i) => i.mediaId).map((i) => [i.mediaId!, i]));
+    const listed = new Set(rpcItems.map((i) => i.mediaId));
+
+    const items: FlowMediaItem[] = [];
+    const seen = new Set<string>();
+    const merged = [
+      ...domItems.filter((i) => !listed.has(i.mediaId)),
+      // Reuse the tab's signed url for listed media it happens to show.
+      ...rpcItems.map((i) => {
+        const shown = domById.get(i.mediaId!);
+        return shown ? { ...i, kind: shown.kind, kindKnown: true, url: shown.url, thumbUrl: shown.thumbUrl } : i;
+      }),
+    ];
+    for (const item of merged) {
+      if (!item.mediaId || seen.has(item.mediaId)) continue;
+      // Unknown kind stays in; the picker drops mismatches once signing settles it.
+      if (kind !== 'any' && item.kindKnown !== false && item.kind !== kind) continue;
+      seen.add(item.mediaId);
+      items.push(item);
+    }
+    log.info(`listFlowMedia: ${items.length} asset (listing ${rpcItems.length}, tab ${domItems.length})`);
+    return { items };
+  }
+
+  /** Signed urls (and settled kind) for one picker page of media ids. */
+  async signFlowMedia(mediaIds: string[]): Promise<{ items: SignedFlowMedia[] }> {
+    const tabId = await this.pool.acquire('flow');
+    return { items: await signFlowMedia(tabId, mediaIds) };
+  }
+
   async diagnose(provider: 'flow' | 'gemini') {
     const tabId = await this.pool.acquire(provider);
     return sendToContent(tabId, { type: 'driver.diagnose' });
@@ -306,6 +356,10 @@ export class ProviderRouter {
     const tabId = await this.pool.acquire(provider);
     return sendToContent(tabId, { type: 'driver.capabilities' });
   }
+}
+
+function errMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 export type EventBroadcaster = (ev: SwToUiEvent) => void;

@@ -596,6 +596,168 @@ export function readImages(payload: unknown): GeneratedImage[] {
   return images;
 }
 
+export interface ProjectMediaEntry {
+  /** Unknown until signed when the listing record carries no url. */
+  kind?: 'image' | 'video';
+  mediaId: string;
+  /** Signed CDN url when the listing carries one (bare path otherwise, or none). */
+  url?: string;
+  /** Creation time (epoch ms) when the listing record carries one. */
+  createdAt?: number;
+}
+
+export interface ProjectMediaPage {
+  items: ProjectMediaEntry[];
+  /** Opaque continuation token, if the listing has more pages. */
+  nextPageToken: string | null;
+}
+
+const PROJECT_MEDIA_URL_RE = new RegExp(
+  `https://${MEDIA_HOST.replace(/\./g, '\\.')}/(image|video)/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\\?[^\\s"\\\\]*)?`,
+  'gi',
+);
+
+const PAGE_TOKEN_RE = /^[A-Za-z0-9_\-+/=.]{12,}$/;
+const EPOCH_S_MIN = 1.4e9;
+const EPOCH_S_MAX = 2.2e9;
+
+function mediaUrlsIn(str: string): { kind: 'image' | 'video'; mediaId: string; url: string }[] {
+  const out: { kind: 'image' | 'video'; mediaId: string; url: string }[] = [];
+  PROJECT_MEDIA_URL_RE.lastIndex = 0;
+  for (let m = PROJECT_MEDIA_URL_RE.exec(str); m; m = PROJECT_MEDIA_URL_RE.exec(str)) {
+    out.push({ kind: m[1]!.toLowerCase() as 'image' | 'video', mediaId: m[2]!, url: m[0] });
+  }
+  return out;
+}
+
+/** Epoch ms from a listing value: seconds / ms numbers or digit strings, or ISO dates. */
+function asEpochMs(value: unknown): number | null {
+  let n: number | null = null;
+  if (typeof value === 'number') n = value;
+  else if (typeof value === 'string') {
+    if (/^\d{10,13}$/.test(value)) n = Number(value);
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+      const t = Date.parse(value);
+      return Number.isNaN(t) ? null : t;
+    }
+  }
+  if (n == null) return null;
+  if (n >= EPOCH_S_MIN && n <= EPOCH_S_MAX) return Math.round(n * 1000);
+  if (n >= EPOCH_S_MIN * 1000 && n <= EPOCH_S_MAX * 1000) return Math.round(n);
+  return null;
+}
+
+function* walkScalars(node: unknown): Generator<unknown> {
+  if (Array.isArray(node)) {
+    for (const item of node) yield* walkScalars(item);
+  } else {
+    yield node;
+  }
+}
+
+/** `[mediaId, projectId, …]` — the media record shape (as in the text-video submit). */
+function isMediaRecord(node: unknown): node is unknown[] {
+  return (
+    Array.isArray(node) &&
+    typeof node[0] === 'string' &&
+    UUID_RE_STRICT.test(node[0]) &&
+    typeof node[1] === 'string' &&
+    UUID_RE_STRICT.test(node[1])
+  );
+}
+
+/** The list holding the most media records (the listing also carries workflows). */
+function findMediaRecordList(payload: unknown): unknown[][] {
+  let best: unknown[][] = [];
+  for (const list of walkLists(payload)) {
+    const records = list.filter(isMediaRecord);
+    if (records.length > best.length) best = records;
+  }
+  return best;
+}
+
+function mergeEntry(byId: Map<string, ProjectMediaEntry>, found: ProjectMediaEntry) {
+  const prev = byId.get(found.mediaId);
+  if (!prev) {
+    byId.set(found.mediaId, { ...found });
+    return;
+  }
+  // The video kind wins over a poster /image/; a signed url (has a query) over a bare path.
+  if (found.kind === 'video' && prev.kind !== 'video') {
+    prev.kind = 'video';
+    if (found.url) prev.url = found.url;
+  } else if (!prev.kind && found.kind) {
+    prev.kind = found.kind;
+  }
+  if (found.url && found.kind === prev.kind && (!prev.url || (!prev.url.includes('?') && found.url.includes('?')))) {
+    prev.url = found.url;
+  }
+  prev.createdAt ??= found.createdAt;
+}
+
+/**
+ * One project listing (`Zzl0ze`) response: every media record once, newest first
+ * when records carry a creation time (listing order otherwise), plus the
+ * continuation token. Most records carry no url — only the id — so kind/url are
+ * filled in later by signing (`as29s`). Falls back to a raw-body url scan when
+ * the envelope drifts.
+ */
+export function readProjectMediaPage(text: string): ProjectMediaPage {
+  const byId = new Map<string, ProjectMediaEntry>();
+  let payload: unknown;
+  try {
+    payload = firstPayload(text, RPC_PROJECT_MEDIA);
+  } catch {
+    const raw = text.replace(/\\u003d/gi, '=').replace(/\\u0026/gi, '&').replace(/\\\//g, '/');
+    for (const found of mediaUrlsIn(raw)) mergeEntry(byId, found);
+    return { items: [...byId.values()], nextPageToken: null };
+  }
+
+  const records = findMediaRecordList(payload);
+  for (const record of records) {
+    let createdAt: number | undefined;
+    for (const scalar of walkScalars(record)) {
+      const t = asEpochMs(scalar);
+      if (t != null && (createdAt == null || t > createdAt)) createdAt = t;
+    }
+    const mediaId = record[0] as string;
+    let kind: 'image' | 'video' | undefined;
+    let url: string | undefined;
+    for (const str of walkStrings(record)) {
+      for (const found of mediaUrlsIn(str)) {
+        if (found.mediaId !== mediaId) continue;
+        if (!kind || found.kind === 'video') kind = found.kind;
+        if (found.kind === kind && (!url || (!url.includes('?') && found.url.includes('?')))) url = found.url;
+      }
+    }
+    mergeEntry(byId, { mediaId, kind, url, createdAt });
+  }
+  // Media referenced only by url elsewhere in the payload (older shapes).
+  for (const str of walkStrings(payload)) {
+    for (const found of mediaUrlsIn(str)) mergeEntry(byId, found);
+  }
+
+  let nextPageToken: string | null = null;
+  if (Array.isArray(payload)) {
+    for (const node of payload) {
+      if (typeof node === 'string' && PAGE_TOKEN_RE.test(node) && !node.startsWith('projects/') && !/^\d+$/.test(node) && !UUID_RE_STRICT.test(node)) {
+        nextPageToken = node;
+      }
+    }
+  }
+
+  const items = [...byId.values()];
+  if (items.some((i) => i.createdAt != null)) {
+    items.sort((a, b) => (b.createdAt ?? -Infinity) - (a.createdAt ?? -Infinity));
+  }
+  return { items, nextPageToken };
+}
+
+/** Listing request for a follow-up page (Google List convention: parent, pageSize, pageToken). */
+export function projectMediaPageRequest(projectId: string, pageToken: string | null): string {
+  return buildEnvelope(RPC_PROJECT_MEDIA, [`projects/${projectId}`, null, pageToken, null, [1]]);
+}
+
 export function readUploadedMediaId(payload: unknown): string {
   const record = Array.isArray(payload) && payload.length ? payload[0] : null;
   const mediaId = Array.isArray(record) && record.length ? record[0] : null;

@@ -942,7 +942,7 @@ function Inspector({ node }: { node: FlowNode }) {
               readOnly
               className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-muted/40 px-2 py-1 font-mono text-xs leading-relaxed"
               value={promptOutput}
-              placeholder="Prompt nối từ các node Prompt phía trước + instruction; [Label] giữ nguyên, chú thích URL ở cuối"
+              placeholder="Instruction + prompt nối từ các node Prompt phía trước; [Label] giữ nguyên, chú thích URL ở cuối"
             />
           </label>
         </>

@@ -376,7 +376,7 @@ function PromptBody({
           readOnly
           className={cn(NODE_TEXTAREA_CLASS, 'border-primary/25 bg-primary/5 font-mono text-[11px]')}
           value={output}
-          placeholder="Prompt phía trước + instruction; [Label] giữ nguyên, chú thích URL ở cuối…"
+          placeholder="Instruction + prompt phía trước; [Label] giữ nguyên, chú thích URL ở cuối…"
         />
       </div>
     </div>

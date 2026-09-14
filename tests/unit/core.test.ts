@@ -194,7 +194,8 @@ describe('resolver', () => {
     ]);
     expect(out).toBe(
       'nhân vật [Character] đang mặc một [outfit] ở [Background]\n\n' +
-        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n' +
+        'Danh sách tham chiếu\n' +
+        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
         '[Outfit]: Tham khảo https://flow-content.google/image/fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
@@ -205,7 +206,8 @@ describe('resolver', () => {
       [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
-      '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
+      'Danh sách tham chiếu\n' +
+        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
@@ -215,7 +217,8 @@ describe('resolver', () => {
       [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
-      '[Character]: Người mẫu nữ Đông Á (20-25 tuổi). Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
+      'Danh sách tham chiếu\n' +
+        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi). Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
@@ -227,6 +230,7 @@ describe('resolver', () => {
     );
     expect(out).toBe(
       'Shot of [Character] smiling.\n\n' +
+        'Danh sách tham chiếu\n' +
         '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á. Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
@@ -242,7 +246,8 @@ describe('resolver', () => {
     expect(stripAssetLegend(once)).toBe('[Character] waves');
     expect(again).toBe(
       '[Character] waves\n\n' +
-        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n' +
+        'Danh sách tham chiếu\n' +
+        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
         '[Outfit]: Tham khảo https://flow-content.google/image/fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
@@ -256,8 +261,8 @@ describe('resolver', () => {
     );
   });
 
-  it('composes upstream prompts before the instruction', () => {
-    expect(composePrompt(['scene 1', '  '], 'scene 2')).toBe('scene 1\n\nscene 2');
+  it('composes the instruction before upstream prompts', () => {
+    expect(composePrompt(['scene 1', '  '], 'scene 2')).toBe('scene 2\n\nscene 1');
   });
 });
 

@@ -26,13 +26,45 @@ async function ensureOffscreenDocument(): Promise<void> {
   await creating;
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isNoReceiver(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.includes('Receiving end does not exist') || msg.includes('Could not establish connection');
+}
+
+/**
+ * createDocument() resolves before the offscreen module script has registered its
+ * onMessage listener (notably in dev, where it loads from the Vite server), so an
+ * immediate sendMessage throws "Receiving end does not exist". Retry with backoff;
+ * if the document still never answers, recreate it once.
+ */
+async function sendToOffscreen(message: unknown): Promise<unknown> {
+  for (let recreated = false; ; recreated = true) {
+    await ensureOffscreenDocument();
+    for (let i = 0; i < 10; i++) {
+      try {
+        return await chrome.runtime.sendMessage(message);
+      } catch (e) {
+        if (!isNoReceiver(e)) throw e;
+        await sleep(150 * (i + 1));
+      }
+    }
+    if (recreated) throw new Error('OFFSCREEN_NOT_READY');
+    await chrome.offscreen.closeDocument().catch(() => undefined);
+  }
+}
+
 async function extractFrame(
   video: { mime: string; dataBase64: string },
   which: 'first' | 'last',
 ): Promise<string> {
-  await ensureOffscreenDocument();
   const reply = (await Promise.race([
-    chrome.runtime.sendMessage({ type: 'offscreen.videoFrame', which, ...video }),
+    sendToOffscreen({ type: 'offscreen.videoFrame', which, ...video }).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    })),
     new Promise((resolve) =>
       setTimeout(() => resolve({ error: 'FRAME_TIMEOUT' }), FRAME_TIMEOUT_MS),
     ),

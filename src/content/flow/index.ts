@@ -166,10 +166,12 @@ function requestCaptchaFromMain(
       resolve({ token: detail.token, error: detail.error });
     };
 
+    // Inner mint (grecaptcha wait ≤22s + bounded execute ≤20s) can take up to ~42s;
+    // give it room so a real error/token wins over this generic fallback.
     const timer = setTimeout(() => {
       window.removeEventListener('CAPTCHA_RESULT', handler);
       resolve({ error: 'CONTENT_TIMEOUT' });
-    }, 25_000);
+    }, 45_000);
 
     window.addEventListener('CAPTCHA_RESULT', handler);
     window.dispatchEvent(

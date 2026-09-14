@@ -132,8 +132,8 @@ export interface PromptPreview {
 }
 
 /**
- * Mirror of `promptExecutor` for the editor: upstream Prompts first, then this
- * node's instruction; `[Label]` stays, legend maps linked assets to Flow URLs.
+ * Mirror of `promptExecutor` for the editor: this node's instruction first,
+ * then upstream Prompts; `[Label]` stays, legend maps linked assets to Flow URLs.
  */
 export function computePromptPreview(
   nodeId: string,

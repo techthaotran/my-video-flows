@@ -64,30 +64,47 @@ function normalizeLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/**
- * Trailing legend we append / rewrite:
- * `[Character]: … Tham khảo https://flow-content.google/image/…`
- * also matches legacy `[Outfit]: https://…`
- */
-const LEGEND_LINE_RE =
-  /^\[[^\]]+\]:\s*(?:.*\s+)?(?:Tham khảo\s+)?https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*$/i;
+/** Header for the unified reference block appended by {@link annotateAssetLabels}. */
+export const REFERENCE_LIST_HEADER = 'Danh sách tham chiếu';
 
 const FLOW_MEDIA_URL_RE =
   /https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+/gi;
 
+const LEGEND_URL_SUFFIX_RE =
+  /\s*(?:Tham khảo\s+)?https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*$/i;
+
+function isDefBlock(block: string): boolean {
+  const t = block.trim();
+  return /^\[[^\]]+\]:/.test(t) || t === REFERENCE_LIST_HEADER || t.startsWith(`${REFERENCE_LIST_HEADER}\n`);
+}
+
 /**
- * Bỏ khối chú thích tham khảo ở cuối (để annotate lại không bị trùng).
+ * Bỏ khối chú thích tham khảo ở cuối (để annotate lại không bị trùng khi forward
+ * qua Prompt khác): giữ lại `[Label]: mô tả`, chỉ bỏ phần URL — mô tả cần sống sót
+ * để node cha re-annotate vẫn còn nội dung, không chỉ còn "Tham khảo <url>" trơ trọi.
  * Không đụng `[Background]: mô tả…` thuần text (không có URL Flow).
  */
 export function stripAssetLegend(content: string): string {
-  const lines = content.split('\n');
-  let end = lines.length;
-  while (end > 0 && lines[end - 1]!.trim() === '') end--;
-  let cut = end;
-  while (cut > 0 && LEGEND_LINE_RE.test(lines[cut - 1]!.trim())) cut--;
-  if (cut === end) return content;
-  while (cut > 0 && lines[cut - 1]!.trim() === '') cut--;
-  return lines.slice(0, cut).join('\n');
+  const trimmed = content.replace(/\s+$/, '');
+  if (!trimmed) return content;
+  const blocks = trimmed.split(/\n{2,}/);
+  let end = blocks.length;
+  while (end > 0 && isDefBlock(blocks[end - 1]!)) end--;
+  if (end === blocks.length) return content;
+
+  let head = blocks.slice(0, end);
+  const refBlocks = blocks.slice(end);
+  if (head.length && head[head.length - 1]!.trim() === REFERENCE_LIST_HEADER) {
+    head = head.slice(0, -1);
+  } else if (refBlocks[0] && refBlocks[0]!.trim().startsWith(`${REFERENCE_LIST_HEADER}\n`)) {
+    refBlocks[0] = refBlocks[0]!.trim().slice(REFERENCE_LIST_HEADER.length + 1);
+  }
+
+  const converted = refBlocks
+    .map((b) => b.trim().replace(LEGEND_URL_SUFFIX_RE, '').trim())
+    // A bare `[Label]:` with the URL stripped and no description left carries no info.
+    .filter((b) => b && !/^\[[^\]]+\]:$/.test(b));
+  return [...head, ...converted].join('\n\n');
 }
 
 /**
@@ -172,9 +189,9 @@ function legendLine(label: string, address: string, description?: string): strin
 }
 
 /**
- * Giữ `[Label]` trần trong narrative. Khối `[Label]: mô tả` chuyển thành dòng
- * chú thích: `[Label]: {mô tả}. Tham khảo {url}` (không nhân đôi, không thay
- * label bằng URL). Label chưa có Flow id giữ nguyên định nghĩa trong thân.
+ * Giữ `[Label]` trần trong narrative. Mọi khối `[Label]: mô tả` (dù có ảnh gắn
+ * kèm hay không) được gom vào một danh sách tham chiếu duy nhất phía dưới narrative,
+ * theo đúng thứ tự xuất hiện; label có Flow id thêm `Tham khảo {url}` vào cuối.
  */
 export function annotateAssetLabels(content: string, refs: AssetRef[]): string {
   const cleaned = restoreAssetLabels(stripAssetLegend(content), refs).trimEnd();
@@ -186,23 +203,25 @@ export function annotateAssetLabels(content: string, refs: AssetRef[]): string {
     linked.set(key, { label: ref.label, address });
   }
 
-  if (!linked.size) return cleaned;
-
   const { narrative, descriptions } = splitLabelDefinitions(cleaned);
+  if (!descriptions.size && !linked.size) return cleaned;
 
-  const unlinkedDefs: string[] = [];
+  const entries: string[] = [];
+  const seen = new Set<string>();
   for (const [key, { label, description }] of descriptions) {
-    if (!linked.has(key)) unlinkedDefs.push(`[${label}]: ${description}`);
+    seen.add(key);
+    const linkedInfo = linked.get(key);
+    entries.push(linkedInfo ? legendLine(label, linkedInfo.address, description) : `[${label}]: ${description}`);
   }
-
-  const legend: string[] = [];
   for (const [key, { label, address }] of linked) {
-    legend.push(legendLine(label, address, descriptions.get(key)?.description));
+    if (seen.has(key)) continue;
+    entries.push(legendLine(label, address));
   }
+  if (!entries.length) return cleaned;
 
-  const bodyParts = [...(narrative ? [narrative] : []), ...unlinkedDefs];
-  const body = bodyParts.join('\n\n').trim();
-  return body ? `${body}\n\n${legend.join('\n')}` : legend.join('\n');
+  const parts = narrative ? [narrative] : [];
+  parts.push(`${REFERENCE_LIST_HEADER}\n${entries.join('\n\n')}`);
+  return parts.join('\n\n').trim();
 }
 
 /** @deprecated Dùng `annotateAssetLabels`. */
@@ -212,7 +231,7 @@ export function replaceAssetLabels(content: string, refs: AssetRef[]): string {
 
 /** Prompt output: prompt upstream nối trước (đã bỏ legend cũ), instruction sau cùng. */
 export function composePrompt(upstream: string[], instruction: string): string {
-  return [...upstream.map(stripAssetLegend), instruction]
+  return [instruction, ...upstream.map(stripAssetLegend)]
     .map((part) => part.trim())
     .filter(Boolean)
     .join('\n\n');

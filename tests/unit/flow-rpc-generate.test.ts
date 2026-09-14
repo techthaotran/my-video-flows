@@ -361,7 +361,8 @@ describe('generateViaRpc references', () => {
     const prompt = (item[8] as string[][][])[0]![0]![0]!;
     expect(prompt).toBe(
       `[Outfit] on [Character]\n\n` +
-        `[Character]: Tham khảo https://flow-content.google/image/33333333-3333-3333-3333-333333333333\n` +
+        `Danh sách tham chiếu\n` +
+        `[Character]: Tham khảo https://flow-content.google/image/33333333-3333-3333-3333-333333333333\n\n` +
         `[Outfit]: Tham khảo https://flow-content.google/image/${IMAGE_ID}`,
     );
   });
@@ -422,5 +423,42 @@ describe('generateViaRpc image', () => {
     const result = await run({ mode: 'text-to-image', model: 'Nano Banana 2', outputsPerPrompt: 2 });
     expect(calls.filter((c) => c === 'ogiZ0b')).toHaveLength(3);
     expect(result.medias).toHaveLength(2);
+  });
+});
+
+describe('readProjectMediaPage', () => {
+  const wrap = (payload: unknown) =>
+    `)]}'\n\n123\n${JSON.stringify([['wrb.fr', 'Zzl0ze', JSON.stringify(payload), null, null, null, 'generic']])}`;
+  const project = 'fcf16651-14f3-4335-9557-0a808bd11946';
+  const id = (n: number) => `0000000${n}-1111-4222-8333-444455556666`;
+  const wf = (n: number) => `ffffff0${n}-1111-4222-8333-444455556666`;
+
+  it('reads media records ([mediaId, projectId, …]) even without urls, newest first', async () => {
+    const { readProjectMediaPage } = await import('@/providers/flow/rpc/batch');
+    const page = readProjectMediaPage(
+      wrap([
+        null,
+        // workflows: [id, null, null, …] — not media
+        [[wf(1), null, null, 1], [wf(2), null, null, 2]],
+        [
+          [id(1), project, wf(1), [1757000000, 0]],
+          [id(2), project, wf(2), [1757900000, 0], [`https://flow-content.google/video/${id(2)}?sig=b`]],
+          [id(3), project, wf(1), [1757500000, 0]],
+        ],
+      ]),
+    );
+    expect(page.items.map((i) => i.mediaId)).toEqual([id(2), id(3), id(1)]);
+    expect(page.items[0]).toMatchObject({ kind: 'video', url: `https://flow-content.google/video/${id(2)}?sig=b`, createdAt: 1757900000_000 });
+    expect(page.items[1]!.kind).toBeUndefined();
+    expect(page.nextPageToken).toBeNull();
+  });
+
+  it('keeps listing order and picks up a trailing page token', async () => {
+    const { readProjectMediaPage } = await import('@/providers/flow/rpc/batch');
+    const page = readProjectMediaPage(
+      wrap([null, [[id(1), project, wf(1)], [id(2), project, wf(2)]], 'CgwI6f7zxQYQgPSm3AMSJGFiY2Q']),
+    );
+    expect(page.items.map((i) => i.mediaId)).toEqual([id(1), id(2)]);
+    expect(page.nextPageToken).toBe('CgwI6f7zxQYQgPSm3AMSJGFiY2Q');
   });
 });
