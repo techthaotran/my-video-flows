@@ -42,10 +42,33 @@ export const templateRepo = {
     await db.templates.delete(id);
   },
 
-  async seedIfEmpty(): Promise<void> {
-    const count = await db.templates.count();
-    if (count > 0) return;
+  /**
+   * Upsert every built-in seed by id on each boot.
+   * User-saved templates (`builtIn: false`) are untouched.
+   * Built-ins removed from seed are deleted from DB.
+   * Empty DB is seeded by the same upsert path.
+   */
+  async syncBuiltIns(): Promise<void> {
     const seeds = getSeedTemplates();
-    await db.templates.bulkPut(seeds);
+    const seedIds = new Set(seeds.map((s) => s.id));
+    const now = Date.now();
+
+    for (const seed of seeds) {
+      const existing = await db.templates.get(seed.id);
+      if (existing && !existing.builtIn) continue;
+      await db.templates.put({
+        ...seed,
+        createdAt: existing?.createdAt ?? seed.createdAt,
+        updatedAt: now,
+        builtIn: true,
+      });
+    }
+
+    const all = await db.templates.toArray();
+    for (const t of all) {
+      if (!t.builtIn) continue;
+      if (seedIds.has(t.id)) continue;
+      await db.templates.delete(t.id);
+    }
   },
 };

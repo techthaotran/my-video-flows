@@ -44,7 +44,7 @@ export async function setUiState(patch: Partial<UiState>): Promise<void> {
 export async function bootstrapStorage(): Promise<void> {
   await ensurePersist();
   await workspaceRepo.ensureDefault();
-  await templateRepo.seedIfEmpty();
+  await templateRepo.syncBuiltIns();
 }
 
 export { db };

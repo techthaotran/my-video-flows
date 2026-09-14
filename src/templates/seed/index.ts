@@ -1,23 +1,24 @@
 import type { Template } from '@/shared/schema';
 import { SCHEMA_VERSION } from '@/shared/schema';
 
+/** Built-in: Character + Outfit → Prompt → Omni Flash (media id slots, no CDN links). */
 export function getSeedTemplates(): Template[] {
   const now = Date.now();
   return [
     {
-      id: 'tpl-dancing-motion',
-      name: 'Google Flow Dancing motion control',
+      id: 'tpl-character-outfit-omni',
+      name: 'Nhân vật + trang phục → Omni Flash',
       description:
-        'Asset Character + Video reference (có sẵn trên Flow) → Prompt thay [Character]/[Video reference] bằng địa chỉ asset → Generate Video.',
-      category: 'motion',
-      tags: ['flow', 'veo', 'motion'],
+        'Asset Character + Outfit (có sẵn trên Flow) → Prompt giữ [Label] và mô tả → Generate Video Omni Flash neo ảnh trong structured prompt (MZZa6b).',
+      category: 'character',
+      tags: ['flow', 'omni', 'character'],
       builtIn: true,
       createdAt: now,
       updatedAt: now,
       workflow: {
-        id: 'tpl-dancing-motion',
+        id: 'tpl-character-outfit-omni',
         schemaVersion: SCHEMA_VERSION,
-        name: 'Google Flow Dancing motion control',
+        name: 'Nhân vật + trang phục → Omni Flash',
         locked: false,
         nodes: [
           {
@@ -26,48 +27,54 @@ export function getSeedTemplates(): Template[] {
             position: { x: 40, y: 40 },
             data: {
               content:
-                'Chọn asset có sẵn trên Google Flow cho 2 node Asset. Prompt thay [Character] và [Video reference] bằng địa chỉ asset đã nối.',
+                'Chọn 2 ảnh có sẵn trên Google Flow cho Character và Outfit. Đặt [Label] đúng chỗ neo ảnh trong câu. Omni Flash gửi MZZa6b (abra_r2v_*) với media id — không dán link Flow.',
               color: '#1e3a5f',
               fontSize: 13,
             },
           },
           {
-            id: 'asset-video',
+            id: 'asset-character',
             type: 'asset',
-            slug: 'video',
-            label: 'Video',
+            slug: 'character',
+            label: 'Character',
             position: { x: 40, y: 160 },
             data: {
-              kind: 'video',
-              assetLabel: 'Video reference',
-              slug: 'video',
+              kind: 'image',
+              assetLabel: 'Character',
+              slug: 'character',
               source: 'flow',
             },
           },
           {
-            id: 'asset-image',
+            id: 'asset-outfit',
             type: 'asset',
-            slug: 'image_model_1',
-            label: 'Model Image',
+            slug: 'outfit',
+            label: 'Outfit',
             position: { x: 40, y: 380 },
             data: {
               kind: 'image',
-              assetLabel: 'Character',
-              slug: 'image_model_1',
+              assetLabel: 'Outfit',
+              slug: 'outfit',
               source: 'flow',
             },
           },
           {
             id: 'prompt-1',
             type: 'prompt',
-            label: 'Prompt Assistant',
-            position: { x: 400, y: 160 },
+            label: 'Prompt',
+            position: { x: 400, y: 220 },
             data: {
               provider: 'gemini',
               model: '',
               preset: 'custom',
               instruction:
-                'Replace the character in the reference video with [Character]. Keep the face 100% identical. Body movements follow the [Video reference].',
+                'Video dọc 9:16 dài 4 giây, phong cách quay thực tế.\n' +
+                '[Character] mặc [Outfit] đi bộ về phía máy quay trên con phố đầy nắng, khẽ mỉm cười.\n' +
+                'Giữ nguyên gương mặt, kiểu tóc và từng chi tiết trang phục như ảnh tham chiếu; không thêm, bớt hay đổi màu quần áo và phụ kiện.\n' +
+                'Góc máy: toàn thân đến trung cảnh, máy lùi chậm.\n' +
+                'Ánh sáng: nắng tự nhiên buổi sáng, mềm.\n\n' +
+                '[Character]: Cô gái Đông Á 20-25 tuổi, mặt trái xoan, da sáng, tóc đen thẳng ngang vai.\n\n' +
+                '[Outfit]: Áo blazer linen màu kem dáng rộng, áo ba lỗ trắng, quần jeans ống rộng, sneaker trắng.',
               outputFormat: 'plain',
               newChat: true,
             },
@@ -76,7 +83,7 @@ export function getSeedTemplates(): Template[] {
             id: 'gen-video-1',
             type: 'generateVideo',
             label: 'Generate Video',
-            position: { x: 1000, y: 160 },
+            position: { x: 1000, y: 220 },
             data: {
               model: 'Omni Flash',
               aspectRatio: '9:16',
@@ -90,7 +97,7 @@ export function getSeedTemplates(): Template[] {
             id: 'download-1',
             type: 'autoDownload',
             label: 'Auto Download',
-            position: { x: 1600, y: 240 },
+            position: { x: 1600, y: 280 },
             data: {
               folderTemplate: 'MyXFlows/{{workflow}}/{{date}}',
               filenameTemplate: '{{slug}}_{{index}}',
@@ -102,15 +109,15 @@ export function getSeedTemplates(): Template[] {
         edges: [
           {
             id: 'e1',
-            source: 'asset-video',
-            sourceHandle: 'out:video',
+            source: 'asset-character',
+            sourceHandle: 'out:image',
             target: 'prompt-1',
-            targetHandle: 'in:video',
-            type: 'video',
+            targetHandle: 'in:image',
+            type: 'image',
           },
           {
             id: 'e2',
-            source: 'asset-image',
+            source: 'asset-outfit',
             sourceHandle: 'out:image',
             target: 'prompt-1',
             targetHandle: 'in:image',
@@ -134,7 +141,7 @@ export function getSeedTemplates(): Template[] {
           },
         ],
         viewport: { x: 0, y: 0, zoom: 0.85 },
-        settings: { concurrency: 1, retry: 2, stopOnError: true },
+        settings: { concurrency: 1, retry: 0, stopOnError: true },
         createdAt: now,
         updatedAt: now,
       },

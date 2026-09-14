@@ -4,14 +4,20 @@
  */
 
 import type { DriverResult, FlowGeneratePayload } from '@/shared/messaging';
-import { annotateAssetLabels, type AssetRef } from '@/engine/resolver';
+import {
+  annotateAssetLabels,
+  stripFlowMediaUrls,
+  type AssetRef,
+} from '@/engine/resolver';
 import { extractLastFrame } from '@/providers/flow/rpc/frame';
 import {
   CAPTCHA_IMAGE,
   CAPTCHA_VIDEO,
   FLOW_VIDEO_WIRE_MODEL_STORAGE_KEY,
+  OMNI_MAX_REFS,
   RPC_GEN_IMAGE,
   RPC_GEN_VIDEO,
+  RPC_GEN_VIDEO_REFS,
   RPC_GEN_VIDEO_TEXT,
   RPC_MEDIA,
   RPC_OPERATION,
@@ -26,6 +32,7 @@ import {
   imageRequest,
   isOmniFlashModel,
   mediaRequest,
+  omniReferenceVideoModel,
   omniTextVideoModel,
   operationRequest,
   projectMediaRequest,
@@ -34,6 +41,10 @@ import {
   readOperation,
   readTextVideoSubmit,
   readUploadedMediaId,
+  readWorkflowPoll,
+  isMediaNotReadyRpcError,
+  referenceVideoRequest,
+  resolveImageModel,
   textVideoRequest,
   uploadRequest,
   videoModelFallbackChain,
@@ -41,13 +52,32 @@ import {
   type GeneratedImage,
   type Operation,
 } from '@/providers/flow/rpc/batch';
+import {
+  describeSubmit,
+  summarizeSubmit,
+  type SubmitRefInfo,
+} from '@/providers/flow/rpc/payloadLog';
+import {
+  buildReferencePromptParts,
+  formatPartsForLog,
+} from '@/providers/flow/rpc/promptParts';
 import { resolveFlowProjectId } from '@/providers/flow/rpc/project';
 import { reviveTabIfNeeded, runBatchRpc } from '@/providers/flow/rpc/runner';
-import { createLogger } from '@/shared/log';
+import { createLogger, type Logger } from '@/shared/log';
+import { strings } from '@/shared/strings';
 
-const log = createLogger('rpc');
+const baseLog = createLogger('rpc');
+/** Per-generate logger; set in {@link generateViaRpc} so payload logs carry run/node. */
+let log: Logger = baseLog;
 
 type Progress = (p: number, m?: string) => void;
+
+export interface OrderedRef {
+  label: string;
+  mediaId: string;
+  kind: 'image';
+  source: 'flow' | 'upload';
+}
 
 /** FlowKit's VIDEO_POLL_INTERVAL; each round is 1–3 RPCs, every 3rd pulls the listing. */
 const VIDEO_POLL_INTERVAL_MS = 10_000;
@@ -59,6 +89,138 @@ const IMAGE_TRANSIENT_RETRY_MS = 34_000;
 
 function driverError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
+}
+
+function logPayload(input: Parameters<typeof describeSubmit>[0]): void {
+  const detail = describeSubmit(input);
+  const msg = summarizeSubmit(detail);
+  if (detail.urlsInPrompt.length || detail.missingRefs.length) log.warn(msg, detail);
+  else log.info(msg, detail);
+  if (detail.urlsInPrompt.length) {
+    throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
+  }
+  if (detail.missingRefs.length && input.rpcid !== RPC_UPLOAD_IMAGE) {
+    const labels = detail.missingRefs.map((r) => (r.label ? `[${r.label}]` : r.mediaId)).join(', ');
+    throw driverError('UNKNOWN', strings.flowMediaIdNotInPayload(labels));
+  }
+}
+
+function toSubmitRefs(ordered: OrderedRef[], role: SubmitRefInfo['role'] = 'ref'): SubmitRefInfo[] {
+  return ordered.map((r) => ({
+    label: r.label,
+    kind: r.kind,
+    source: r.source,
+    mediaId: r.mediaId,
+    role,
+  }));
+}
+
+/** Refs logged for Veo i2v: start-frame slot only when continuing; else start + extras (extras → missingRefs). */
+function veoSubmitLogRefs(
+  sourceMediaId: string,
+  orderedRefs: OrderedRef[],
+  fromContinuation: boolean,
+): SubmitRefInfo[] {
+  const start: SubmitRefInfo = fromContinuation
+    ? {
+        kind: 'image',
+        source: 'upload',
+        mediaId: sourceMediaId,
+        label: strings.continueStartFrameLabel,
+        role: 'startFrame',
+      }
+    : orderedRefs[0] && orderedRefs[0].mediaId === sourceMediaId
+      ? { ...toSubmitRefs([orderedRefs[0]], 'startFrame')[0]! }
+      : {
+          kind: 'image',
+          source: 'upload',
+          mediaId: sourceMediaId,
+          label: strings.continueStartFrameLabel,
+          role: 'startFrame',
+        };
+  // Continue scene: wire has only the last-frame upload; Character/Outfit stay in prompt text.
+  if (fromContinuation) return [start];
+  const extras = toSubmitRefs(
+    orderedRefs.filter((r) => r.mediaId !== sourceMediaId),
+    'ref',
+  );
+  return [start, ...extras];
+}
+
+function toAssetRefs(ordered: OrderedRef[]): AssetRef[] {
+  return ordered.map((r) => ({ label: r.label, kind: r.kind, flowMediaId: r.mediaId }));
+}
+
+/**
+ * Final gate: matching Flow URLs → `[Label]`; orphan URLs → error.
+ * Re-annotate so legend shows `mediaId {uuid}` for linked Flow assets (no CDN links).
+ */
+function cleanPromptForSubmit(prompt: string, ordered: OrderedRef[]): string {
+  const refs = toAssetRefs(ordered);
+  const { text, orphanUrls } = stripFlowMediaUrls(prompt, refs);
+  if (orphanUrls.length) throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
+  return annotateAssetLabels(text, refs);
+}
+
+/**
+ * Refs that cannot ride a media-id slot must fail before captcha / upload / submit.
+ * Omni image refs go through MZZa6b (capped at {@link OMNI_MAX_REFS}).
+ * Scene continue (`continueFrom`): image refs are prompt-only (see {@link generateVideoRpc}).
+ */
+function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'video'): void {
+  const refs = payload.refs ?? [];
+
+  for (const ref of refs) {
+    if (ref.kind === 'image') continue;
+    const label = ref.label?.trim() || 'Asset';
+    const kindLabel = ref.kind === 'video' ? 'video' : 'audio';
+    throw driverError('UNKNOWN', strings.refKindUnsupported(label, kindLabel));
+  }
+
+  if (kind !== 'video') return;
+  // Last-frame i2v owns the only start-frame slot; Character/Outfit stay in prompt text.
+  if (payload.continueFrom) return;
+
+  const imageRefs = refs.filter((r) => r.kind === 'image' && (r.mediaId || r.upload));
+  const omni = isOmniFlashModel(payload.model);
+  if (omni) {
+    const unique = new Set<string>();
+    for (const ref of imageRefs) {
+      if (ref.mediaId) unique.add(`id:${ref.mediaId}`);
+      else if (ref.upload) unique.add(`up:${ref.upload.cacheKey}`);
+    }
+    if (unique.size > OMNI_MAX_REFS) {
+      throw driverError('OMNI_TOO_MANY_REFS', strings.omniTooManyRefs(OMNI_MAX_REFS, unique.size));
+    }
+    return;
+  }
+
+  if (imageRefs.length > 1) {
+    throw driverError('UNKNOWN', strings.veoTooManyImageRefs);
+  }
+}
+
+/** Keep `[Label]` / legend for continue scenes without uploading or wiring media ids. */
+function cleanPromptForContinue(prompt: string, payload: FlowGeneratePayload): string {
+  const refs: AssetRef[] = [];
+  const seen = new Set<string>();
+  for (const ref of payload.refs ?? []) {
+    if (ref.kind !== 'image') continue;
+    const label = ref.label?.trim() || strings.defaultImageRefLabel;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ label, kind: 'image', flowMediaId: ref.mediaId });
+  }
+  const { text, orphanUrls } = stripFlowMediaUrls(prompt, refs);
+  if (orphanUrls.length) throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
+  return annotateAssetLabels(text, refs);
+}
+
+function imageRefLabels(payload: FlowGeneratePayload): string[] {
+  return (payload.refs ?? [])
+    .filter((r) => r.kind === 'image' && (r.mediaId || r.upload))
+    .map((r) => `[${r.label?.trim() || strings.defaultImageRefLabel}]`);
 }
 
 function stripDataUrl(b64: string): string {
@@ -210,6 +372,12 @@ async function uploadImage(
     mimeType: compressed.mime || 'image/jpeg',
     fileName: compressed.name || 'upload.jpg',
   });
+  logPayload({
+    rpcid: RPC_UPLOAD_IMAGE,
+    freq,
+    prompt: '',
+    refs: [],
+  });
   const { text, raw } = await rpcPayload(tabId, RPC_UPLOAD_IMAGE, freq, CAPTCHA_IMAGE);
   try {
     return readUploadedMediaId(firstPayload(text, RPC_UPLOAD_IMAGE));
@@ -247,10 +415,9 @@ const uploadedMediaIds = new Map<string, string>();
 const MAX_UPLOAD_CACHE = 200;
 
 /**
- * Turn the node's references into Flow image media ids. Assets that already
- * live on Flow are used by id and never uploaded; local files are uploaded once
- * per run. After upload, the prompt legend is refreshed so `[Label]` maps to
- * the new Flow URL (labels in the body stay as tags).
+ * Turn the node's references into Flow image media ids (ordered, deduped).
+ * Assets already on Flow are used by id and never uploaded; local files upload once per run.
+ * Prompt is cleaned of Flow CDN URLs — media ids go only in RPC slots.
  */
 async function resolveRefs(
   tabId: number,
@@ -258,21 +425,17 @@ async function resolveRefs(
   payload: FlowGeneratePayload,
   onProgress: Progress,
   signal: AbortSignal,
-): Promise<{ imageIds: string[]; prompt: string }> {
-  const imageIds: string[] = [];
-  const addressed: AssetRef[] = [];
-  let unusable = 0;
+): Promise<{ imageIds: string[]; orderedRefs: OrderedRef[]; prompt: string }> {
+  const orderedRefs: OrderedRef[] = [];
+  const seen = new Set<string>();
 
   for (const ref of payload.refs ?? []) {
     if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-    if (ref.kind !== 'image') {
-      // Video/audio can't be a generation input on the batch API; a Flow video
-      // still reaches the model as its address in the prompt.
-      unusable++;
-      continue;
-    }
+    if (ref.kind !== 'image') continue;
     let mediaId = ref.mediaId;
+    let source: OrderedRef['source'] = 'flow';
     if (!mediaId && ref.upload) {
+      source = 'upload';
       const key = `${projectId}:${ref.upload.cacheKey}`;
       mediaId = uploadedMediaIds.get(key);
       if (!mediaId) {
@@ -284,14 +447,22 @@ async function resolveRefs(
       }
     }
     if (!mediaId) continue;
-    if (!imageIds.includes(mediaId)) imageIds.push(mediaId);
-    if (ref.label) addressed.push({ label: ref.label, kind: 'image', flowMediaId: mediaId });
+    if (seen.has(mediaId)) continue;
+    seen.add(mediaId);
+    orderedRefs.push({
+      label: ref.label?.trim() || `${strings.defaultImageRefLabel} ${orderedRefs.length + 1}`,
+      mediaId,
+      kind: 'image',
+      source,
+    });
   }
 
-  if (unusable) {
-    onProgress(20, `${unusable} video/audio tham chiếu chỉ được đưa địa chỉ vào prompt (API Flow chưa nhận làm input)`);
-  }
-  return { imageIds, prompt: annotateAssetLabels(payload.prompt, addressed) };
+  const prompt = cleanPromptForSubmit(payload.prompt, orderedRefs);
+  return {
+    imageIds: orderedRefs.map((r) => r.mediaId),
+    orderedRefs,
+    prompt,
+  };
 }
 
 async function generateImageRpc(
@@ -301,10 +472,18 @@ async function generateImageRpc(
   onProgress: Progress,
   signal: AbortSignal,
 ): Promise<DriverResult> {
-  const { imageIds: refIds, prompt } = await resolveRefs(tabId, projectId, payload, onProgress, signal);
+  assertRefsSupported(payload, 'image');
+  const { imageIds: refIds, orderedRefs, prompt } = await resolveRefs(
+    tabId,
+    projectId,
+    payload,
+    onProgress,
+    signal,
+  );
 
   const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
   const seed = Math.floor(Math.random() * 1e9) + 1;
+  const model = resolveImageModel(payload.model);
   onProgress(40, count > 1 ? `Tạo ${count} ảnh (RPC)…` : 'Tạo ảnh (RPC)…');
 
   // Flow's composer launches x4 as four single-image ogiZ0b calls, staggered,
@@ -318,6 +497,15 @@ async function generateImageRpc(
       aspect: payload.aspectRatio,
       model: payload.model,
       refMediaIds: refIds.length ? refIds : undefined,
+    });
+    logPayload({
+      rpcid: RPC_GEN_IMAGE,
+      freq,
+      model,
+      aspect: payload.aspectRatio,
+      count: 1,
+      prompt,
+      refs: toSubmitRefs(orderedRefs),
     });
     const { text } = await rpcPayload(tabId, RPC_GEN_IMAGE, freq, CAPTCHA_IMAGE);
     const images = readImages(firstPayload(text, RPC_GEN_IMAGE));
@@ -431,10 +619,21 @@ function isInternalRejection(reason: unknown): boolean {
   return reason instanceof RpcError && Array.isArray(reason.detail) && reason.detail[0] === 13;
 }
 
+/** Terminal poll errors — fail on first hit, do not retry or wrap as "5 lần liên tiếp". */
+function isTerminalPollError(e: unknown): boolean {
+  const code = (e as { code?: string }).code;
+  return (
+    code === 'FLOW_RENDER_FAILED' ||
+    code === 'AUTH_REQUIRED' ||
+    code === 'NO_AT_TOKEN' ||
+    (e instanceof Error && e.message === 'aborted')
+  );
+}
+
 /**
  * Wait for a clip's `/video/` url.
  * - Veo: operation id → media id → url
- * - Omni: media id → url
+ * - Omni: jwpduf until workflow DONE → as29s (as29s [5] = not ready, keep polling)
  * - Orphan (submit accepted, parse failed): discover new `/video/` ids on the
  *   project listing that were not present before submit, then resolve urls.
  *   Flow still renders the clip even when our response shape drifts.
@@ -486,16 +685,47 @@ async function pollVideoUntilReady(
       }
 
       if (mediaId) {
-        const { text } = await rpcPayload(tabId, RPC_MEDIA, mediaRequest(mediaId));
-        const urls = readMediaUrls(firstPayload(text, RPC_MEDIA), mediaId);
-        if (urls.video) {
-          return { mediaId, videoUrl: urls.video };
+        // Omni / MZZa6b / YhhmEf: UI polls jwpduf with mediaId until workflow settles.
+        if (!operationId) {
+          const { text: pollText } = await rpcPayload(
+            tabId,
+            RPC_OPERATION,
+            operationRequest(mediaId),
+          );
+          const wf = readWorkflowPoll(firstPayload(pollText, RPC_OPERATION));
+          if (wf?.failed) {
+            throw driverError(
+              'FLOW_RENDER_FAILED',
+              strings.flowRenderFailureMessage(wf.error, wf.reasons),
+            );
+          }
+          if (wf && !wf.done) {
+            consecutiveFailures = 0;
+            continue;
+          }
+        }
+
+        try {
+          const { text } = await rpcPayload(tabId, RPC_MEDIA, mediaRequest(mediaId));
+          const urls = readMediaUrls(firstPayload(text, RPC_MEDIA), mediaId);
+          if (urls.video) {
+            return { mediaId, videoUrl: urls.video };
+          }
+        } catch (e) {
+          if (isMediaNotReadyRpcError(e)) {
+            consecutiveFailures = 0;
+            continue;
+          }
+          throw e;
         }
       }
       consecutiveFailures = 0;
     } catch (e) {
-      const code = (e as { code?: string }).code;
-      if (code === 'AUTH_REQUIRED' || code === 'NO_AT_TOKEN') throw e;
+      if (isTerminalPollError(e)) throw e;
+      if (isMediaNotReadyRpcError(e)) {
+        consecutiveFailures = 0;
+        continue;
+      }
       lastError = e instanceof Error ? e.message : String(e);
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
@@ -545,13 +775,78 @@ async function findNewProjectVideoId(
 /**
  * Video-only: never call ogiZ0b / invent a mid-scene still.
  *
- * - Omni Flash → ALWAYS text-to-video (`YhhmEf` / `abra_t2v_*`). Prompt keeps
- *   `[Label]` tags; a legend maps each to its CDN url. Never falls back to Veo.
+ * - Previous clip (`continueFrom`) → last-frame upload + Veo i2v.
+ * - Omni Flash text-only → `YhhmEf` / `abra_t2v_*`.
+ * - Omni Flash + images → `MZZa6b` / `abra_r2v_*`.
  * - Veo → image-to-video (`eb1hJf`) with exactly one start frame.
- * - continue-from (any model) → last-frame upload + Veo i2v (Omni has no
- *   captured frame-to-video batchexecute payload yet).
  */
 async function generateVideoRpc(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
+  assertRefsSupported(payload, 'video');
+  if (payload.continueFrom) {
+    return generateContinuedSceneVideo(tabId, projectId, payload, onProgress, signal);
+  }
+  if (isOmniFlashModel(payload.model)) {
+    return generateOmniFlashVideo(tabId, projectId, payload, onProgress, signal);
+  }
+  return generateVeoI2vVideo(tabId, projectId, payload, onProgress, signal);
+}
+
+/** Scene continue: last frame of previous clip → Veo i2v; image refs stay in prompt only. */
+async function generateContinuedSceneVideo(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
+  const continueFrom = payload.continueFrom;
+  if (!continueFrom) throw driverError('UNKNOWN', strings.videoNeedsStartFrame);
+
+  const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
+  const labels = imageRefLabels(payload);
+  if (labels.length) {
+    const msg = strings.continueIgnoresImageRefs(labels.join(', '));
+    onProgress(6, msg);
+    log.info(msg, { labels });
+  }
+  if (isOmniFlashModel(payload.model)) {
+    onProgress(8, strings.omniContinueUsesVeo);
+  }
+
+  const scene: FlowGeneratePayload = {
+    ...payload,
+    prompt: cleanPromptForContinue(payload.prompt, payload),
+  };
+  onProgress(10, strings.extractLastFrameProgress);
+  const frame = await extractLastFrame(continueFrom);
+  const startFrameId = await uploadImage(
+    tabId,
+    projectId,
+    { name: 'previous-scene-last-frame.jpg', mime: 'image/jpeg', dataBase64: frame },
+    onProgress,
+  );
+
+  const jobs = await submitVeoI2vJobs(
+    tabId,
+    projectId,
+    startFrameId,
+    scene,
+    [],
+    count,
+    onProgress,
+    signal,
+  );
+  return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
+}
+
+/** Omni Flash without scene continue: text `YhhmEf` or reference `MZZa6b`. */
+async function generateOmniFlashVideo(
   tabId: number,
   projectId: string,
   payload: FlowGeneratePayload,
@@ -561,92 +856,119 @@ async function generateVideoRpc(
   const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
   const resolved = await resolveRefs(tabId, projectId, payload, onProgress, signal);
   const scene: FlowGeneratePayload = { ...payload, prompt: resolved.prompt };
-  const omni = isOmniFlashModel(payload.model);
-  let startFrameId: string | undefined;
-
-  // Next scene: last frame → Veo i2v (Omni batch has no frame/r2v capture yet).
-  if (payload.continueFrom) {
-    if (omni) {
-      onProgress(8, 'Omni Flash chưa nối cảnh trên API batch — dùng Veo i2v từ frame cuối…');
-    }
-    onProgress(10, 'Lấy frame cuối của cảnh trước để I2V…');
-    const frame = await extractLastFrame(payload.continueFrom);
-    startFrameId = await uploadImage(
-      tabId,
-      projectId,
-      { name: 'previous-scene-last-frame.jpg', mime: 'image/jpeg', dataBase64: frame },
-      onProgress,
-    );
-  } else if (!omni && resolved.imageIds.length) {
-    startFrameId = resolved.imageIds[0];
-    if (resolved.imageIds.length > 1) {
-      onProgress(
-        20,
-        `Veo i2v dùng 1 ảnh start frame; ${resolved.imageIds.length - 1} asset còn lại chỉ qua link trong prompt`,
-      );
-    }
-  }
+  const knownVideos = await listProjectVideoIds(tabId, projectId);
+  const sharedExclude = new Set(knownVideos);
+  const withRefs = resolved.orderedRefs.length > 0;
+  const model = withRefs
+    ? omniReferenceVideoModel(payload.durationSec)
+    : omniTextVideoModel(payload.durationSec);
+  const rpcLabel = withRefs ? RPC_GEN_VIDEO_REFS : RPC_GEN_VIDEO_TEXT;
+  log.info(`Omni Flash → ${rpcLabel} (${model})`, {
+    refs: resolved.orderedRefs.length,
+    durationSec: payload.durationSec,
+  });
 
   const jobs: { projectId: string; job: VideoJob }[] = [];
-
-  // Omni Flash (not a continued scene): prompt + asset links only — never eb1hJf.
-  if (omni && !payload.continueFrom) {
-    const model = omniTextVideoModel(payload.durationSec);
-    log.info(`Omni Flash → ${RPC_GEN_VIDEO_TEXT} (${model}), bỏ qua Veo/eb1hJf`, {
-      refs: resolved.imageIds.length,
-      durationSec: payload.durationSec,
-    });
-    // Snapshot so a parse-failed submit can still be recovered from Flow's gallery.
-    const knownVideos = await listProjectVideoIds(tabId, projectId);
-    const sharedExclude = new Set(knownVideos);
-    for (let n = 0; n < count; n++) {
-      if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-      onProgress(
-        45,
-        count > 1 ? `Submit Omni Flash ${n + 1}/${count} (${model})…` : `Submit Omni Flash (${model})…`,
-      );
-      const submitted = await submitOmniTextVideo(tabId, projectId, scene, model);
-      if (submitted.mediaId) {
-        sharedExclude.add(submitted.mediaId);
-        jobs.push({
-          projectId: submitted.projectId ?? projectId,
-          job: { mediaId: submitted.mediaId },
-        });
-      } else {
-        onProgress(48, 'Parse response lệch — giữ job trên Flow, sẽ lấy video từ project…');
-        jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
-      }
-    }
-  } else {
-    if (!startFrameId) {
-      throw driverError(
-        'UNKNOWN',
-        'Tạo video không tạo ảnh trung gian. Dùng Omni Flash (prompt + link asset), hoặc nối đúng 1 ảnh start frame / cảnh trước cho Veo i2v.',
-      );
-    }
+  for (let n = 0; n < count; n++) {
     if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-
-    const knownVideos = await listProjectVideoIds(tabId, projectId);
-    const sharedExclude = new Set(knownVideos);
-    const first = await submitVideoWithFallback(tabId, projectId, startFrameId, scene, onProgress, signal);
-    const operations: (Operation | { orphan: true })[] = [first.operation];
-    for (let n = 1; n < count; n++) {
-      if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-      onProgress(46, `Submit video ${n + 1}/${count} (${first.model})…`);
-      operations.push(await submitVideo(tabId, projectId, startFrameId, scene, first.model));
-    }
-    for (const op of operations) {
-      if ('orphan' in op) {
-        jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
-      } else {
-        jobs.push({ projectId: op.projectId ?? projectId, job: { operationId: op.operationId } });
-      }
+    onProgress(
+      45,
+      count > 1
+        ? `Submit Omni Flash ${n + 1}/${count} (${model})…`
+        : `Submit Omni Flash (${model})…`,
+    );
+    const submitted = withRefs
+      ? await submitOmniReferenceVideo(tabId, projectId, scene, model, resolved.orderedRefs)
+      : await submitOmniTextVideo(tabId, projectId, scene, model, resolved.orderedRefs);
+    if (submitted.mediaId) {
+      sharedExclude.add(submitted.mediaId);
+      jobs.push({
+        projectId: submitted.projectId ?? projectId,
+        job: { mediaId: submitted.mediaId },
+      });
+    } else {
+      onProgress(48, 'Parse response lệch — giữ job trên Flow, sẽ lấy video từ project…');
+      jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
     }
   }
+  return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
+}
 
+/** Veo without scene continue: exactly one image start frame → `eb1hJf`. */
+async function generateVeoI2vVideo(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
+  const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
+  const resolved = await resolveRefs(tabId, projectId, payload, onProgress, signal);
+  const startFrameId = resolved.imageIds[0];
+  if (!startFrameId) {
+    throw driverError('UNKNOWN', strings.videoNeedsStartFrame);
+  }
+  const scene: FlowGeneratePayload = { ...payload, prompt: resolved.prompt };
+  const jobs = await submitVeoI2vJobs(
+    tabId,
+    projectId,
+    startFrameId,
+    scene,
+    resolved.orderedRefs,
+    count,
+    onProgress,
+    signal,
+  );
+  return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
+}
+
+async function submitVeoI2vJobs(
+  tabId: number,
+  projectId: string,
+  startFrameId: string,
+  scene: FlowGeneratePayload,
+  orderedRefs: OrderedRef[],
+  count: number,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<{ projectId: string; job: VideoJob }[]> {
+  if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+  const knownVideos = await listProjectVideoIds(tabId, projectId);
+  const sharedExclude = new Set(knownVideos);
+  const first = await submitVideoWithFallback(
+    tabId,
+    projectId,
+    startFrameId,
+    scene,
+    orderedRefs,
+    onProgress,
+    signal,
+  );
+  const operations: (Operation | { orphan: true })[] = [first.operation];
+  for (let n = 1; n < count; n++) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    onProgress(46, `Submit video ${n + 1}/${count} (${first.model})…`);
+    operations.push(
+      await submitVideo(tabId, projectId, startFrameId, scene, first.model, orderedRefs),
+    );
+  }
+  return operations.map((op) =>
+    'orphan' in op
+      ? { projectId, job: { excludeMediaIds: sharedExclude } }
+      : { projectId: op.projectId ?? projectId, job: { operationId: op.operationId } },
+  );
+}
+
+async function settleAndFetchVideos(
+  tabId: number,
+  jobs: { projectId: string; job: VideoJob }[],
+  timeoutSec: number,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
   const settled = await Promise.allSettled(
     jobs.map(({ projectId: pid, job }) =>
-      pollVideoUntilReady(tabId, pid, job, payload.timeoutSec ?? 600, onProgress, signal),
+      pollVideoUntilReady(tabId, pid, job, timeoutSec, onProgress, signal),
     ),
   );
   const clips = settled.flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []));
@@ -667,44 +989,51 @@ async function generateVideoRpc(
   return { medias };
 }
 
-async function submitOmniTextVideo(
+/** Shared Omni submit parse / salvage / orphan path for YhhmEf and MZZa6b. */
+async function parseOmniSubmitResponse(
   tabId: number,
   projectId: string,
-  payload: FlowGeneratePayload,
-  model: string,
+  rpcid: string,
+  freq: string,
+  deniedMessage: string,
+  rejectedMessage: (detail: string) => string,
 ): Promise<{ mediaId: string | null; projectId: string | null }> {
-  const freq = textVideoRequest({ prompt: payload.prompt, projectId, aspect: payload.aspectRatio, model });
-  const { text, raw } = await rpcPayload(tabId, RPC_GEN_VIDEO_TEXT, freq, CAPTCHA_VIDEO);
+  const { text, raw } = await rpcPayload(tabId, rpcid, freq, CAPTCHA_VIDEO);
 
   const failHard = (e: unknown): never => {
     const denied = isModelAccessDenied(e, text);
     throw driverError(
       'UNKNOWN',
       denied
-        ? `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni Flash (${model}). Thử chọn model Veo.`
-        : `Omni Flash bị từ chối (${model}): ${e instanceof Error ? e.message : String(e)} — ${summarizeRpcFailure(text, raw.status)}`,
+        ? deniedMessage
+        : rejectedMessage(
+            `${e instanceof Error ? e.message : String(e)} — ${summarizeRpcFailure(text, raw.status)}`,
+          ),
     );
   };
 
   try {
-    return readTextVideoSubmit(firstPayload(text, RPC_GEN_VIDEO_TEXT));
+    return readTextVideoSubmit(firstPayload(text, rpcid));
   } catch (e) {
     if (e instanceof RpcError || isModelAccessDenied(e, text)) return failHard(e);
 
-    // HTTP accepted but envelope shape drifted — try UUID salvage, else orphan-poll.
     const fromText = extractVideoMediaIdsFromText(text)[0] ?? null;
     if (fromText) {
-      log.warn('Omni submit: salvaged media id from raw body', { mediaId: fromText });
+      log.warn('Omni submit: salvaged media id from raw body', { mediaId: fromText, rpcid });
       return { mediaId: fromText, projectId };
     }
     const uuids = extractUuidsFromText(text).filter((id) => id !== projectId);
     if (uuids[0] && (raw.status == null || raw.status < 400)) {
-      log.warn('Omni submit: using first non-project UUID as media id candidate', { mediaId: uuids[0] });
+      log.warn('Omni submit: using first non-project UUID as media id candidate', {
+        mediaId: uuids[0],
+        rpcid,
+      });
       return { mediaId: uuids[0]!, projectId };
     }
     if (raw.status == null || raw.status < 400) {
       log.warn('Omni submit accepted but unparsed — will recover from project listing', {
         status: raw.status,
+        rpcid,
         preview: text.slice(0, 240),
       });
       return { mediaId: null, projectId };
@@ -713,12 +1042,92 @@ async function submitOmniTextVideo(
   }
 }
 
+async function submitOmniTextVideo(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  model: string,
+  orderedRefs: OrderedRef[],
+): Promise<{ mediaId: string | null; projectId: string | null }> {
+  const freq = textVideoRequest({
+    prompt: payload.prompt,
+    projectId,
+    aspect: payload.aspectRatio,
+    model,
+  });
+  logPayload({
+    rpcid: RPC_GEN_VIDEO_TEXT,
+    freq,
+    model,
+    aspect: payload.aspectRatio,
+    durationSec: payload.durationSec,
+    prompt: payload.prompt,
+    refs: toSubmitRefs(orderedRefs),
+  });
+  return parseOmniSubmitResponse(
+    tabId,
+    projectId,
+    RPC_GEN_VIDEO_TEXT,
+    freq,
+    strings.omniTextDenied(model),
+    (detail) => strings.omniTextSubmitFailed(model, detail),
+  );
+}
+
+async function submitOmniReferenceVideo(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  model: string,
+  orderedRefs: OrderedRef[],
+): Promise<{ mediaId: string | null; projectId: string | null }> {
+  const { parts, unknownLabels } = buildReferencePromptParts(
+    payload.prompt,
+    orderedRefs.map((r) => ({ label: r.label, mediaId: r.mediaId })),
+  );
+  if (unknownLabels.length) {
+    log.warn(strings.omniUnknownLabelWarn(unknownLabels.map((l) => `[${l}]`).join(', ')), {
+      unknownLabels,
+    });
+  }
+  const freq = referenceVideoRequest({
+    parts,
+    projectId,
+    aspect: payload.aspectRatio,
+    model,
+  });
+  const promptLog = formatPartsForLog(parts);
+  const textOnly = parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join('');
+  logPayload({
+    rpcid: RPC_GEN_VIDEO_REFS,
+    freq,
+    model,
+    aspect: payload.aspectRatio,
+    durationSec: payload.durationSec,
+    prompt: promptLog,
+    promptForUrlScan: textOnly,
+    refs: toSubmitRefs(orderedRefs),
+  });
+  return parseOmniSubmitResponse(
+    tabId,
+    projectId,
+    RPC_GEN_VIDEO_REFS,
+    freq,
+    strings.omniReferenceDenied(model),
+    (detail) => strings.omniReferenceSubmitFailed(model, detail),
+  );
+}
+
 async function submitVideo(
   tabId: number,
   projectId: string,
   sourceMediaId: string,
   payload: FlowGeneratePayload,
   model: string,
+  orderedRefs: OrderedRef[],
 ): Promise<Operation | { orphan: true }> {
   const freq = videoRequest({
     prompt: payload.prompt,
@@ -726,6 +1135,14 @@ async function submitVideo(
     sourceMediaId,
     aspect: payload.aspectRatio,
     model,
+  });
+  logPayload({
+    rpcid: RPC_GEN_VIDEO,
+    freq,
+    model,
+    aspect: payload.aspectRatio,
+    prompt: payload.prompt,
+    refs: veoSubmitLogRefs(sourceMediaId, orderedRefs, !!payload.continueFrom),
   });
   const { text, raw } = await rpcPayload(tabId, RPC_GEN_VIDEO, freq, CAPTCHA_VIDEO);
   try {
@@ -780,6 +1197,7 @@ async function submitVideoWithFallback(
   projectId: string,
   sourceMediaId: string,
   payload: FlowGeneratePayload,
+  orderedRefs: OrderedRef[],
   onProgress: Progress,
   signal: AbortSignal,
 ): Promise<{ operation: Operation | { orphan: true }; model: string }> {
@@ -795,7 +1213,10 @@ async function submitVideoWithFallback(
       denied.length ? `Model bị từ chối — thử ${model}…` : `Submit video (${model})…`,
     );
     try {
-      return { operation: await submitVideo(tabId, projectId, sourceMediaId, payload, model), model };
+      return {
+        operation: await submitVideo(tabId, projectId, sourceMediaId, payload, model, orderedRefs),
+        model,
+      };
     } catch (e) {
       const modelDenied =
         (e as { modelDenied?: boolean }).modelDenied || isModelAccessDenied(e);
@@ -807,7 +1228,7 @@ async function submitVideoWithFallback(
   throw driverError(
     'UNKNOWN',
     `MODEL_ACCESS_DENIED với mọi model Veo đã thử (${denied.join(', ')}). ` +
-      `Nếu tài khoản có Omni Flash: chọn "Omni Flash" (prompt + link asset). ` +
+      `Nếu tài khoản có Omni Flash: chọn "Omni Flash" (prompt thuần hoặc ảnh tham chiếu qua media id). ` +
       `Hoặc lấy wire model của Veo: tạo 1 video tay trên flow.google.com, ` +
       `mở DevTools → Network → request batchexecute?rpcids=eb1hJf, lấy tên model trong f.req ` +
       `rồi ghim vào chrome.storage.local["${FLOW_VIDEO_WIRE_MODEL_STORAGE_KEY}"].`,
@@ -823,6 +1244,7 @@ export async function generateViaRpc(
   onProgress: Progress,
   signal: AbortSignal,
 ): Promise<DriverResult> {
+  log = payload.logCtx ? baseLog.child(payload.logCtx) : baseLog;
   const alive = await reviveTabIfNeeded(tabId);
   if (alive == null) {
     throw driverError('TAB_LOST', 'Tab Flow đã bị đóng hoặc discard');
@@ -840,6 +1262,7 @@ export async function generateViaRpc(
     }
     return await generateVideoRpc(alive, projectId, payload, onProgress, signal);
   } finally {
+    log = baseLog;
     chrome.tabs
       .sendMessage(alive, { type: 'driver.rpcKeepalive', start: false })
       .catch(() => undefined);

@@ -14,12 +14,16 @@ import {
   buildSlugIndex,
   annotateAssetLabels,
   stripAssetLegend,
+  stripFlowMediaUrls,
   composePrompt,
 } from '@/engine/resolver';
 import { db } from '@/storage/db';
 import { workspaceRepo } from '@/storage/repos/workspaceRepo';
 import { workflowRepo, createEmptyWorkflow } from '@/storage/repos/workflowRepo';
+import { templateRepo } from '@/storage/repos/templateRepo';
 import { exportWorkflows, parseImportFile, commitImport } from '@/storage/transfer';
+import { assertGeminiPromptPreserved } from '@/engine/executors';
+import { getSeedTemplates } from '@/templates/seed';
 
 beforeEach(async () => {
   await db.delete();
@@ -186,7 +190,7 @@ describe('resolver', () => {
     expect(buildSlugIndex(wf).get('video')).toBe('1');
   });
 
-  it('keeps [Label] tags and appends a Tham khảo legend for Flow assets', () => {
+  it('keeps [Label] tags and appends mediaId lines for linked Flow assets', () => {
     const out = annotateAssetLabels('nhân vật [Character] đang mặc một [outfit] ở [Background]', [
       { label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
       { label: 'Outfit', kind: 'image', flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
@@ -195,34 +199,34 @@ describe('resolver', () => {
     expect(out).toBe(
       'nhân vật [Character] đang mặc một [outfit] ở [Background]\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
-        '[Outfit]: Tham khảo https://flow-content.google/image/fcf16651-14f3-4335-9557-0a808bd11946',
+        '[Character]: mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
+        '[Outfit]: mediaId fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
 
-  it('turns [Label]: description into a single Tham khảo line (no URL-in-place, no duplicate)', () => {
+  it('turns [Label]: description into a legend line with Flow mediaId (no CDN URL)', () => {
     const out = annotateAssetLabels(
       '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng.',
       [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
       'Danh sách tham chiếu\n' +
-        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
-  it('restores wrongly inlined Flow URLs then formats Tham khảo', () => {
+  it('restores wrongly inlined Flow URLs then keeps the description with mediaId', () => {
     const out = annotateAssetLabels(
       'https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c: Người mẫu nữ Đông Á (20-25 tuổi).',
       [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
       'Danh sách tham chiếu\n' +
-        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi). Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi). · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
-  it('keeps narrative tags and moves definitions into the Tham khảo legend', () => {
+  it('keeps narrative tags and moves definitions into the reference list with mediaId', () => {
     const out = annotateAssetLabels(
       '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á.\n\n' +
         'Shot of [Character] smiling.',
@@ -231,24 +235,25 @@ describe('resolver', () => {
     expect(out).toBe(
       'Shot of [Character] smiling.\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á. Tham khảo https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
-  it('strips a previous Tham khảo legend before re-annotating', () => {
-    const once = annotateAssetLabels('[Character] waves', [
-      { label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
-    ]);
+  it('strips a previous reference legend before re-annotating', () => {
+    const once = annotateAssetLabels(
+      '[Character]: Cô gái Đông Á.\n\n[Character] waves',
+      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+    );
     const again = annotateAssetLabels(once, [
       { label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
       { label: 'Outfit', kind: 'image', flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
     ]);
-    expect(stripAssetLegend(once)).toBe('[Character] waves');
+    expect(stripAssetLegend(once)).toBe('[Character] waves\n\n[Character]: Cô gái Đông Á.');
     expect(again).toBe(
       '[Character] waves\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
-        '[Outfit]: Tham khảo https://flow-content.google/image/fcf16651-14f3-4335-9557-0a808bd11946',
+        '[Character]: Cô gái Đông Á. · mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
+        '[Outfit]: mediaId fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
 
@@ -261,8 +266,98 @@ describe('resolver', () => {
     );
   });
 
+  it('stripFlowMediaUrls turns matching URLs into [Label] and reports orphans', () => {
+    const { text, orphanUrls } = stripFlowMediaUrls(
+      `See https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427 and https://flow-content.google/image/99999999-9999-9999-9999-999999999999`,
+      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+    );
+    expect(text).toContain('[Character]');
+    expect(orphanUrls).toEqual([
+      'https://flow-content.google/image/99999999-9999-9999-9999-999999999999',
+    ]);
+  });
+
+  it('keeps narrative lines that end with Tham khảo while stripping legend suffixes', () => {
+    const { text } = stripFlowMediaUrls(
+      'Xin xem phần Tham khảo\n\n' +
+        '[Character]: mô tả. Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
+      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+    );
+    expect(text).toContain('Xin xem phần Tham khảo');
+    expect(text).toContain('[Character]: mô tả.');
+    expect(text).not.toContain('flow-content.google');
+  });
+
   it('composes the instruction before upstream prompts', () => {
     expect(composePrompt(['scene 1', '  '], 'scene 2')).toBe('scene 2\n\nscene 1');
+  });
+});
+
+describe('assertGeminiPromptPreserved', () => {
+  it('rejects output that drops input labels or adds Flow URLs', () => {
+    expect(() =>
+      assertGeminiPromptPreserved('[Character] walks', 'a person walks'),
+    ).toThrow(/làm mất nhãn/);
+    expect(() =>
+      assertGeminiPromptPreserved(
+        '[Character] walks',
+        '[Character] at https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
+      ),
+    ).toThrow(/link Flow/);
+  });
+
+  it('accepts output that keeps labels', () => {
+    expect(() =>
+      assertGeminiPromptPreserved('[Character] walks', '[Character] walks slowly'),
+    ).not.toThrow();
+  });
+});
+
+describe('templateRepo.syncBuiltIns', () => {
+  it('seeds an empty DB with every built-in template', async () => {
+    expect(await db.templates.count()).toBe(0);
+    await templateRepo.syncBuiltIns();
+    const seeds = getSeedTemplates();
+    expect(await db.templates.count()).toBe(seeds.length);
+    for (const s of seeds) {
+      const row = await db.templates.get(s.id);
+      expect(row?.builtIn).toBe(true);
+      expect(row?.name).toBe(s.name);
+    }
+  });
+
+  it('upserts built-in seeds and leaves user templates alone', async () => {
+    const stale = {
+      ...getSeedTemplates()[0]!,
+      id: 'tpl-dancing-motion',
+      name: 'OLD dancing',
+      builtIn: true as const,
+      createdAt: 1,
+      updatedAt: 1,
+      description: 'old',
+    };
+    await db.templates.put(stale);
+    await db.templates.put({
+      id: 'user-1',
+      name: 'Mine',
+      description: '',
+      category: 'user',
+      tags: [],
+      workflow: createEmptyWorkflow('w', 'Mine'),
+      builtIn: false,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    await templateRepo.syncBuiltIns();
+
+    const removed = await db.templates.get('tpl-dancing-motion');
+    expect(removed).toBeUndefined();
+    const fresh = await db.templates.get('tpl-character-outfit-omni');
+    expect(fresh?.name).toContain('Omni Flash');
+    expect(fresh?.builtIn).toBe(true);
+    const user = await db.templates.get('user-1');
+    expect(user?.name).toBe('Mine');
   });
 });
 

@@ -3,7 +3,6 @@ import type { FlowNode } from '@/features/editor/store';
 import type { NodeType, PortType } from '@/shared/schema';
 import {
   annotateAssetLabels,
-  assetAddress,
   composePrompt,
   extractLabels,
   stripAssetLegend,
@@ -102,11 +101,11 @@ function itemFromSource(src: FlowNode, e: Edge): IncomingItem {
       flowPreviewUrl: d.flowPreviewUrl as string | undefined,
       assetId,
       subtitle: flowMediaId
-        ? 'Google Flow'
+        ? `Google Flow · ${flowMediaId.slice(0, 8)}`
         : flowWithoutId
-          ? 'Google Flow — mất media id, chọn lại (không upload)'
+          ? 'Google Flow - mất media id, chọn lại (không upload)'
           : assetId
-            ? 'File local — upload khi chạy'
+            ? 'File local - upload khi chạy'
             : 'Chưa chọn asset',
       missing: flowWithoutId || (!flowMediaId && (!assetId || !!d.missing)),
     };
@@ -127,13 +126,13 @@ export interface PromptPreview {
   refs: IncomingItem[];
   /** Previous clip forwarded for a continuation scene. */
   continuation?: IncomingItem;
-  /** `[Label]` without a Flow URL yet: no connected asset, or local file not uploaded. */
+  /** `[Label]` without a connected Flow/local asset yet. */
   unresolved: string[];
 }
 
 /**
  * Mirror of `promptExecutor` for the editor: this node's instruction first,
- * then upstream Prompts; `[Label]` stays, legend maps linked assets to Flow URLs.
+ * then upstream Prompts; `[Label]` stays in text; Flow media ids travel as refs.
  */
 export function computePromptPreview(
   nodeId: string,
@@ -181,7 +180,9 @@ export function computePromptPreview(
       : String(node.data.data.instruction ?? '');
   const text = annotateAssetLabels(composePrompt(upstream, instruction), assetRefs);
   const linked = new Set(
-    assetRefs.filter((r) => assetAddress(r)).map((r) => r.label.trim().toLowerCase().replace(/\s+/g, ' ')),
+    assetRefs
+      .filter((r) => r.flowMediaId)
+      .map((r) => r.label.trim().toLowerCase().replace(/\s+/g, ' ')),
   );
   const unresolved = extractLabels(stripAssetLegend(text)).filter(
     (label) => !linked.has(label.trim().toLowerCase().replace(/\s+/g, ' ')),

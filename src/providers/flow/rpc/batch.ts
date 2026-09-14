@@ -86,32 +86,55 @@ export const VIDEO_MODEL_BY_NICKNAME: Record<string, string> = {
 };
 
 /**
- * Omni 1.1 Flash text-to-video rides its own RPC with the duration in the key
- * (`abra_t2v_4s` verified live, FlowKit PR #41). Prompt keeps `[Label]` tags;
- * a trailing legend maps each to its CDN url. Video generation never invents a mid-scene still.
- * Omni frame/reference-to-video has no captured batchexecute payload yet.
+ * Omni Flash text-to-video (`YhhmEf` / `abra_t2v_*`).
+ * Prompt keeps `[Label]` tags and text descriptions only — no CDN URLs.
+ * Image ingredients use {@link RPC_GEN_VIDEO_REFS} instead.
  */
 export const RPC_GEN_VIDEO_TEXT = 'YhhmEf';
+
+/**
+ * Reference-to-video (`MZZa6b`): structured prompt with images anchored at
+ * `[Label]` positions + `item[1]` media-id list. Capture: sp1007/flowkit
+ * `boq_payloads.json` (MIT); Omni keys `abra_r2v_*` confirmed from Flow UI.
+ * Telemetry `WuwhI` is not a submit RPC — do not call it.
+ */
+export const RPC_GEN_VIDEO_REFS = 'MZZa6b';
+
 export const OMNI_FLASH_DURATIONS = [4, 6, 8, 10] as const;
+/** Max unique image media ids per Omni r2v submit (FlowKit fork docs; verify live). */
+export const OMNI_MAX_REFS = 7;
 const OMNI_FLASH_NICKNAMES = new Set(['omni flash', 'google omni flash', 'gemini omni flash']);
 
 export function isOmniFlashModel(key?: string | null): boolean {
   if (typeof key !== 'string' || !key.trim()) return false;
   const n = normalizeModelKey(key);
   if (OMNI_FLASH_NICKNAMES.has(n)) return true;
-  // Wire keys (`abra_t2v_4s`) and any label that still says Omni.
+  // Wire keys (`abra_t2v_4s` / `abra_r2v_4s`) and any label that still says Omni.
   if (/^abra[_-]?/i.test(key.trim())) return true;
   return /\bomni\b/.test(n);
 }
 
-/** Snap to the nearest duration Omni offers. */
-export function omniTextVideoModel(durationSec?: number | null): string {
+function snapOmniDuration(durationSec?: number | null): (typeof OMNI_FLASH_DURATIONS)[number] {
   const want = durationSec ?? 8;
-  const snapped = OMNI_FLASH_DURATIONS.reduce((best, d) =>
+  return OMNI_FLASH_DURATIONS.reduce((best, d) =>
     Math.abs(d - want) < Math.abs(best - want) ? d : best,
   );
-  return `abra_t2v_${snapped}s`;
 }
+
+/** Snap to the nearest duration Omni offers (text-to-video). */
+export function omniTextVideoModel(durationSec?: number | null): string {
+  return `abra_t2v_${snapOmniDuration(durationSec)}s`;
+}
+
+/** Omni reference-to-video wire key (`abra_r2v_{4|6|8|10}s`). */
+export function omniReferenceVideoModel(durationSec?: number | null): string {
+  return `abra_r2v_${snapOmniDuration(durationSec)}s`;
+}
+
+/** Structured prompt part for {@link referenceVideoRequest}. Media-id only (no entityId). */
+export type PromptPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mediaId: string; name: string };
 
 export const VIDEO_ASPECT_PORTRAIT = 1;
 export const VIDEO_ASPECT_LANDSCAPE = 2;
@@ -128,6 +151,9 @@ export const VIDEO_ASPECT_BY_NAME: Record<string, number> = {
 };
 
 export const STATUS_DONE = 'CAE';
+/** Omni / r2v workflow poll (`jwpduf`): status lives at workflow[5][8][0]. */
+export const WORKFLOW_STATUS_DONE = 3;
+export const WORKFLOW_STATUS_FAILED = 4;
 export const OUTCOME_OK = 3;
 export const OUTCOME_COMPLAINT = 4;
 export const SURFACE_ID = 22;
@@ -430,6 +456,72 @@ export function textVideoRequest(opts: {
   return buildEnvelope(RPC_GEN_VIDEO_TEXT, [[item], context(opts.projectId), [clientUuid(), 1]]);
 }
 
+/** Wire shape for structured prompt parts inside MZZa6b item[0]. */
+export function structuredPromptBlock(parts: PromptPart[]): unknown[] {
+  return [
+    null,
+    null,
+    [
+      parts.map((p) => {
+        if (p.type === 'text') return [p.text];
+        return [null, [[p.mediaId, p.name]]];
+      }),
+    ],
+  ];
+}
+
+function uniqueInOrder(ids: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Omni / Veo reference-to-video submit (`MZZa6b`).
+ * Invariants: no adjacent text parts, no empty text, each mediaId once in image parts,
+ * `item[1]` lists those media ids in first-appearance order.
+ */
+export function referenceVideoRequest(opts: {
+  parts: PromptPart[];
+  projectId: string;
+  aspect?: string | number;
+  model: string;
+}): string {
+  const parts = opts.parts;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]!;
+    if (p.type === 'text') {
+      if (!p.text) throw new FlowBatchError('MZZa6b: empty text part');
+      if (i > 0 && parts[i - 1]!.type === 'text') {
+        throw new FlowBatchError('MZZa6b: adjacent text parts must be merged');
+      }
+    }
+  }
+  const imageParts = parts.filter((p): p is Extract<PromptPart, { type: 'image' }> => p.type === 'image');
+  const mediaIds = imageParts.map((p) => p.mediaId);
+  if (new Set(mediaIds).size !== mediaIds.length) {
+    throw new FlowBatchError('MZZa6b: duplicate mediaId in image parts');
+  }
+  const refs = uniqueInOrder(mediaIds).map((id) => [null, id]);
+  if (refs.length !== mediaIds.length) {
+    throw new FlowBatchError('MZZa6b: item[1] must match image parts in order');
+  }
+  const item = [
+    structuredPromptBlock(parts),
+    refs,
+    opts.model,
+    resolveVideoAspect(opts.aspect),
+    null,
+    [null, null, null, null, clientUuid(), clientUuid()],
+  ];
+  return buildEnvelope(RPC_GEN_VIDEO_REFS, [[item], context(opts.projectId), [clientUuid(), 2]]);
+}
+
 /** `[?, ?, ?, [[mediaId, projectId, workflowId, status, …]]]` — the media id is known at submit. */
 export function readTextVideoSubmit(payload: unknown): { mediaId: string; projectId: string | null } {
   const records = Array.isArray(payload) && payload.length > 3 ? payload[3] : null;
@@ -490,6 +582,59 @@ export function extractUuidsFromText(text: string): string[] {
     out.push(id);
   }
   return out;
+}
+
+export interface WorkflowPoll {
+  done: boolean;
+  failed: boolean;
+  error: string | null;
+  reasons: string[];
+}
+
+function digPayload(node: unknown, ...path: number[]): unknown {
+  let cur = node;
+  for (const key of path) {
+    if (!Array.isArray(cur) || key >= cur.length) return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
+/**
+ * Parse Omni / r2v `jwpduf` poll — workflow at payload[2][0], status at [5][8][0].
+ * FlowKit: 3 = done, 4 = failed, 1/2/6 = in progress.
+ */
+export function readWorkflowPoll(payload: unknown): WorkflowPoll | null {
+  const wf = digPayload(payload, 2, 0);
+  if (!Array.isArray(wf)) return null;
+  const st = digPayload(wf, 5, 8);
+  if (!Array.isArray(st) || !st.length) {
+    return { done: false, failed: false, error: null, reasons: [] };
+  }
+  const code = typeof st[0] === 'number' ? st[0] : null;
+  if (code === WORKFLOW_STATUS_FAILED) {
+    let error: string | null = null;
+    const detail = st[1];
+    if (Array.isArray(detail)) {
+      error = detail.find((x): x is string => typeof x === 'string') ?? null;
+    } else if (typeof detail === 'string') {
+      error = detail;
+    }
+    const reasons = Array.isArray(st[2]) ? st[2].map(String) : [];
+    return { done: false, failed: true, error, reasons };
+  }
+  if (code === WORKFLOW_STATUS_DONE) {
+    return { done: true, failed: false, error: null, reasons: [] };
+  }
+  return { done: false, failed: false, error: null, reasons: [] };
+}
+
+/** `as29s` error [5] while render is in flight — keep polling, not fatal. */
+export function isMediaNotReadyRpcError(err: unknown, rpcid = RPC_MEDIA): boolean {
+  if (!(err instanceof RpcError) || err.rpcid !== rpcid) return false;
+  const d = err.detail;
+  if (d === 5) return true;
+  return Array.isArray(d) && d.length === 1 && d[0] === 5;
 }
 
 export function readOperation(payload: unknown): Operation {

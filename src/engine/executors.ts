@@ -1,7 +1,8 @@
 import { FLOW_NO_UPLOAD, type ExecutorContext, type NodeExecutor, type NodeOutputValue } from '@/engine/types';
-import { annotateAssetLabels, composePrompt, resolveTemplate, type AssetRef } from '@/engine/resolver';
+import { annotateAssetLabels, composePrompt, extractLabels, resolveTemplate, type AssetRef } from '@/engine/resolver';
 import type { FlowGenerateRef } from '@/shared/messaging';
 import { parseFlowMediaUrl } from '@/providers/flow/media';
+import { strings } from '@/shared/strings';
 import type {
   AssetNodeDataSchema,
   AutoDownloadNodeDataSchema,
@@ -108,20 +109,40 @@ export const assetExecutor: NodeExecutor = async (ctx) => {
   ];
 };
 
+const PRESET_LABEL_RULE =
+  ' Keep every [Label] tag and every "[Label]: description" block exactly as written. ' +
+  'Do not insert flow-content.google URLs or media ids into the text.';
+
 const PRESET_SYSTEM: Record<string, string> = {
-  enhance: 'Enhance and improve the following prompt for generative AI video/image.',
-  analyzeImage: 'Analyze the provided image(s) in detail.',
-  script: 'Write a short video script based on the inputs.',
-  summarize: 'Summarize the following content concisely.',
-  translate: 'Translate the following content to Vietnamese.',
-  brainstorm: 'Brainstorm creative ideas based on the inputs.',
+  enhance: 'Enhance and improve the following prompt for generative AI video/image.' + PRESET_LABEL_RULE,
+  analyzeImage: 'Analyze the provided image(s) in detail.' + PRESET_LABEL_RULE,
+  script: 'Write a short video script based on the inputs.' + PRESET_LABEL_RULE,
+  summarize: 'Summarize the following content concisely.' + PRESET_LABEL_RULE,
+  translate: 'Translate the following content to Vietnamese.' + PRESET_LABEL_RULE,
+  brainstorm: 'Brainstorm creative ideas based on the inputs.' + PRESET_LABEL_RULE,
   custom: '',
 };
+
+const FLOW_URL_IN_PROMPT_RE = /https:\/\/flow-content\.google\/(?:image|video)\//i;
+
+/** Gemini rewrite must keep input labels and must not invent Flow CDN links. */
+export function assertGeminiPromptPreserved(input: string, output: string): void {
+  if (FLOW_URL_IN_PROMPT_RE.test(output)) {
+    throw fail(strings.geminiInsertedFlowUrl);
+  }
+  const inputLabels = extractLabels(input);
+  if (!inputLabels.length) return;
+  const outputLabels = new Set(extractLabels(output).map((l) => l.trim().toLowerCase()));
+  const missing = inputLabels.filter((l) => !outputLabels.has(l.trim().toLowerCase()));
+  if (missing.length) {
+    throw fail(strings.geminiDroppedLabels(missing.map((l) => `[${l}]`).join(', ')));
+  }
+}
 
 /**
  * Prompt node:
  * - this node's instruction comes first, upstream Prompts are concatenated after it;
- * - `[Label]` stays in the body; a trailing legend maps each linked asset to its Flow URL;
+ * - `[Label]` stays in the body; descriptions gather under `Danh sách tham chiếu` (no URLs);
  * - references and the previous clip are forwarded so the generator receives them.
  */
 export const promptExecutor: NodeExecutor = async (ctx) => {
@@ -137,6 +158,7 @@ export const promptExecutor: NodeExecutor = async (ctx) => {
 
   const system = PRESET_SYSTEM[data.preset] ?? '';
   if (system) {
+    const inputText = text;
     const images = [];
     for (const ref of refs) {
       if (ref.kind !== 'image' || !ref.blob) continue;
@@ -155,6 +177,7 @@ export const promptExecutor: NodeExecutor = async (ctx) => {
       },
     });
     text = result.texts?.[0] ?? '';
+    assertGeminiPromptPreserved(inputText, text);
     if (data.outputFormat === 'json') {
       try {
         JSON.parse(text);
@@ -262,6 +285,7 @@ export const generateImageExecutor: NodeExecutor = async (ctx) => {
       prompt,
       refs,
       timeoutSec: data.timeoutSec,
+      logCtx: { runId: ctx.runId, nodeId: ctx.node.id },
     },
   });
 
@@ -302,6 +326,7 @@ export const generateVideoExecutor: NodeExecutor = async (ctx) => {
       refs,
       continueFrom,
       timeoutSec: data.timeoutSec,
+      logCtx: { runId: ctx.runId, nodeId: ctx.node.id },
     },
   });
 

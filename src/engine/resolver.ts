@@ -54,13 +54,17 @@ export interface AssetRef {
   flowMediaId?: string;
 }
 
-/** Địa chỉ của asset trên Flow, hoặc undefined khi asset chưa có media id (file local chưa upload). */
+/**
+ * Địa chỉ CDN của asset trên Flow (chỉ dùng preview / restore URL cũ).
+ * Prompt gửi Flow không còn nhúng địa chỉ này — media id đi qua slot RPC.
+ */
 export function assetAddress(ref: AssetRef): string | undefined {
   if (!ref.flowMediaId || (ref.kind !== 'image' && ref.kind !== 'video')) return undefined;
   return flowMediaUrl(ref.kind, ref.flowMediaId);
 }
 
-function normalizeLabel(label: string): string {
+/** Case-insensitive, whitespace-collapsed label key for matching `[Label]`. */
+export function normalizeLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
@@ -70,8 +74,17 @@ export const REFERENCE_LIST_HEADER = 'Danh sách tham chiếu';
 const FLOW_MEDIA_URL_RE =
   /https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+/gi;
 
+const FLOW_MEDIA_URL_CAPTURE_RE =
+  /https:\/\/flow-content\.google\/(image|video)\/([0-9a-fA-F-]+)/gi;
+
 const LEGEND_URL_SUFFIX_RE =
   /\s*(?:Tham khảo\s+)?https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*$/i;
+
+/** Suffix appended by {@link annotateAssetLabels} so re-annotate can strip it cleanly. */
+const LEGEND_MEDIA_ID_SUFFIX_RE = /\s*(?:·\s*)?mediaId\s+[0-9a-fA-F-]{8,}\s*$/i;
+
+const THAM_KHAO_URL_SENTENCE_RE =
+  /(?:^|\n)\s*Tham khảo\s+https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*(?=\n|$)/gi;
 
 function isDefBlock(block: string): boolean {
   const t = block.trim();
@@ -80,8 +93,7 @@ function isDefBlock(block: string): boolean {
 
 /**
  * Bỏ khối chú thích tham khảo ở cuối (để annotate lại không bị trùng khi forward
- * qua Prompt khác): giữ lại `[Label]: mô tả`, chỉ bỏ phần URL — mô tả cần sống sót
- * để node cha re-annotate vẫn còn nội dung, không chỉ còn "Tham khảo <url>" trơ trọi.
+ * qua Prompt khác): giữ lại `[Label]: mô tả`, chỉ bỏ phần URL.
  * Không đụng `[Background]: mô tả…` thuần text (không có URL Flow).
  */
 export function stripAssetLegend(content: string): string {
@@ -101,8 +113,14 @@ export function stripAssetLegend(content: string): string {
   }
 
   const converted = refBlocks
-    .map((b) => b.trim().replace(LEGEND_URL_SUFFIX_RE, '').trim())
-    // A bare `[Label]:` with the URL stripped and no description left carries no info.
+    .map((b) =>
+      b
+        .trim()
+        .replace(LEGEND_URL_SUFFIX_RE, '')
+        .replace(LEGEND_MEDIA_ID_SUFFIX_RE, '')
+        .trim(),
+    )
+    // Bare `[Label]:` after stripping URL / mediaId carries no info for re-annotate.
     .filter((b) => b && !/^\[[^\]]+\]:$/.test(b));
   return [...head, ...converted].join('\n\n');
 }
@@ -121,13 +139,67 @@ export function restoreAssetLabels(content: string, refs: AssetRef[]): string {
   return out;
 }
 
+/**
+ * Làm sạch prompt cũ đã lưu có link Flow:
+ * - URL khớp media id của ref → `[Label]`
+ * - câu `Tham khảo <url>` → bỏ
+ * Trả về danh sách URL còn lại (không khớp ref nào) để caller báo lỗi.
+ */
+export function stripFlowMediaUrls(
+  content: string,
+  refs: AssetRef[],
+): { text: string; orphanUrls: string[] } {
+  const byId = new Map<string, AssetRef>();
+  for (const ref of refs) {
+    if (ref.flowMediaId && !byId.has(ref.flowMediaId)) byId.set(ref.flowMediaId, ref);
+  }
+
+  let text = content.replace(THAM_KHAO_URL_SENTENCE_RE, '\n');
+
+  // On `[Label]: …` lines only: drop legacy `Tham khảo <url>` / trailing `Tham khảo` / mediaId suffix.
+  text = text
+    .split('\n')
+    .map((line) => {
+      if (!/^\[[^\]]+\]:/.test(line.trim())) return line;
+      return line
+        .replace(
+          /\s*Tham khảo\s+https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*$/i,
+          '',
+        )
+        .replace(/\s*Tham khảo\s*$/i, '')
+        .replace(LEGEND_MEDIA_ID_SUFFIX_RE, '');
+    })
+    .join('\n');
+
+  const orphanUrls: string[] = [];
+  text = text.replace(FLOW_MEDIA_URL_CAPTURE_RE, (full, _kind: string, id: string) => {
+    const ref = byId.get(id);
+    if (ref) return `[${ref.label}]`;
+    orphanUrls.push(full);
+    return full;
+  });
+
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
+  return { text, orphanUrls: [...new Set(orphanUrls)] };
+}
+
 function cleanDescription(raw: string): string {
   return raw
     .replace(/\s*Tham khảo\s+https:\/\/flow-content\.google\/(?:image|video)\/[0-9a-fA-F-]+\s*$/i, '')
+    .replace(LEGEND_MEDIA_ID_SUFFIX_RE, '')
     .replace(FLOW_MEDIA_URL_RE, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[:\s]+|[:\s]+$/g, '')
     .trim();
+}
+
+/** Một dòng trong khối `Danh sách tham chiếu`: mô tả chữ (nếu có) + mediaId Flow (nếu có). */
+function legendLine(label: string, description?: string, mediaId?: string): string {
+  const parts: string[] = [];
+  if (description) parts.push(description);
+  if (mediaId) parts.push(`mediaId ${mediaId}`);
+  if (!parts.length) return `[${label}]:`;
+  return `[${label}]: ${parts.join(' · ')}`;
 }
 
 /**
@@ -180,44 +252,38 @@ export function extractLabelDescriptions(content: string): Map<string, string> {
   return map;
 }
 
-function legendLine(label: string, address: string, description?: string): string {
-  if (description) {
-    const desc = description.replace(/\.\s*$/, '');
-    return `[${label}]: ${desc}. Tham khảo ${address}`;
-  }
-  return `[${label}]: Tham khảo ${address}`;
-}
-
 /**
- * Giữ `[Label]` trần trong narrative. Mọi khối `[Label]: mô tả` (dù có ảnh gắn
- * kèm hay không) được gom vào một danh sách tham chiếu duy nhất phía dưới narrative,
- * theo đúng thứ tự xuất hiện; label có Flow id thêm `Tham khảo {url}` vào cuối.
+ * Giữ `[Label]` trần trong narrative.
+ * Gom khối `[Label]: mô tả` xuống cuối dưới `Danh sách tham chiếu`.
+ * Asset đã có trên Flow: thêm `mediaId {uuid}` vào dòng (không nhúng URL CDN).
+ * Label nối asset có media id nhưng chưa có mô tả vẫn tạo dòng để UI / forward thấy id.
  */
 export function annotateAssetLabels(content: string, refs: AssetRef[]): string {
-  const cleaned = restoreAssetLabels(stripAssetLegend(content), refs).trimEnd();
-  const linked = new Map<string, { label: string; address: string }>();
+  const restored = restoreAssetLabels(stripAssetLegend(content), refs);
+  const { text: cleaned } = stripFlowMediaUrls(restored, refs);
+  const trimmed = cleaned.trimEnd();
+
+  const linked = new Map<string, { label: string; mediaId: string }>();
   for (const ref of refs) {
-    const address = assetAddress(ref);
     const key = normalizeLabel(ref.label);
-    if (!address || linked.has(key)) continue;
-    linked.set(key, { label: ref.label, address });
+    if (!ref.flowMediaId || linked.has(key)) continue;
+    linked.set(key, { label: ref.label, mediaId: ref.flowMediaId });
   }
 
-  const { narrative, descriptions } = splitLabelDefinitions(cleaned);
-  if (!descriptions.size && !linked.size) return cleaned;
+  const { narrative, descriptions } = splitLabelDefinitions(trimmed);
+  if (!descriptions.size && !linked.size) return trimmed || cleaned;
 
   const entries: string[] = [];
   const seen = new Set<string>();
   for (const [key, { label, description }] of descriptions) {
     seen.add(key);
-    const linkedInfo = linked.get(key);
-    entries.push(linkedInfo ? legendLine(label, linkedInfo.address, description) : `[${label}]: ${description}`);
+    entries.push(legendLine(label, description, linked.get(key)?.mediaId));
   }
-  for (const [key, { label, address }] of linked) {
+  for (const [key, { label, mediaId }] of linked) {
     if (seen.has(key)) continue;
-    entries.push(legendLine(label, address));
+    entries.push(legendLine(label, undefined, mediaId));
   }
-  if (!entries.length) return cleaned;
+  if (!entries.length) return trimmed || cleaned;
 
   const parts = narrative ? [narrative] : [];
   parts.push(`${REFERENCE_LIST_HEADER}\n${entries.join('\n\n')}`);

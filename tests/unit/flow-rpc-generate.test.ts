@@ -11,6 +11,8 @@ import {
   VIDEO_ASPECT_LANDSCAPE,
   VIDEO_ASPECT_PORTRAIT,
 } from '@/providers/flow/rpc/batch';
+import { clearLogs, getLogs } from '@/shared/log';
+import { strings } from '@/shared/strings';
 
 const rpc = vi.fn<(tabId: number, cmd: BatchRpcCmd) => Promise<BatchRpcResult>>();
 
@@ -50,7 +52,15 @@ function inner(cmd: BatchRpcCmd): unknown[] {
 
 function videoModelOf(cmd: BatchRpcCmd): string {
   const item = (inner(cmd)[0] as unknown[][])[0]!;
+  // YhhmEf / eb1hJf: model at [1]; MZZa6b: model at [2] (item[1] is refs list).
+  if (cmd.rpcid === 'MZZa6b') return item[2] as string;
   return item[1] as string;
+}
+
+function refMediaIdsOf(cmd: BatchRpcCmd): string[] {
+  const item = (inner(cmd)[0] as unknown[][])[0]!;
+  const refs = item[1] as unknown[];
+  return refs.map((r) => (r as unknown[])[1] as string);
 }
 
 function mediaIdFor(op: string) {
@@ -61,6 +71,8 @@ function mediaIdFor(op: string) {
 function fakeFlow(opts: {
   deniedModels?: string[];
   flakyMediaRounds?: number;
+  /** as29s calls that answer `[5]` (media not ready) before returning a url. */
+  as29sNotReadyRounds?: number;
   /** ogiZ0b calls (1-based) that answer the transient `[8]` rejection. */
   transientImageCalls?: number[];
   /** i2v source media ids eb1hJf answers with `[13]` (INTERNAL). */
@@ -93,6 +105,11 @@ function fakeFlow(opts: {
         const mediaId = `bbbbbbbb-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
         return { status: 200, text: envelope('YhhmEf', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
       }
+      case 'MZZa6b': {
+        submitted.push(videoModelOf(cmd));
+        const mediaId = `dddddddd-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
+        return { status: 200, text: envelope('MZZa6b', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
+      }
       case 'eb1hJf': {
         const model = videoModelOf(cmd);
         submitted.push(model);
@@ -107,8 +124,14 @@ function fakeFlow(opts: {
         return { status: 200, text: envelope('eb1hJf', [null, 50, [[op, PROJECT, 'scene', null]]]) };
       }
       case 'jwpduf': {
-        const op = ((inner(cmd)[2] as string[][])[0]!)[0]!;
-        return { status: 200, text: envelope('jwpduf', [null, 50, [[op, PROJECT, 'scene', 'CAE']]]) };
+        const target = ((inner(cmd)[2] as string[][])[0]!)[0]!;
+        if (target.startsWith('op-')) {
+          return { status: 200, text: envelope('jwpduf', [null, 50, [[target, PROJECT, 'scene', 'CAE']]]) };
+        }
+        const genParams = new Array(9).fill(null);
+        genParams[8] = [3];
+        const wf = [target, PROJECT, null, null, null, genParams, null, null];
+        return { status: 200, text: envelope('jwpduf', [null, 50, [wf]]) };
       }
       case 'Zzl0ze': {
         const op = cmd.match;
@@ -121,6 +144,10 @@ function fakeFlow(opts: {
           return { error: 'Could not establish connection' };
         }
         const mediaId = inner(cmd)[0] as string;
+        if (opts.as29sNotReadyRounds && opts.as29sNotReadyRounds > 0) {
+          opts.as29sNotReadyRounds--;
+          return { status: 200, text: errorEnvelope('as29s', [5]) };
+        }
         return {
           status: 200,
           text: envelope('as29s', [[`https://flow-content.google/video/${mediaId}?sig=1`]]),
@@ -145,15 +172,33 @@ async function run(payload: Record<string, unknown>) {
   return promise;
 }
 
+function payloadLogRefs(rpcid?: string): Array<{ label?: string; mediaId: string; role?: string; source?: string }> {
+  const entry = getLogs().find(
+    (e) =>
+      e.message.startsWith('payload →') &&
+      e.scope === 'rpc' &&
+      (rpcid == null || e.message.includes(rpcid) || (e.data as { rpcid?: string } | undefined)?.rpcid === rpcid),
+  );
+  const data = entry?.data as
+    | { refs?: Array<{ label?: string; mediaId: string; role?: string; source?: string }>; rpcid?: string }
+    | undefined;
+  return data?.refs ?? [];
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   rpc.mockReset();
+  clearLogs();
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.mocked(console.warn).mockRestore();
+  vi.mocked(console.error).mockRestore();
 });
 
 describe('video aspect', () => {
@@ -255,26 +300,124 @@ describe('generateViaRpc Omni Flash', () => {
     const result = await run({ model: 'Omni Flash', durationSec: 6 });
     expect(submitted).toEqual(['abra_t2v_6s']);
     expect(calls).not.toContain('eb1hJf');
-    expect(calls).not.toContain('jwpduf');
     expect(calls).not.toContain('ogiZ0b');
+    expect(calls).not.toContain('MZZa6b');
+    expect(calls.filter((c) => c === 'jwpduf').length).toBeGreaterThan(0);
     expect(result.medias![0]!.url).toContain('/video/bbbbbbbb-');
   });
 
-  it('Omni Flash with asset links stays on YhhmEf — no mid-scene image, no Veo fallback', async () => {
+  it('keeps polling when as29s returns [5] before the clip is ready', async () => {
+    fakeFlow({ as29sNotReadyRounds: 3 });
+    const result = await run({ model: 'Omni Flash', durationSec: 4 });
+    expect(result.medias![0]!.url).toContain('/video/bbbbbbbb-');
+    expect(rpc.mock.calls.filter((c) => c[1].rpcid === 'as29s').length).toBeGreaterThan(3);
+  });
+
+  it('fails immediately when jwpduf reports workflow render failure', async () => {
+    fakeFlow({});
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (tab, cmd) => {
+      if (cmd.rpcid === 'jwpduf') {
+        const target = ((inner(cmd)[2] as string[][])[0]!)[0]!;
+        const genParams = new Array(9).fill(null);
+        genParams[8] = [4, ['PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED'], ['PROMINENT_PERSON']];
+        const wf = [target, PROJECT, null, null, null, genParams, null, null];
+        return { status: 200, text: envelope('jwpduf', [null, 50, [wf]]) };
+      }
+      return base(tab, cmd);
+    });
+    const promise = run({ model: 'Omni Flash', durationSec: 4 });
+    promise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+    await expect(promise).rejects.toMatchObject({ code: 'FLOW_RENDER_FAILED' });
+    await expect(promise).rejects.toThrow(/người nổi tiếng/i);
+    expect(rpc.mock.calls.filter((c) => c[1].rpcid === 'jwpduf').length).toBe(1);
+  });
+
+  it('Omni Flash with 2 Flow image refs goes through MZZa6b once per count', async () => {
+    const outfit = '33333333-3333-3333-3333-333333333333';
     const { submitted, calls } = fakeFlow({});
-    await run({
+    const result = await run({
       model: 'google omni flash',
       mode: 'ingredients-to-video',
-      prompt: `https://flow-content.google/image/${IMAGE_ID} character with outfit`,
+      durationSec: 4,
+      outputsPerPrompt: 2,
+      prompt: `[Character] with [Outfit]`,
       refs: [
         { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
-        { kind: 'image', label: 'Outfit', mediaId: '33333333-3333-3333-3333-333333333333' },
+        { kind: 'image', label: 'Outfit', mediaId: outfit },
       ],
     });
-    expect(submitted).toEqual(['abra_t2v_8s']);
-    expect(calls).toContain('YhhmEf');
+    expect(submitted).toEqual(['abra_r2v_4s', 'abra_r2v_4s']);
+    expect(calls.filter((c) => c === 'MZZa6b')).toHaveLength(2);
+    expect(calls).not.toContain('YhhmEf');
     expect(calls).not.toContain('ogiZ0b');
     expect(calls).not.toContain('eb1hJf');
+    expect(calls).not.toContain('maseQ');
+    expect(result.medias).toHaveLength(2);
+
+    const mz = rpc.mock.calls.map((c) => c[1]).filter((c) => c.rpcid === 'MZZa6b');
+    expect(refMediaIdsOf(mz[0]!)).toEqual([IMAGE_ID, outfit]);
+    const item = (inner(mz[0]!)[0] as unknown[][])[0]!;
+    const parts = ((item[0] as unknown[])[2] as unknown[])[0] as unknown[];
+    const imageIds = parts
+      .filter((p) => Array.isArray(p) && p[0] === null)
+      .map((p) => ((p as unknown[])[1] as unknown[][])[0]![0]);
+    expect(imageIds).toEqual([IMAGE_ID, outfit]);
+  });
+
+  it('Omni Flash with one local image uploads once then MZZa6b', async () => {
+    const { calls } = fakeFlow({});
+    await run({
+      model: 'Omni Flash',
+      durationSec: 8,
+      prompt: '[Character] walks',
+      refs: [
+        {
+          kind: 'image',
+          label: 'Character',
+          upload: {
+            name: 'face.jpg',
+            mime: 'image/jpeg',
+            dataBase64: 'ZmFrZQ==',
+            cacheKey: 'run1:local-char',
+          },
+        },
+      ],
+    });
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
+    expect(calls).toContain('MZZa6b');
+    expect(calls).not.toContain('YhhmEf');
+    const mz = rpc.mock.calls.map((c) => c[1]).find((c) => c.rpcid === 'MZZa6b')!;
+    expect(videoModelOf(mz)).toBe('abra_r2v_8s');
+    expect(refMediaIdsOf(mz)).toEqual([IMAGE_ID]);
+  });
+
+  it('Omni Flash with too many image refs fails before upload / captcha', async () => {
+    const { calls } = fakeFlow({});
+    const refs = Array.from({ length: 8 }, (_, i) => ({
+      kind: 'image' as const,
+      label: `R${i}`,
+      mediaId: `aaaaaaaa-bbbb-cccc-dddd-${String(i).padStart(12, '0')}`,
+    }));
+    await expect(run({ model: 'Omni Flash', refs })).rejects.toMatchObject({
+      code: 'OMNI_TOO_MANY_REFS',
+    });
+    expect(calls).not.toContain('maseQ');
+    expect(calls).not.toContain('MZZa6b');
+    expect(calls).not.toContain('YhhmEf');
+  });
+
+  it('rejects video refs for Omni before submit', async () => {
+    const { calls } = fakeFlow({});
+    await expect(
+      run({
+        model: 'Omni Flash',
+        refs: [{ kind: 'video', label: 'Video reference', mediaId: IMAGE_ID }],
+      }),
+    ).rejects.toThrow(/video/);
+    expect(calls).not.toContain('YhhmEf');
+    expect(calls).not.toContain('MZZa6b');
   });
 
   it('recovers an Omni clip from the project listing when submit parse fails', async () => {
@@ -284,12 +427,10 @@ describe('generateViaRpc Omni Flash', () => {
     let zzl = 0;
     rpc.mockImplementation(async (tab, cmd) => {
       if (cmd.rpcid === 'YhhmEf') {
-        // HTTP 200 success prefix but unreadable payload shape.
         return { status: 200, text: `)]}'\n12\n[["wrb.fr","YhhmEf","{}",null,null,null,"generic"]]` };
       }
       if (cmd.rpcid === 'Zzl0ze') {
         zzl++;
-        // First call = pre-submit snapshot (empty). Later = new clip on Flow.
         if (zzl === 1) return { status: 200, text: `)]}'\n2\n[]` };
         return {
           status: 200,
@@ -307,6 +448,38 @@ describe('generateViaRpc Omni Flash', () => {
     });
     const result = await run({ model: 'Omni Flash', durationSec: 4 });
     expect(zzl).toBeGreaterThan(1);
+    expect(result.medias![0]!.url).toContain(newVideo);
+  });
+
+  it('recovers Omni reference clip via orphan-poll when MZZa6b parse fails', async () => {
+    const newVideo = 'eeeeeeee-0000-0000-0000-000000000088';
+    fakeFlow({});
+    const base = rpc.getMockImplementation()!;
+    let zzl = 0;
+    rpc.mockImplementation(async (tab, cmd) => {
+      if (cmd.rpcid === 'MZZa6b') {
+        return { status: 200, text: `)]}'\n12\n[["wrb.fr","MZZa6b","{}",null,null,null,"generic"]]` };
+      }
+      if (cmd.rpcid === 'Zzl0ze') {
+        zzl++;
+        if (zzl === 1) return { status: 200, text: `)]}'\n2\n[]` };
+        return { status: 200, text: `https://flow-content.google/video/${newVideo}?sig=1` };
+      }
+      if (cmd.rpcid === 'as29s') {
+        const mediaId = inner(cmd)[0] as string;
+        return {
+          status: 200,
+          text: envelope('as29s', [[`https://flow-content.google/video/${mediaId}?sig=1`]]),
+        };
+      }
+      return base(tab, cmd);
+    });
+    const result = await run({
+      model: 'Omni Flash',
+      durationSec: 4,
+      prompt: '[Character] walks',
+      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+    });
     expect(result.medias![0]!.url).toContain(newVideo);
   });
 });
@@ -329,6 +502,14 @@ describe('generateViaRpc references', () => {
     expect(calls).not.toContain('maseQ');
     expect(calls).not.toContain('ogiZ0b');
     expect(sources).toEqual([IMAGE_ID]);
+    const refs = payloadLogRefs('eb1hJf');
+    expect(refs[0]).toMatchObject({
+      label: 'Character',
+      mediaId: IMAGE_ID,
+      role: 'startFrame',
+      source: 'flow',
+    });
+    expect(refs).toHaveLength(1);
   });
 
   it('surfaces a Flow-internal [13] submit failure immediately — no auto-retry', async () => {
@@ -341,7 +522,7 @@ describe('generateViaRpc references', () => {
     expect(calls).not.toContain('ogiZ0b');
   });
 
-  it('passes Flow asset ids as image references and annotates labels after upload', async () => {
+  it('passes Flow asset ids as image references and keeps [Label] without URLs', async () => {
     const { calls, imageItems } = fakeFlow({});
     const payload = {
       mode: 'text-to-image',
@@ -360,33 +541,63 @@ describe('generateViaRpc references', () => {
     expect((item[2] as unknown[][]).map((r) => r[0])).toEqual(['33333333-3333-3333-3333-333333333333', IMAGE_ID]);
     const prompt = (item[8] as string[][][])[0]![0]![0]!;
     expect(prompt).toBe(
-      `[Outfit] on [Character]\n\n` +
-        `Danh sách tham chiếu\n` +
-        `[Character]: Tham khảo https://flow-content.google/image/33333333-3333-3333-3333-333333333333\n\n` +
-        `[Outfit]: Tham khảo https://flow-content.google/image/${IMAGE_ID}`,
+      '[Outfit] on [Character]\n\n' +
+        'Danh sách tham chiếu\n' +
+        '[Character]: mediaId 33333333-3333-3333-3333-333333333333\n\n' +
+        `[Outfit]: mediaId ${IMAGE_ID}`,
     );
+    expect(prompt).not.toContain('flow-content.google');
   });
 
-  it('Veo with several assets uses the first as start frame only — never ogiZ0b', async () => {
+  it('Veo with several assets fails before submit', async () => {
     const second = '33333333-3333-3333-3333-333333333333';
     const { calls } = fakeFlow({});
-    const sources: string[] = [];
+    await expect(
+      run({
+        model: 'Veo 3.1 Lite',
+        refs: [
+          { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+          { kind: 'image', label: 'Outfit', mediaId: second },
+        ],
+      }),
+    ).rejects.toThrow(/Veo chỉ nhận 1 ảnh/);
+    expect(calls).not.toContain('eb1hJf');
+    expect(calls).not.toContain('ogiZ0b');
+  });
+
+  it('rejects orphan Flow URLs in the prompt', async () => {
+    await expect(
+      run({
+        model: 'Veo 3.1 Lite',
+        prompt: 'https://flow-content.google/image/99999999-9999-9999-9999-999999999999 alone',
+        refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+      }),
+    ).rejects.toThrow(/link Flow không gắn asset/);
+  });
+
+  it('restores a matching Flow URL in an old prompt to [Label]', async () => {
+    const { calls } = fakeFlow({});
+    const prompts: string[] = [];
     const base = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (tab, cmd) => {
-      if (cmd.rpcid === 'eb1hJf') sources.push(sourceOf(cmd));
+      if (cmd.rpcid === 'eb1hJf') {
+        const item = (inner(cmd)[0] as unknown[][])[0]!;
+        prompts.push((((item[0] as unknown[])[2] as string[][][])[0]![0]![0] as string));
+      }
       return base(tab, cmd);
     });
     await run({
       model: 'Veo 3.1 Lite',
-      refs: [
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
-        { kind: 'image', label: 'Outfit', mediaId: second },
-      ],
+      prompt: `https://flow-content.google/image/${IMAGE_ID} walks`,
+      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
     });
-    expect(calls).not.toContain('ogiZ0b');
-    expect(sources).toEqual([IMAGE_ID]);
+    expect(prompts[0]).toBe(
+      '[Character] walks\n\n' +
+        'Danh sách tham chiếu\n' +
+        `[Character]: mediaId ${IMAGE_ID}`,
+    );
+    expect(calls).toContain('eb1hJf');
   });
-
   it('starts the next scene from the last frame of the previous clip', async () => {
     const { calls } = fakeFlow({});
     const sources: string[] = [];
@@ -405,6 +616,77 @@ describe('generateViaRpc references', () => {
     expect(calls).not.toContain('YhhmEf');
     expect(calls).not.toContain('ogiZ0b');
     expect(sources).toEqual([IMAGE_ID]);
+    const refs = payloadLogRefs('eb1hJf');
+    expect(refs[0]).toMatchObject({
+      label: strings.continueStartFrameLabel,
+      mediaId: IMAGE_ID,
+      role: 'startFrame',
+      source: 'upload',
+    });
+    expect(refs[0]!.label).not.toBe('Character');
+  });
+
+  it('continues from last frame and keeps Character/Outfit in prompt only (no media-id slots)', async () => {
+    const { calls } = fakeFlow({});
+    const sources: string[] = [];
+    const prompts: string[] = [];
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (tab, cmd) => {
+      if (cmd.rpcid === 'eb1hJf') {
+        sources.push(sourceOf(cmd));
+        const item = (inner(cmd)[0] as unknown[][])[0]!;
+        prompts.push((((item[0] as unknown[])[2] as string[][][])[0]![0]![0] as string));
+      }
+      return base(tab, cmd);
+    });
+    await run({
+      model: 'Veo 3.1 Lite',
+      mode: 'continue-video',
+      continueFrom: { mime: 'video/mp4', dataBase64: 'Y2xpcA==' },
+      prompt: '[Character] mặc [Outfit] bước tiếp.\n\nDanh sách tham chiếu\n[Character]: cô gái\n\n[Outfit]: áo nâu',
+      refs: [
+        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Outfit', mediaId: '33333333-3333-3333-3333-333333333333' },
+      ],
+    });
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
+    expect(calls).toContain('eb1hJf');
+    expect(calls).not.toContain('YhhmEf');
+    expect(calls).not.toContain('MZZa6b');
+    expect(calls).not.toContain('ogiZ0b');
+    expect(sources).toEqual([IMAGE_ID]);
+    expect(prompts[0]).toContain('[Character]');
+    expect(prompts[0]).toContain('[Outfit]');
+    const refs = payloadLogRefs('eb1hJf');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      label: strings.continueStartFrameLabel,
+      mediaId: IMAGE_ID,
+      role: 'startFrame',
+      source: 'upload',
+    });
+  });
+
+  it('continues without uploading local Character when last frame owns the start slot', async () => {
+    const { calls } = fakeFlow({});
+    await run({
+      model: 'Veo 3.1 Lite',
+      mode: 'continue-video',
+      continueFrom: { mime: 'video/mp4', dataBase64: 'Y2xpcA==' },
+      prompt: '[Character] bước tiếp',
+      refs: [
+        {
+          kind: 'image',
+          label: 'Character',
+          upload: { name: 'c.png', mime: 'image/png', dataBase64: 'aGVsbG8=', cacheKey: 'run:c' },
+        },
+      ],
+    });
+    // Only previous-scene last frame is uploaded — not Character.
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
+    expect(calls).toContain('eb1hJf');
+    expect(calls).not.toContain('ogiZ0b');
+    expect(payloadLogRefs('eb1hJf')).toHaveLength(1);
   });
 });
 

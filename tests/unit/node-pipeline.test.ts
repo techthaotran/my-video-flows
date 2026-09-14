@@ -55,13 +55,19 @@ function flowAsset(id: string, label: string, mediaId: string, kind = 'image') {
 }
 
 describe('prompt node', () => {
-  it('keeps [Label] tags, appends a URL legend, and concatenates upstream prompts', async () => {
+  it('keeps [Label] tags, appends descriptions without URLs, and concatenates upstream prompts', async () => {
     const wf = createEmptyWorkflow('w');
     wf.nodes = [
       flowAsset('char', 'Character', CHARACTER),
       flowAsset('outfit', 'Outfit', OUTFIT),
-      node('p1', 'prompt', { preset: 'custom', instruction: 'Scene 1: [Character] walks in.' }),
-      node('p2', 'prompt', { preset: 'custom', instruction: 'Scene 2: [Character] wears [Outfit]. [Background] stays.' }),
+      node('p1', 'prompt', {
+        preset: 'custom',
+        instruction: '[Character]: Cô gái Đông Á.\n\nScene 1: [Character] walks in.',
+      }),
+      node('p2', 'prompt', {
+        preset: 'custom',
+        instruction: '[Outfit]: Áo blazer.\n\nScene 2: [Character] wears [Outfit]. [Background] stays.',
+      }),
     ];
     wf.edges = [
       edge('char', 'out:image', 'p1', 'in:image', 'image'),
@@ -75,9 +81,11 @@ describe('prompt node', () => {
       `Scene 2: [Character] wears [Outfit]. [Background] stays.\n\n` +
         `Scene 1: [Character] walks in.\n\n` +
         `Danh sách tham chiếu\n` +
-        `[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}\n\n` +
-        `[Outfit]: Tham khảo https://flow-content.google/image/${OUTFIT}`,
+        `[Outfit]: Áo blazer. · mediaId ${OUTFIT}\n\n` +
+        `[Character]: Cô gái Đông Á. · mediaId ${CHARACTER}`,
     );
+    expect(text!.text).not.toContain('flow-content.google');
+    expect(text!.text).not.toContain('Tham khảo');
     // Both assets travel on to the generator, the upstream one via p1.
     expect(forwarded.map((v) => [v.role, v.flowMediaId])).toEqual([
       ['ref', CHARACTER],
@@ -101,8 +109,11 @@ describe('generate node', () => {
     });
     const payload = calls[0]!.payload as FlowGeneratePayload;
     expect(payload?.prompt).toBe(
-      `[Character] dances\n\nDanh sách tham chiếu\n[Character]: Tham khảo https://flow-content.google/image/${CHARACTER}`,
+      '[Character] dances\n\n' +
+        'Danh sách tham chiếu\n' +
+        `[Character]: mediaId ${CHARACTER}`,
     );
+    expect(payload?.prompt).not.toContain('flow-content.google');
     expect(payload?.refs).toEqual([{ kind: 'image', label: 'Character', mediaId: CHARACTER }]);
     expect(outputs.get('g')![0]!.flowMediaId).toBe('new-image');
   });

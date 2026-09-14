@@ -108,7 +108,50 @@ export const strings = {
   nodeText: 'Text',
   nodeTextDesc: 'Đã gộp vào Prompt',
   nodePrompt: 'Prompt',
-  nodePromptDesc: 'Nối prompt phía trước; thay [Label] bằng địa chỉ asset trên Flow; nhận Generate Video làm cảnh trước',
+  nodePromptDesc:
+    'Nối prompt phía trước; giữ [Label] và mô tả; asset gửi Flow bằng media id; nhận Generate Video làm cảnh trước',
+  flowPromptOrphanUrl:
+    'Prompt chứa link Flow không gắn asset. Nối asset vào node để gửi bằng media id.',
+  veoTooManyImageRefs: 'Veo chỉ nhận 1 ảnh start frame; bỏ bớt ảnh hoặc chọn Omni Flash',
+  omniTooManyRefs: (max: number, n: number) =>
+    `Omni Flash chỉ nhận tối đa ${max} ảnh tham chiếu (đang có ${n}). Bỏ bớt ảnh rồi thử lại.`,
+  /** Progress / log when scene continue keeps [Label] text but drops media-id slots. */
+  continueIgnoresImageRefs: (labels: string) =>
+    `Nối cảnh: chỉ dùng frame cuối làm start frame; ${labels} giữ trong prompt (không gửi media id).`,
+  refKindUnsupported: (label: string, kind: string) =>
+    `[${label}] là ${kind}, model này chưa nhận làm tham chiếu`,
+  flowMediaIdNotInPayload: (labels: string) =>
+    `Media id không vào được payload RPC (${labels}). Kiểm tra model / số lượng ảnh tham chiếu.`,
+  videoNeedsStartFrame:
+    'Tạo video không tạo ảnh trung gian. Dùng Omni Flash (prompt thuần hoặc ảnh tham chiếu), hoặc nối đúng 1 ảnh start frame / cảnh trước cho Veo i2v.',
+  continueStartFrameLabel: 'frame cuối cảnh trước',
+  geminiInsertedFlowUrl: 'Gemini đã chèn link Flow vào prompt. Giữ [Label] và mô tả chữ, không dùng URL.',
+  geminiDroppedLabels: (labels: string) =>
+    `Gemini đã làm mất nhãn trong prompt: ${labels}. Giữ nguyên mọi [Label].`,
+  defaultImageRefLabel: 'Ảnh',
+  omniContinueUsesVeo: 'Omni Flash chưa nối cảnh trên API batch - dùng Veo i2v từ frame cuối…',
+  extractLastFrameProgress: 'Lấy frame cuối của cảnh trước để I2V…',
+  omniReferenceDenied: (model: string) =>
+    `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni tham chiếu (${model}). Bỏ ảnh tham chiếu (Omni text-only) hoặc chọn model Veo.`,
+  omniReferenceSubmitFailed: (model: string, detail: string) =>
+    `Omni Flash tham chiếu bị từ chối (${model}): ${detail}`,
+  /** Map Flow workflow failure codes (jwpduf) to actionable Vietnamese. */
+  flowRenderFailureMessage: (code: string | null, reasons: string[]): string => {
+    if (code === 'PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED') {
+      return (
+        'Google Flow từ chối vì ảnh tham chiếu hoặc mô tả bị lọc người nổi tiếng. ' +
+        'Dùng ảnh stock/generic, tránh mô tả giống người thật có thể nhận diện; thử ảnh khác hoặc Omni text-only.'
+      );
+    }
+    const detail = code ?? (reasons.length ? reasons.join(', ') : null) ?? 'không rõ';
+    return `Flow từ chối render video: ${detail}`;
+  },
+  omniTextDenied: (model: string) =>
+    `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni Flash (${model}). Thử chọn model Veo.`,
+  omniTextSubmitFailed: (model: string, detail: string) =>
+    `Omni Flash bị từ chối (${model}): ${detail}`,
+  omniUnknownLabelWarn: (labels: string) =>
+    `Nhãn trong prompt không có asset nối vào: ${labels} (giữ chữ, không neo ảnh)`,
   nodeGenerateImage: 'Generate Image',
   nodeGenerateImageDesc: 'Tạo ảnh (tỉ lệ, số lượng, độ phân giải, model)',
   nodeGenerateVideo: 'Generate Video',

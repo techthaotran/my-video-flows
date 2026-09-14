@@ -1,0 +1,29 @@
+{
+  "_source": {
+    "kind": "sp1007/flowkit",
+    "url": "https://github.com/sp1007/flowkit",
+    "commit": "9d11943239f27f6e2edf55a29f4f7ab5b57454ee",
+    "path": "agent/services/testdata/boq_payloads.json",
+    "license": "MIT",
+    "modelKey": "veo_3_1_t2v_lite_low_priority",
+    "note": "Contrast fixture for textVideoRequest (YhhmEf). Capture used Veo t2v key; app Omni uses abra_t2v_*. Drift: capture batch trailer is [uuid, 2]; app sends [uuid, 1] (verified live Omni)."
+  },
+  "rpcid": "YhhmEf",
+  "args": [
+    [
+      [
+        [
+          null,
+          null,
+          [[["con chó chạy tung tăng trên đồng cỏ"]]]
+        ],
+        "veo_3_1_t2v_lite_low_priority",
+        2,
+        null,
+        [null, null, null, null, "CLIENT_UUID_A", "CLIENT_UUID_B"]
+      ]
+    ],
+    [null, 22, null, null, null, "PROJECT_ID", null, null, null, null, ["__CAPTCHA__", 1]],
+    ["BATCH_UUID", 2]
+  ]
+}

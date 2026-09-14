@@ -29,7 +29,7 @@ Flow tab (MAIN world)
 | Executors | `src/engine/executors.ts` | Logic chạy từng loại node |
 | Run | `src/engine/RunManager.ts` | Queue, retry, cache input hash |
 | Scheduler | `src/engine/scheduler.ts` | Topo-sort, upstream/downstream |
-| Resolver | `src/engine/resolver.ts` | Ghép prompt, chú thích `[Label]` → URL |
+| Resolver | `src/engine/resolver.ts` | Ghép prompt, giữ `[Label]` + mô tả (không nhúng URL) |
 | Flow RPC | `src/providers/flow/rpc/*` | Generate không click DOM |
 | Editor | `src/features/editor/*` | Canvas React Flow |
 
@@ -132,7 +132,9 @@ Khi `gatherInputs`, mỗi giá trị có `role`:
 - Asset Flow: `flowMediaId` + `fromFlow: true` → **không** `maseQ`
 - Asset local: upload một lần / run (cache theo `cacheKey`)
 
-Prompt giữ `[Label]` trần trong narrative; khối `[Label]: mô tả` chuyển thành `[Label]: {mô tả}. Tham khảo https://flow-content.google/…` (`annotateAssetLabels`). Không thay label bằng URL. URL bị replace nhầm từ bản cũ được khôi phục về `[Label]`.
+Prompt giữ `[Label]` trần trong narrative; khối `[Label]: mô tả` gom xuống `Danh sách tham chiếu` (`annotateAssetLabels`).
+Asset đã có `flowMediaId` hiện `mediaId {uuid}` trên dòng tham chiếu (không nhúng URL CDN).
+Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp asset → khôi phục `[Label]`; URL lạ → lỗi trước submit.
 
 ### 2.6 UI canvas
 
@@ -152,9 +154,11 @@ Prompt giữ `[Label]` trần trong narrative; khối `[Label]: mô tả` chuy�
                                                       [Auto Download]
 ```
 
-- **Omni Flash:** asset chủ yếu là link trong prompt → `YhhmEf`
-- **Veo:** đúng 1 ảnh đầu = start frame → `eb1hJf`
-- **Kéo dài / scene tiếp:** video → Prompt → Generate Video → extract last frame → upload → Veo i2v
+- **Omni Flash text-only:** prompt thuần → `YhhmEf` / `abra_t2v_*`
+- **Omni + ảnh:** structured prompt neo ảnh tại `[Label]` → `MZZa6b` / `abra_r2v_*` (tối đa `OMNI_MAX_REFS`)
+- **Veo:** đúng 1 ảnh = start frame → `eb1hJf`; ≥ 2 ảnh → lỗi
+- **Kéo dài / scene tiếp:** video → Prompt → Generate Video → extract last frame → upload → Veo i2v.
+  Ảnh Character/Outfit nối kèm vẫn giữ `[Label]` + mô tả trong prompt; **không** gửi media id (slot start frame đã dùng cho frame cuối).
 
 ---
 
@@ -180,10 +184,13 @@ Generate **không click** nút Generate trên DOM. DOM chỉ dùng cho auth, dia
 | `RPC_GEN_IMAGE` | `ogiZ0b` | Text / image-to-image |
 | `RPC_GEN_VIDEO` | `eb1hJf` | Veo image-to-video |
 | `RPC_GEN_VIDEO_TEXT` | `YhhmEf` | Omni Flash text-to-video |
+| `RPC_GEN_VIDEO_REFS` | `MZZa6b` | Omni (và Veo r2v) reference-to-video — ảnh neo trong structured prompt |
 | `RPC_UPLOAD_IMAGE` | `maseQ` | Upload ảnh local → media id |
 | `RPC_OPERATION` | `jwpduf` | Poll trạng thái Veo |
 | `RPC_PROJECT_MEDIA` | `Zzl0ze` | Liệt kê media project |
 | `RPC_MEDIA` | `as29s` | Resolve CDN URL theo media id |
+
+`WuwhI` là telemetry UI (không phải submit) — không gọi.
 
 Codec: `src/providers/flow/rpc/batch.ts`  
 Orchestrate: `src/providers/flow/rpc/generate.ts`
@@ -194,7 +201,8 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 |---|---|
 | Nano Banana 2 | `NARWHAL` (`ogiZ0b`) |
 | Nano Banana 2 Lite | `HARBOR_SEAL` (`ogiZ0b`) |
-| Omni Flash | `YhhmEf` + `abra_t2v_{4\|6\|8\|10}s` |
+| Omni Flash (text) | `YhhmEf` + `abra_t2v_{4\|6\|8\|10}s` |
+| Omni Flash (có ảnh) | `MZZa6b` + `abra_r2v_{4\|6\|8\|10}s` |
 | Veo 3.1 Lite / Low Priority / Fast | `eb1hJf` + `veo_3_1_i2v_*` (fallback khi `MODEL_ACCESS_DENIED`) |
 
 **Không** dùng `ogiZ0b` để tự tạo ảnh trung gian cho video.
@@ -204,7 +212,7 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 **Image**
 
 1. Resolve refs (Flow id giữ nguyên; local → compress → `maseQ`)
-2. Thay `[Label]` trong prompt
+2. Giữ `[Label]` trong prompt; media id vào `refMediaIds`
 3. `count` request `ogiZ0b` (stagger 0/500/1500/2500 ms), mỗi request một captcha
 4. Lỗi transient `[8]` → chờ ~34s, retry các index đó
 5. Lấy URL ảnh → base64
@@ -213,9 +221,13 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 
 | Trường hợp | Hành vi |
 |---|---|
-| Omni, không continue | Prompt (+ CDN link) → `YhhmEf` × count → poll media |
-| Veo / có frame | Đúng 1 start frame → `eb1hJf` + model fallback |
+| Omni, không ref | Prompt (không CDN link) → `YhhmEf` × count → poll media |
+| Omni, 1..`OMNI_MAX_REFS` ảnh | `buildReferencePromptParts` → `MZZa6b` / `abra_r2v_*` → poll media |
+| Omni, > `OMNI_MAX_REFS` ảnh | Lỗi rõ ràng, không cắt bớt |
+| Veo, 1 ảnh | Start frame → `eb1hJf` + model fallback |
+| Veo, ≥ 2 ảnh | Lỗi rõ ràng |
 | continueFrom | Extract last frame → `maseQ` → Veo i2v |
+| continueFrom + ảnh tham chiếu | Frame cuối = start frame; `[Label]` giữ trong prompt; không upload / không wire media id của Character/Outfit |
 | Không frame + không Omni | Lỗi: chọn Omni hoặc cung cấp 1 ảnh / scene trước |
 
 Poll: mỗi 10s (`jwpduf` + định kỳ `Zzl0ze` → `as29s`).

@@ -78,7 +78,7 @@ export interface FlowMediaItem {
 
 export interface FlowGenerateRef {
   kind: 'image' | 'video' | 'audio';
-  /** Label asset ([Character]…) — placeholder còn sót sẽ được thay sau khi upload. */
+  /** Label asset ([Character]…) — giữ trong prompt; media id đi qua slot RPC. */
   label?: string;
   /** Media đã có trên Flow: dùng thẳng, không upload. */
   mediaId?: string;
@@ -100,6 +100,8 @@ export interface FlowGeneratePayload {
   /** Clip length; Omni Flash snaps to 4/6/8/10s. Veo i2v has no duration slot. */
   durationSec?: number;
   timeoutSec?: number;
+  /** Chỉ để gắn log — không gửi lên Flow. */
+  logCtx?: { runId?: string; nodeId?: string };
 }
 
 export interface GeminiGeneratePayload {

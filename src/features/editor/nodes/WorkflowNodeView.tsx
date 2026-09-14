@@ -352,7 +352,7 @@ function PromptBody({
         className={NODE_TEXTAREA_CLASS}
         value={instruction}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="vd: nhân vật [Character] đang mặc một [Outfit] — chú thích URL gắn cuối prompt"
+        placeholder="vd: [Character] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
       />
       {unresolved.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -376,7 +376,7 @@ function PromptBody({
           readOnly
           className={cn(NODE_TEXTAREA_CLASS, 'border-primary/25 bg-primary/5 font-mono text-[11px]')}
           value={output}
-          placeholder="Instruction + prompt phía trước; [Label] giữ nguyên, chú thích URL ở cuối…"
+          placeholder="Instruction + prompt phía trước; [Label] + mô tả · mediaId {uuid}"
         />
       </div>
     </div>

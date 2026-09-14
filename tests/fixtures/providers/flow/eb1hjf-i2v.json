@@ -1,0 +1,30 @@
+{
+  "_source": {
+    "kind": "sp1007/flowkit",
+    "url": "https://github.com/sp1007/flowkit",
+    "commit": "9d11943239f27f6e2edf55a29f4f7ab5b57454ee",
+    "path": "agent/services/testdata/boq_payloads.json",
+    "license": "MIT",
+    "modelKey": "veo_3_1_i2v_s_lite_4s_low_priority",
+    "note": "Contrast fixture for videoRequest (eb1hJf). Drift: capture crop is [null,null,1,1]; app uses FULL_FRAME_CROP fractional box (verified live). Model key differs by account tier."
+  },
+  "rpcid": "eb1hJf",
+  "args": [
+    [
+      [
+        [
+          null,
+          null,
+          [[["chiếc xe đạp đột nhiên đổ xuống đất"]]]
+        ],
+        "veo_3_1_i2v_s_lite_4s_low_priority",
+        2,
+        null,
+        [null, "MEDIA_START", null, null, null, [null, null, 1, 1]],
+        [null, null, null, null, "CLIENT_UUID_A", "CLIENT_UUID_B"]
+      ]
+    ],
+    [null, 22, null, null, null, "PROJECT_ID", null, null, null, null, ["__CAPTCHA__", 1]],
+    ["BATCH_UUID", 2]
+  ]
+}

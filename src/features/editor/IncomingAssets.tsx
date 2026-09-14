@@ -122,7 +122,7 @@ export function AssetThumb({
         onError={() => setBroken(true)}
         muted
         className={cn(box, 'shrink-0 rounded border border-border object-cover bg-muted')}
-        title={item.title}
+        title={item.flowMediaId ? `${item.title} · ${item.flowMediaId}` : item.title}
       />
     );
   }
@@ -133,7 +133,7 @@ export function AssetThumb({
       onError={() => setBroken(true)}
       alt={item.title}
       className={cn(box, 'shrink-0 rounded border border-border object-cover bg-muted')}
-      title={item.title}
+      title={item.flowMediaId ? `${item.title} · ${item.flowMediaId}` : item.title}
     />
   );
 }
@@ -181,8 +181,11 @@ export function ReferencedAssetsStrip({
               <span className="text-[9px] leading-none">×</span>
             </button>
           )}
-          <div className="pointer-events-none absolute -bottom-4 left-0 hidden max-w-[100px] truncate text-[9px] text-muted-foreground group-hover:block">
-            {item.title}
+          <div
+            className="pointer-events-none absolute -bottom-4 left-0 hidden max-w-[120px] truncate text-[9px] text-muted-foreground group-hover:block"
+            title={item.flowMediaId ? `${item.title} · ${item.flowMediaId}` : item.title}
+          >
+            {item.flowMediaId ? `${item.title} · ${item.flowMediaId.slice(0, 8)}` : item.title}
           </div>
         </div>
       ))}
@@ -221,7 +224,17 @@ export function IncomingInputsDetail({ items }: { items: IncomingItem[] }) {
               </span>
             </div>
             {item.subtitle && (
-              <div className="truncate font-mono text-[10px] text-amber-300/90">{item.subtitle}</div>
+              <div
+                className="truncate font-mono text-[10px] text-amber-300/90"
+                title={item.flowMediaId ?? item.subtitle}
+              >
+                {item.subtitle}
+              </div>
+            )}
+            {item.flowMediaId && (
+              <div className="truncate font-mono text-[9px] text-muted-foreground" title={item.flowMediaId}>
+                mediaId · {item.flowMediaId}
+              </div>
             )}
             {item.text && (
               <div className="line-clamp-4 whitespace-pre-wrap text-[10px] leading-snug text-foreground/85">

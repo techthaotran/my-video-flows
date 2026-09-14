@@ -1,0 +1,38 @@
+{
+  "_source": {
+    "kind": "sp1007/flowkit",
+    "url": "https://github.com/sp1007/flowkit",
+    "commit": "9d11943239f27f6e2edf55a29f4f7ab5b57454ee",
+    "path": "agent/services/testdata/boq_payloads.json",
+    "license": "MIT",
+    "modelKey": "veo_3_1_r2v_lite_low_priority",
+    "note": "Fallback until project-account submit (plan 4.1) is captured. Same MZZa6b wire shape; Omni live uses abra_r2v_{d}s."
+  },
+  "rpcid": "MZZa6b",
+  "args": [
+    [
+      [
+        [
+          null,
+          null,
+          [
+            [
+              ["chiếc "],
+              [null, [["MEDIA_A", "long"]]],
+              [" bay lơ lửng trên đầu con mèo "],
+              [null, [["MEDIA_B", "test-upload-cat.jpg"]]],
+              ["  rồi từ từ hạ xuống đầu nó"]
+            ]
+          ]
+        ],
+        [[null, "MEDIA_A"], [null, "MEDIA_B"]],
+        "veo_3_1_r2v_lite_low_priority",
+        1,
+        null,
+        [null, null, null, null, "CLIENT_UUID_A", "CLIENT_UUID_B"]
+      ]
+    ],
+    [null, 22, null, null, null, "PROJECT_ID", null, null, null, null, ["__CAPTCHA__", 1]],
+    ["BATCH_UUID", 2]
+  ]
+}
