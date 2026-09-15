@@ -7,7 +7,7 @@ import type {
   FlowMediaItem,
 } from '@/shared/messaging';
 import { generateViaRpc } from '@/providers/flow/rpc/generate';
-import { listProjectMediaViaRpc, signFlowMedia, type SignedFlowMedia } from '@/providers/flow/rpc/listing';
+import { listProjectMediaPage, signFlowMedia, type SignedFlowMedia } from '@/providers/flow/rpc/listing';
 import { createLogger } from '@/shared/log';
 
 const log = createLogger('driver');
@@ -300,21 +300,34 @@ export class ProviderRouter {
   }
 
   /**
-   * Flow media for the asset picker, newest first: media only the tab shows (fresh
-   * renders not yet on the listing, already with signed urls) lead, then the
-   * project listing RPC (every item, urls signed per page via `signFlowMedia`).
-   * Items without a media id can't be referenced by generation, so they're dropped.
+   * One page of Flow media for the asset picker (newest first within the page).
+   * First page (`pageToken` null) merges DOM gallery items that aren't on the
+   * listing yet and reuses any signed urls the tab already shows. Later pages
+   * are RPC-only. Urls for unsigned ids are filled per page via `signFlowMedia`.
    */
-  async listFlowMedia(kind: 'image' | 'video' | 'any'): Promise<{ items: FlowMediaItem[] }> {
+  async listFlowMedia(
+    kind: 'image' | 'video' | 'any',
+    opts?: { pageToken?: string | null },
+  ): Promise<{ items: FlowMediaItem[]; nextPageToken: string | null }> {
     const tabId = await this.pool.acquire('flow');
+    const pageToken = opts?.pageToken ?? null;
+
+    if (pageToken) {
+      const page = await listProjectMediaPage(tabId, pageToken);
+      const items = filterFlowMediaKind(page.items, kind);
+      log.info(`listFlowMedia trang tiếp: ${items.length} asset (listing ${page.items.length})`);
+      return { items, nextPageToken: page.nextPageToken };
+    }
+
     const [rpc, dom] = await Promise.allSettled([
-      listProjectMediaViaRpc(tabId),
+      listProjectMediaPage(tabId, null),
       this.execute('flow', { name: 'listMedia', payload: { kind: 'any' } }, new AbortController().signal, () => undefined),
     ]);
     if (rpc.status === 'rejected') log.warn(`listFlowMedia RPC lỗi: ${errMessage(rpc.reason)}`);
     if (rpc.status === 'rejected' && dom.status === 'rejected') throw dom.reason;
 
-    const rpcItems = rpc.status === 'fulfilled' ? rpc.value : [];
+    const rpcPage = rpc.status === 'fulfilled' ? rpc.value : { items: [] as FlowMediaItem[], nextPageToken: null };
+    const rpcItems = rpcPage.items;
     const domItems =
       dom.status === 'fulfilled' ? ((dom.value.raw as { items?: FlowMediaItem[] })?.items ?? []) : [];
     const domById = new Map(domItems.filter((i) => i.mediaId).map((i) => [i.mediaId!, i]));
@@ -324,7 +337,6 @@ export class ProviderRouter {
     const seen = new Set<string>();
     const merged = [
       ...domItems.filter((i) => !listed.has(i.mediaId)),
-      // Reuse the tab's signed url for listed media it happens to show.
       ...rpcItems.map((i) => {
         const shown = domById.get(i.mediaId!);
         return shown ? { ...i, kind: shown.kind, kindKnown: true, url: shown.url, thumbUrl: shown.thumbUrl } : i;
@@ -332,13 +344,12 @@ export class ProviderRouter {
     ];
     for (const item of merged) {
       if (!item.mediaId || seen.has(item.mediaId)) continue;
-      // Unknown kind stays in; the picker drops mismatches once signing settles it.
       if (kind !== 'any' && item.kindKnown !== false && item.kind !== kind) continue;
       seen.add(item.mediaId);
       items.push(item);
     }
-    log.info(`listFlowMedia: ${items.length} asset (listing ${rpcItems.length}, tab ${domItems.length})`);
-    return { items };
+    log.info(`listFlowMedia trang đầu: ${items.length} asset (listing ${rpcItems.length}, tab ${domItems.length})`);
+    return { items, nextPageToken: rpcPage.nextPageToken };
   }
 
   /** Signed urls (and settled kind) for one picker page of media ids. */
@@ -360,6 +371,15 @@ export class ProviderRouter {
 
 function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+function filterFlowMediaKind(items: FlowMediaItem[], kind: 'image' | 'video' | 'any'): FlowMediaItem[] {
+  if (kind === 'any') return items.filter((i) => !!i.mediaId);
+  return items.filter((i) => {
+    if (!i.mediaId) return false;
+    if (i.kindKnown === false) return true;
+    return i.kind === kind;
+  });
 }
 
 export type EventBroadcaster = (ev: SwToUiEvent) => void;

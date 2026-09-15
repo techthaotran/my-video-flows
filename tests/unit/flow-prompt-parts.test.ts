@@ -4,6 +4,7 @@ import { buildReferencePromptParts, formatPartsForLog } from '@/providers/flow/r
 
 const CHAR = '5ef8278f-a08d-4b30-a45c-bdd946b37427';
 const OUTFIT = 'fcf16651-14f3-4335-9557-0a808bd11946';
+const BG = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 describe('buildReferencePromptParts', () => {
   it('anchors first [Label] in narrative; later repeats stay as text', () => {
@@ -88,6 +89,23 @@ describe('buildReferencePromptParts', () => {
     );
     expect(unknownLabels).toEqual(['Background']);
     expect(parts.some((p) => p.type === 'text' && p.text.includes('[Background]'))).toBe(true);
+  });
+
+  it('anchors Background like Character when both are ordered refs', () => {
+    const { parts, mediaIds, unknownLabels } = buildReferencePromptParts(
+      '[Character] walks in [Background]',
+      [
+        { label: 'Character', mediaId: CHAR },
+        { label: 'Background', mediaId: BG },
+      ],
+    );
+    expect(unknownLabels).toEqual([]);
+    expect(mediaIds).toEqual([CHAR, BG]);
+    expect(parts).toEqual([
+      { type: 'image', mediaId: CHAR, name: 'Character' },
+      { type: 'text', text: ' walks in ' },
+      { type: 'image', mediaId: BG, name: 'Background' },
+    ]);
   });
 
   it('text parts never contain flow CDN urls or ref media ids', () => {

@@ -420,6 +420,43 @@ describe('generateViaRpc Omni Flash', () => {
     expect(calls).not.toContain('MZZa6b');
   });
 
+  it('rejects audio refs for Omni before submit', async () => {
+    const { calls } = fakeFlow({});
+    await expect(
+      run({
+        model: 'Omni Flash',
+        refs: [{ kind: 'audio', label: 'Audio voice', mediaId: IMAGE_ID }],
+      }),
+    ).rejects.toThrow(/audio/);
+    expect(calls).not.toContain('YhhmEf');
+    expect(calls).not.toContain('MZZa6b');
+  });
+
+  it('Omni Flash with Character + Background Flow images goes through MZZa6b', async () => {
+    const background = '33333333-3333-3333-3333-333333333333';
+    const { calls } = fakeFlow({});
+    await run({
+      model: 'Omni Flash',
+      durationSec: 4,
+      prompt: '[Character] walks in [Background]',
+      refs: [
+        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Background', mediaId: background },
+      ],
+    });
+    expect(calls.filter((c) => c === 'MZZa6b')).toHaveLength(1);
+    expect(calls).not.toContain('YhhmEf');
+    expect(calls).not.toContain('maseQ');
+    const mz = rpc.mock.calls.map((c) => c[1]).find((c) => c.rpcid === 'MZZa6b')!;
+    expect(refMediaIdsOf(mz)).toEqual([IMAGE_ID, background]);
+    const item = (inner(mz)[0] as unknown[][])[0]!;
+    const parts = ((item[0] as unknown[])[2] as unknown[])[0] as unknown[];
+    const imageIds = parts
+      .filter((p) => Array.isArray(p) && p[0] === null)
+      .map((p) => ((p as unknown[])[1] as unknown[][])[0]![0]);
+    expect(imageIds).toEqual([IMAGE_ID, background]);
+  });
+
   it('recovers an Omni clip from the project listing when submit parse fails', async () => {
     const newVideo = 'cccccccc-0000-0000-0000-000000000099';
     fakeFlow({});
@@ -742,5 +779,13 @@ describe('readProjectMediaPage', () => {
     );
     expect(page.items.map((i) => i.mediaId)).toEqual([id(1), id(2)]);
     expect(page.nextPageToken).toBe('CgwI6f7zxQYQgPSm3AMSJGFiY2Q');
+  });
+
+  it('projectMediaPageRequest puts token in the list envelope', async () => {
+    const { projectMediaPageRequest } = await import('@/providers/flow/rpc/batch');
+    const freq = projectMediaPageRequest(project, 'CgwI6f7zxQYQgPSm3AMSJGFiY2Q');
+    const outer = JSON.parse(freq) as unknown[][][];
+    const inner = JSON.parse(outer[0]![0]![1] as string) as unknown[];
+    expect(inner).toEqual([`projects/${project}`, null, 'CgwI6f7zxQYQgPSm3AMSJGFiY2Q', null, [1]]);
   });
 });

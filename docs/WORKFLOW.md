@@ -147,18 +147,20 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
 ### 2.7 Graph mẫu
 
 ```
-[Asset: Character] ──image──┐
-[Asset: Outfit]   ──image──┼──► [Prompt] ──text(+refs)──► [Generate Video]
-                              ▲                              │
-[Generate Video prev] ─video──┘ (continuation)               ▼
-                                                      [Auto Download]
+[Asset: Character]  ──image──┐
+[Asset: Outfit]     ──image──┼──► [Prompt] ──text(+refs)──► [Generate Video]
+[Asset: Background] ──image──┤     ▲                              │
+                                 │                              ▼
+[Generate Video prev] ──video────┘ (continuation)        [Auto Download]
 ```
 
 - **Omni Flash text-only:** prompt thuần → `YhhmEf` / `abra_t2v_*`
-- **Omni + ảnh:** structured prompt neo ảnh tại `[Label]` → `MZZa6b` / `abra_r2v_*` (tối đa `OMNI_MAX_REFS`)
+- **Omni + ảnh:** structured prompt neo ảnh tại `[Label]` → `MZZa6b` / `abra_r2v_*` (tối đa `OMNI_MAX_REFS`).
+  Mọi label `kind: image` (Character, Outfit, Background, …) đều neo media id như nhau.
 - **Veo:** đúng 1 ảnh = start frame → `eb1hJf`; ≥ 2 ảnh → lỗi
+- **Audio / Video reference:** nối vào Generate Video → lỗi rõ (`refKindUnsupported`); mô tả chữ `[Audio voice]: …` trong prompt vẫn được.
 - **Kéo dài / scene tiếp:** video → Prompt → Generate Video → extract last frame → upload → Veo i2v.
-  Ảnh Character/Outfit nối kèm vẫn giữ `[Label]` + mô tả trong prompt; **không** gửi media id (slot start frame đã dùng cho frame cuối).
+  Ảnh Character/Outfit/Background nối kèm vẫn giữ `[Label]` + mô tả trong prompt; **không** gửi media id (slot start frame đã dùng cho frame cuối).
 
 ---
 
@@ -238,7 +240,9 @@ Poll: mỗi 10s (`jwpduf` + định kỳ `Zzl0ze` → `as29s`).
 |---|---|---|
 | `checkAuth` | DOM | Sign-in / avatar |
 | `diagnose` | DOM | Selector + project URL |
-| `listMedia` | DOM gallery | Asset picker |
+| `listFlowMedia` | `Zzl0ze` phân trang (+ DOM trang đầu) | Asset picker — bấm số trang |
+| `signFlowMedia` | `as29s` theo trang UI | Preview CDN đã ký |
+| `listMedia` | DOM gallery | Bổ sung media mới trên tab (trang đầu) |
 | `fetchMedia` | fetch URL | → base64 |
 | Gemini `prompt` | DOM driver | Không batchexecute |
 

@@ -12,7 +12,7 @@ export type UiToSwMessage =
   | { type: 'provider.checkAuth'; provider: 'flow' | 'gemini' }
   | { type: 'provider.diagnose'; provider: 'flow' | 'gemini' }
   | { type: 'provider.capabilities'; provider: 'flow' | 'gemini' }
-  | { type: 'provider.listFlowMedia'; kind?: 'image' | 'video' | 'any' }
+  | { type: 'provider.listFlowMedia'; kind?: 'image' | 'video' | 'any'; pageToken?: string | null }
   | { type: 'provider.fetchFlowMedia'; url: string }
   | { type: 'provider.signFlowMedia'; mediaIds: string[] }
   | { type: 'provider.openLogin'; provider: 'flow' | 'gemini' }

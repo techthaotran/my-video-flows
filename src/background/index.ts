@@ -161,7 +161,9 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
     }
     case 'provider.listFlowMedia': {
       try {
-        const data = await router.listFlowMedia(message.kind ?? 'any');
+        const data = await router.listFlowMedia(message.kind ?? 'any', {
+          pageToken: message.pageToken ?? null,
+        });
         return { ok: true, data };
       } catch (e) {
         return {

@@ -31,8 +31,8 @@
 | Model video | UI Omni Flash không ảnh → `YhhmEf` / `abra_t2v_*`. Có ảnh → `MZZa6b` / `abra_r2v_*`. Veo labels → `eb1hJf` + fallback nếu `MODEL_ACCESS_DENIED` |
 | i2v lỗi `[13]` | Flow từ chối start frame / lỗi nội bộ — báo ngay, **không tự retry** |
 | Retry node generate | Mặc định `retry: 0` cho Generate Image/Video |
-| Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio; `entityId` ingredient; extend REST cũ |
-| Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b`. Veo ≥ 2 ảnh → lỗi. continueFrom + ảnh → chỉ frame cuối trên wire, `[Label]` giữ trong prompt. Không dùng link làm dự phòng |
+| Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio (Audio voice, Video reference); `entityId` ingredient; extend REST cũ |
+| Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi. continueFrom + ảnh → chỉ frame cuối trên wire, `[Label]` giữ trong prompt. Không dùng link làm dự phòng |
 
 RPC ids: `ogiZ0b` (image), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload).
 `WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) — **không** tái tạo / không submit.
@@ -52,13 +52,15 @@ Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVX
 3. `prompt` dạng chữ với `⟦ảnh [Character] 5ef8…⟧` tại chỗ neo; `urlsInPrompt` chỉ quét mảnh text.
 4. `missingRefs` hoặc `urlsInPrompt > 0` → warn và **không** submit.
 
-## DOM (không generate)
+## DOM / listing (không generate)
 
 | Hành động | Ghi chú |
 |---|---|
 | checkAuth | Sign-in / avatar / prompt bar |
 | diagnose | Selector health + project URL |
-| listMedia | Quét gallery/result grid → Asset picker |
+| listFlowMedia | Picker: một trang `Zzl0ze` (`pageToken`); trang đầu merge DOM gallery |
+| signFlowMedia | `as29s` theo trang đang xem (concurrency 8); video ưu tiên poster `/image/` làm thumb |
+| listMedia | Quét gallery DOM — chỉ bổ sung trang đầu picker |
 | fetchMedia | `fetch(url)` → base64 |
 
 ## Modules
