@@ -5,12 +5,16 @@ import { getSettings } from '@/storage/repos/settingsRepo';
 import { topoSort, collectDownstream, collectUpstream } from '@/engine/scheduler';
 import { buildSlugIndex } from '@/engine/resolver';
 import { computeInputHash } from '@/engine/cache';
-import { executors } from '@/engine/executors';
+import { executors, hasGeneratePrompt } from '@/engine/executors';
+import { extractLastFrame } from '@/providers/flow/rpc/frame';
+import { composeVideoInOffscreen } from '@/media/composeClient';
 import { NON_RETRYABLE, type NodeOutputValue } from '@/engine/types';
 import type { ProviderRouter, EventBroadcaster } from '@/providers/TabPool';
+import type { SwToUiEvent } from '@/shared/messaging';
 import type { Workflow, WorkflowNode } from '@/shared/schema';
 import { nanoid } from '@/shared/utils';
 import { createLogger } from '@/shared/log';
+import { strings } from '@/shared/strings';
 
 const log = createLogger('run');
 
@@ -20,9 +24,19 @@ interface ActiveRun {
   workflowId: string;
 }
 
+/** Loại media mà node này xuất ra — dùng khi output không tự khai `kind`. */
+function previewKindOf(nodeType: WorkflowNode['type']): 'image' | 'video' {
+  return nodeType === 'generateImage' ? 'image' : 'video';
+}
+
 /** Asset/text/custom-prompt chỉ lấy data — không hiện Running trên canvas. */
 function shouldShowRunStatus(node: WorkflowNode): boolean {
-  if (node.type === 'generateImage' || node.type === 'generateVideo' || node.type === 'autoDownload') {
+  if (
+    node.type === 'generateImage' ||
+    node.type === 'generateVideo' ||
+    node.type === 'mergeVideo' ||
+    node.type === 'autoDownload'
+  ) {
     return true;
   }
   if (node.type === 'prompt') {
@@ -54,7 +68,7 @@ export class RunManager {
 
   async runWorkflow(
     workflowId: string,
-    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'from'; nodeId?: string },
+    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from'; nodeId?: string },
   ): Promise<string> {
     const workflow = await workflowRepo.get(workflowId);
     if (!workflow) throw new Error('Workflow không tồn tại');
@@ -114,10 +128,34 @@ export class RunManager {
     }
   }
 
+  /**
+   * Gửi lại trạng thái của các node đang chạy cho một UI vừa nối (lại) port.
+   *
+   * Port `run-events` chết theo service worker; nối lại xong UI không biết gì
+   * về run đang dở cho tới sự kiện kế tiếp. Sau khi service worker khởi động
+   * lại thì `active` rỗng và `recover()` đã đánh dấu run cũ là lỗi, nên hàm này
+   * chỉ phát tín hiệu cho trường hợp port chết mà service worker còn sống.
+   */
+  async replayActiveStatuses(send: (ev: SwToUiEvent) => void): Promise<void> {
+    for (const { runId } of this.active.values()) {
+      for (const nr of await runRepo.listNodeRuns(runId)) {
+        if (nr.status !== 'running' && nr.status !== 'queued') continue;
+        send({
+          type: 'node.status',
+          runId,
+          nodeId: nr.nodeId,
+          status: nr.status,
+          progress: nr.progress,
+          message: nr.message,
+        });
+      }
+    }
+  }
+
   private async executeRun(
     runId: string,
     workflow: Workflow,
-    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'from'; nodeId?: string },
+    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from'; nodeId?: string },
   ) {
     const abort = new AbortController();
     this.active.set(runId, { runId, abort, workflowId: workflow.id });
@@ -127,10 +165,14 @@ export class RunManager {
     const slugIndex = buildSlugIndex(workflow);
     const runLog = log.child({ runId });
     const startedAt = Date.now();
+    let failure: unknown;
 
     try {
       let nodeIds: Set<string> | undefined;
-      if (opts?.mode === 'node' && (opts.nodeId || opts.fromNodeId)) {
+      // `only`: upstream still runs for prompt/assets, but upstream generators reuse their last result.
+      const onlyNodeId =
+        opts?.mode === 'only' ? (opts.nodeId ?? opts.fromNodeId) : undefined;
+      if ((opts?.mode === 'node' || opts?.mode === 'only') && (opts.nodeId || opts.fromNodeId)) {
         // Include upstream so Generate Image/Video receives prompt/text/assets
         nodeIds = collectUpstream(workflow, opts.nodeId ?? opts.fromNodeId!);
       } else if ((opts?.mode === 'from' || opts?.fromNodeId) && (opts.fromNodeId || opts.nodeId)) {
@@ -150,24 +192,29 @@ export class RunManager {
 
       const done = new Set<string>();
       const queue = [...plan.order];
+      // stopOnError aborts the run on a node error; that is a failure, not a user cancel.
       const inFlight = new Set<Promise<void>>();
 
       const canRun = (id: string) => (plan.deps.get(id) ?? []).every((d) => done.has(d));
 
       while (queue.length || inFlight.size) {
-        if (abort.signal.aborted) throw Object.assign(new Error('Đã huỷ'), { code: 'UNKNOWN' });
+        if (abort.signal.aborted) {
+          throw failure ?? Object.assign(new Error('Đã huỷ'), { code: 'UNKNOWN' });
+        }
 
         while (inFlight.size < maxConcurrent) {
           const idx = queue.findIndex(canRun);
           if (idx < 0) break;
           const nodeId = queue.splice(idx, 1)[0]!;
-          const p = this.runNode(runId, workflow, nodeId, outputsByNode, slugIndex, abort.signal)
+          const p = this.runNode(runId, workflow, nodeId, outputsByNode, slugIndex, abort.signal, onlyNodeId)
             .then(() => {
               done.add(nodeId);
             })
             .catch((err) => {
               done.add(nodeId);
               if (workflow.settings.stopOnError !== false) {
+                // A node rejecting after the user cancelled is still a cancel.
+                if (!abort.signal.aborted) failure ??= err;
                 abort.abort();
                 throw err;
               }
@@ -192,7 +239,7 @@ export class RunManager {
       this.notify('Workflow xong', workflow.name, 'success');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const status = abort.signal.aborted ? 'cancelled' : 'error';
+      const status = abort.signal.aborted && failure === undefined ? 'cancelled' : 'error';
       await runRepo.update(runId, { status, finishedAt: Date.now(), error: msg });
       if (status === 'cancelled') runLog.warn(`Đã huỷ: ${msg}`);
       else runLog.error(`Lỗi: ${msg}`, e);
@@ -210,6 +257,7 @@ export class RunManager {
     outputsByNode: Map<string, NodeOutputValue[]>,
     slugIndex: Map<string, string>,
     signal: AbortSignal,
+    onlyNodeId?: string,
   ) {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -237,8 +285,35 @@ export class RunManager {
       ]),
     ));
 
-    const cached = this.cache.get(inputHash);
     const showStatus = shouldShowRunStatus(node);
+
+    // `only` run: an upstream generator hands on its last result instead of generating again.
+    // Otherwise a Generate Video without prompt that still feeds later nodes hands on its clip.
+    const reuseForOnly = !!onlyNodeId && nodeId !== onlyNodeId && isGeneratorNode(node);
+    const previous = reuseForOnly
+      ? await previousGenerateOutput(node)
+      : await previousClipToPassOn(workflow, node, inputs);
+    if (reuseForOnly && !previous) {
+      const msg = strings.generateOnlyMissingUpstream(node.label ?? node.slug ?? node.type);
+      await runRepo.setNodeStatus(runId, nodeId, 'error', { error: msg });
+      this.broadcast({ type: 'node.status', runId, nodeId, status: 'error', message: msg });
+      throw Object.assign(new Error(msg), { code: 'UNKNOWN' });
+    }
+    if (previous) {
+      const message = reuseForOnly ? strings.generateReusedForOnly : strings.generateReusedPreviousClip;
+      outputsByNode.set(nodeId, [previous]);
+      nodeLog.info(message, { outputId: previous.outputId });
+      await runRepo.setNodeStatus(runId, nodeId, 'success', {
+        progress: 100,
+        message,
+        inputHash,
+        outputIds: [previous.outputId!],
+      });
+      this.broadcast({ type: 'node.status', runId, nodeId, status: 'success', progress: 100, message });
+      return;
+    }
+
+    const cached = this.cache.get(inputHash);
     if (cached && (workflow.settings as { useCache?: boolean }).useCache !== false) {
       // only reuse for run-node mode typically — always allow cache hit
       outputsByNode.set(nodeId, cached);
@@ -251,14 +326,16 @@ export class RunManager {
       });
       if (
         cachedOutputId &&
-        (node.type === 'generateImage' || node.type === 'generateVideo')
+        (node.type === 'generateImage' ||
+          node.type === 'generateVideo' ||
+          node.type === 'mergeVideo')
       ) {
         this.broadcast({
           type: 'node.output',
           runId,
           nodeId,
           outputId: cachedOutputId,
-          kind: cached[0]?.kind ?? node.type,
+          kind: cached[0]?.kind ?? previewKindOf(node.type),
         });
       }
       if (showStatus) {
@@ -268,11 +345,15 @@ export class RunManager {
     }
 
     // Generate Image/Video calls a real (quota/credit-consuming) API — a failed
-    // attempt already spent that cost, so don't blindly resubmit unless the
-    // node explicitly opts in via its own `retry`.
-    const isGenerateNode = node.type === 'generateImage' || node.type === 'generateVideo';
+    // attempt already spent that cost. Merge Video burns minutes of CPU on a
+    // deterministic job, so a blind retry only reproduces the same failure.
+    // Neither resubmits unless the node opts in via its own `retry`.
+    const noBlindRetry =
+      node.type === 'generateImage' ||
+      node.type === 'generateVideo' ||
+      node.type === 'mergeVideo';
     const explicitRetry = (node.data as { retry?: number }).retry;
-    const retries = explicitRetry ?? (isGenerateNode ? 0 : (workflow.settings.retry ?? 2));
+    const retries = explicitRetry ?? (noBlindRetry ? 0 : (workflow.settings.retry ?? 2));
     let lastErr: unknown;
     nodeLog.debug('Inputs', Object.fromEntries(
       Object.entries(inputs).map(([k, vs]) => [
@@ -320,6 +401,25 @@ export class RunManager {
             const a = await assetRepo.get(assetId);
             return a?.blob;
           },
+          putAsset: async (blob, name) => (await assetRepo.put(blob, name, workflow.id)).id,
+          patchNodeData: async (patch) => {
+            const wf = await workflowRepo.get(workflow.id);
+            if (wf) {
+              wf.nodes = wf.nodes.map((n) =>
+                n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n,
+              );
+              await workflowRepo.save(wf);
+            }
+            this.broadcast({ type: 'node.data', runId, nodeId, data: patch });
+          },
+          extractLastFrame: async (video) => {
+            const dataBase64 = await extractLastFrame({
+              mime: video.type || 'video/mp4',
+              dataBase64: await blobToBase64(video),
+            });
+            return new Blob([base64ToBytes(dataBase64)], { type: 'image/jpeg' });
+          },
+          composeVideo: (job) => composeVideoInOffscreen({ ...job, workflowId: workflow.id }),
           saveOutput: async (value) => {
             const nr = await runRepo.getNodeRun(runId, nodeId);
             const out = await runRepo.saveOutput({
@@ -358,6 +458,7 @@ export class RunManager {
               mime: r.mime,
               text: r.text,
               blob: r.blob,
+              flowMediaId: r.flowMediaId,
             });
             r.outputId = out.id;
           }
@@ -374,7 +475,11 @@ export class RunManager {
           outputIds,
         });
         // Gắn preview / formatted output vào node data + báo UI cập nhật ngay
-        if (node.type === 'generateImage' || node.type === 'generateVideo') {
+        if (
+          node.type === 'generateImage' ||
+          node.type === 'generateVideo' ||
+          node.type === 'mergeVideo'
+        ) {
           if (outputIds[0]) {
             const wf = await workflowRepo.get(workflow.id);
             if (wf) {
@@ -390,7 +495,7 @@ export class RunManager {
               runId,
               nodeId,
               outputId: outputIds[0],
-              kind: results[0]?.kind ?? node.type,
+              kind: results[0]?.kind ?? previewKindOf(node.type),
             });
           }
         } else if (node.type === 'prompt') {
@@ -467,6 +572,45 @@ export class RunManager {
 }
 
 /**
+ * Generate Video with no prompt whose output still feeds another node: pass on the clip
+ * it produced last time instead of failing the run. Without a stored clip it runs (and
+ * fails with the missing-prompt error) as before.
+ */
+export async function previousClipToPassOn(
+  workflow: Workflow,
+  node: WorkflowNode,
+  inputs: Record<string, NodeOutputValue[]>,
+): Promise<NodeOutputValue | undefined> {
+  if (node.type !== 'generateVideo') return undefined;
+  const data = node.data as { prompt?: string; previewOutputId?: string };
+  if (hasGeneratePrompt(data.prompt, inputs)) return undefined;
+  if (!workflow.edges.some((e) => e.source === node.id)) return undefined;
+  return previousGenerateOutput(node);
+}
+
+function isGeneratorNode(node: WorkflowNode): boolean {
+  return node.type === 'generateImage' || node.type === 'generateVideo';
+}
+
+/** The result a Generate node showed last (`previewOutputId`), as a value later nodes can consume. */
+export async function previousGenerateOutput(node: WorkflowNode): Promise<NodeOutputValue | undefined> {
+  if (!isGeneratorNode(node)) return undefined;
+  const outputId = (node.data as { previewOutputId?: string }).previewOutputId;
+  if (!outputId) return undefined;
+  const out = await runRepo.getOutput(outputId);
+  if (!out?.blob) return undefined;
+  const kind = node.type === 'generateVideo' ? 'video' : 'image';
+  return {
+    kind,
+    blob: out.blob,
+    mime: out.mime ?? (out.blob.type || (kind === 'video' ? 'video/mp4' : 'image/png')),
+    outputId,
+    flowMediaId: out.flowMediaId,
+    fromFlow: true,
+  };
+}
+
+/**
  * Role of a value arriving straight from its producing node. A Prompt forwards
  * values that already carry a role, so those keep it.
  */
@@ -501,6 +645,7 @@ export function gatherInputs(
       ...v,
       name: v.name ?? String(srcName),
       role: v.role ?? role,
+      sourceNodeId: v.sourceNodeId ?? e.source,
     }));
 
     if (srcNode?.type === 'prompt') {
@@ -516,4 +661,20 @@ export function gatherInputs(
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }

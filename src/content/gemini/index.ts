@@ -1,6 +1,20 @@
 import { handleDriverAction, checkAuth, diagnose, capabilities } from '@/providers/gemini/driver';
 import type { SwToContentMessage, ContentToSwMessage, DriverAction } from '@/shared/messaging';
 
+/**
+ * Service worker inject lại file này khi tab mất listener (extension vừa
+ * reload, hoặc loader dev không chạy). Inject lặp không được đăng ký listener
+ * hai lần — nếu không, mỗi message sẽ có hai handler cùng chạy.
+ */
+declare global {
+  interface Window {
+    __myXFlowsGeminiContent?: boolean;
+  }
+}
+
+const alreadyInstalled = window.__myXFlowsGeminiContent === true;
+window.__myXFlowsGeminiContent = true;
+
 const aborts = new Map<string, AbortController>();
 
 function send(msg: ContentToSwMessage) {
@@ -26,7 +40,16 @@ function startKeepalive() {
   };
 }
 
-chrome.runtime.onMessage.addListener((message: SwToContentMessage, _sender, sendResponse) => {
+if (!alreadyInstalled) {
+  chrome.runtime.onMessage.addListener(onSwMessage);
+  console.debug('[My X Flows] Gemini content script loaded');
+}
+
+function onSwMessage(
+  message: SwToContentMessage,
+  _sender: chrome.runtime.MessageSender,
+  sendResponse: (r?: unknown) => void,
+) {
   void (async () => {
     try {
       if (message.type === 'driver.checkAuth') {
@@ -87,7 +110,7 @@ chrome.runtime.onMessage.addListener((message: SwToContentMessage, _sender, send
     }
   })();
   return true;
-});
+}
 
 if (import.meta.env.DEV) {
   (window as unknown as { __myXFlowsGemini?: unknown }).__myXFlowsGemini = {
@@ -96,5 +119,3 @@ if (import.meta.env.DEV) {
     capabilities,
   };
 }
-
-console.debug('[My X Flows] Gemini content script loaded');

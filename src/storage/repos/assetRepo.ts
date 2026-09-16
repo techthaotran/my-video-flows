@@ -1,10 +1,9 @@
 import { db, type AssetRecord } from '@/storage/db';
 import { nanoid, sha256 } from '@/shared/utils';
+import { mediaKindOf } from '@/shared/media';
 
-function kindFromMime(mime: string): 'image' | 'video' | 'other' {
-  if (mime.startsWith('image/')) return 'image';
-  if (mime.startsWith('video/')) return 'video';
-  return 'other';
+function assetKind(mime: string, originalName?: string): 'image' | 'video' | 'audio' | 'other' {
+  return mediaKindOf({ type: mime, name: originalName }) ?? 'other';
 }
 
 export const assetRepo = {
@@ -24,7 +23,7 @@ export const assetRepo = {
       mime: blob.type || 'application/octet-stream',
       size: blob.size,
       originalName,
-      kind: kindFromMime(blob.type),
+      kind: assetKind(blob.type, originalName),
       createdAt: Date.now(),
       blob,
     };
@@ -60,7 +59,7 @@ export const assetRepo = {
       mime: meta.mime,
       size: blob.size,
       originalName: meta.originalName,
-      kind: kindFromMime(meta.mime),
+      kind: assetKind(meta.mime, meta.originalName),
       createdAt: Date.now(),
       blob,
     };
@@ -77,6 +76,10 @@ export const assetRepo = {
         if (n.type === 'asset') {
           const assetId = (n.data as { assetId?: string }).assetId;
           if (assetId) used.add(assetId);
+        }
+        if (n.type === 'prompt') {
+          const frameId = (n.data as { continueFrameAssetId?: string }).continueFrameAssetId;
+          if (frameId) used.add(frameId);
         }
       }
     }

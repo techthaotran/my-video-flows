@@ -1,5 +1,54 @@
 /** Offscreen document — DOM-only helpers the service worker cannot run itself. */
 
+import { composeVideo } from '@/media/composeVideo';
+import {
+  COMPOSE_PROGRESS,
+  COMPOSE_REQUEST,
+  type ComposeVideoRequest,
+  type ComposeVideoResult,
+} from '@/media/composeTypes';
+import { assetRepo } from '@/storage/repos/assetRepo';
+
+async function loadAsset(assetId: string, what: string): Promise<Blob> {
+  const asset = await assetRepo.get(assetId);
+  if (!asset) throw new Error(`Không tìm thấy ${what} trong bộ nhớ tạm — chạy lại node`);
+  return asset.blob;
+}
+
+/**
+ * Ghép video: nhận asset id (blob không đi qua chrome.runtime được), trả lại
+ * asset id của mp4 kết quả. Tiến độ bắn về service worker bằng message riêng —
+ * vừa để hiện trên node, vừa giữ service worker khỏi bị ngủ giữa chừng.
+ */
+async function runCompose(req: ComposeVideoRequest): Promise<ComposeVideoResult> {
+  try {
+    const clips: Blob[] = [];
+    for (const [i, id] of req.clipAssetIds.entries()) {
+      clips.push(await loadAsset(id, `clip ${i + 1}`));
+    }
+    const blob = await composeVideo({
+      clips,
+      audio: req.audio
+        ? { blob: await loadAsset(req.audio.assetId, 'file audio'), startSec: req.audio.startSec }
+        : undefined,
+      logo: req.logo
+        ? { ...req.logo, blob: await loadAsset(req.logo.assetId, 'ảnh logo') }
+        : undefined,
+      fps: req.fps,
+      bitrateMbps: req.bitrateMbps,
+      onProgress: (progress, message) => {
+        void chrome.runtime
+          .sendMessage({ type: COMPOSE_PROGRESS, jobId: req.jobId, progress, message })
+          .catch(() => undefined);
+      },
+    });
+    const asset = await assetRepo.put(blob, 'merged.mp4');
+    return { assetId: asset.id };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const raw = atob(b64);
   const out = new Uint8Array(new ArrayBuffer(raw.length));
@@ -53,6 +102,10 @@ async function videoFrame(
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === COMPOSE_REQUEST) {
+    runCompose(msg as ComposeVideoRequest).then(sendResponse);
+    return true;
+  }
   if (msg?.type === 'offscreen.createObjectURL' && msg.buffer) {
     const blob = new Blob([msg.buffer], { type: msg.mime ?? 'application/octet-stream' });
     const url = URL.createObjectURL(blob);

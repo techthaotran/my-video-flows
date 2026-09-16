@@ -73,14 +73,15 @@ export function countConnections(
 
 /**
  * Which node types may feed which. Asset → Prompt/Generate; Prompt → Prompt
- * (concatenate) / Generate; Generate Video → Prompt (next scene); generated
- * media → Auto Download.
+ * (concatenate) / Generate; Generate Video → Prompt (next scene); clip/asset →
+ * Merge Video; generated media → Auto Download.
  */
 export const ALLOWED_SOURCES: Partial<Record<NodeType, readonly NodeType[]>> = {
   prompt: ['asset', 'prompt', 'generateImage', 'generateVideo'],
   generateImage: ['asset', 'prompt'],
   generateVideo: ['asset', 'prompt'],
-  autoDownload: ['generateImage', 'generateVideo'],
+  mergeVideo: ['asset', 'generateImage', 'generateVideo', 'mergeVideo'],
+  autoDownload: ['generateImage', 'generateVideo', 'mergeVideo'],
 };
 
 export function sourceAllowed(sourceType: NodeType | undefined, targetType: NodeType | undefined): boolean {
@@ -247,6 +248,14 @@ export const DEFAULT_PORTS: Record<NodeType, { inputs: PortSpec[]; outputs: Port
       { id: 'in:image', type: 'image', label: 'Asset ảnh', maxConnections: 8 },
       { id: 'in:video', type: 'video', label: 'Asset video', maxConnections: 2 },
       { id: 'in:audio', type: 'audio', label: 'Asset audio', maxConnections: 2 },
+    ],
+    outputs: [{ id: 'out:video', type: 'video' }],
+  },
+  mergeVideo: {
+    inputs: [
+      { id: 'in:video', type: 'video', label: 'Video ghép (theo thứ tự)', maxConnections: 32 },
+      { id: 'in:audio', type: 'audio', label: 'Audio nền', maxConnections: 1 },
+      { id: 'in:image', type: 'image', label: 'Logo overlay', maxConnections: 1 },
     ],
     outputs: [{ id: 'out:video', type: 'video' }],
   },

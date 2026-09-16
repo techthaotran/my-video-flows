@@ -49,13 +49,14 @@ Editor/SidePanel (React) ──chrome.runtime msg──▶ Service Worker (src/b
 | Logic chạy node | `src/engine/executors.ts`, `resolver.ts` |
 | Message UI ↔ SW ↔ content | `src/shared/messaging/index.ts` (union type) |
 | Chuỗi UI | `src/shared/strings.ts` |
+| Ghép video (WebCodecs, offscreen) | `src/media/` — engine `composeVideo.ts`, bridge `composeClient.ts` |
 | IndexedDB (Dexie) | `src/storage/db.ts`, `src/storage/repos/` |
 
 Tài liệu sâu (đọc khi chạm vào phần đó): `docs/WORKFLOW.md` (node, port, pipeline), `docs/providers/flow.md` (RPC id, captcha, lỗi), `docs/providers/gemini.md`, `docs/PLAN.md` (quyết định sản phẩm).
 
 ## Quy tắc bắt buộc
 
-1. **Phạm vi đã chốt:** chỉ tab Workflow; provider chỉ `flow` | `gemini`; không cloud/share/backend; không gói/hạn mức. Không thêm tính năng ngoài phạm vi khi chưa được hỏi.
+1. **Phạm vi đã chốt:** chỉ tab Workflow; provider chỉ `flow` | `gemini` (node `mergeVideo` xử lý local, không phải provider); không cloud/share/backend; không gói/hạn mức. Không thêm tính năng ngoài phạm vi khi chưa được hỏi.
 2. **UI chỉ tiếng Việt, mọi chuỗi hiển thị qua `strings.ts`.** Không hardcode text trong component, không thêm thư viện i18n.
 3. **Đổi shape dữ liệu đã lưu → tăng `SCHEMA_VERSION` + thêm nhánh trong `migrateWorkflow`.** Workflow cũ trong IndexedDB và file `.xflow.zip/.xflow.json` phải vẫn load được.
 4. **Thêm message mới → khai báo trong union ở `shared/messaging`** trước, rồi mới xử lý ở SW/content. Không gửi message không có type.
@@ -71,7 +72,8 @@ Tài liệu sâu (đọc khi chạm vào phần đó): `docs/WORKFLOW.md` (node,
 
 - `pnpm dev` cần port 5001 trống (`strictPort`); đổi port phải sửa cả `hmr`.
 - `manifest.config.ts` giữ `key` cố định để extension ID ổn định — không xoá/đổi.
-- Sau khi sửa content script / manifest phải reload extension và tab Flow/Gemini.
+- Port tới SW phải tự nối lại (SW MV3 bị tắt khi rảnh); port một lần = UI câm sau lần chạy đầu.
+- Sửa content script / manifest → reload extension. Tab Flow/Gemini tự phục hồi (SW inject lại qua `reinjectContentScripts`); chỉ reload tab khi vẫn lỗi `TAB_LOST`.
 
 ---
 

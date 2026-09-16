@@ -20,10 +20,6 @@ vi.mock('@/providers/flow/rpc/runner', () => ({
   runBatchRpc: (tabId: number, cmd: BatchRpcCmd) => rpc(tabId, cmd),
   reviveTabIfNeeded: async (tabId: number) => tabId,
 }));
-vi.mock('@/providers/flow/rpc/frame', () => ({
-  extractFirstFrame: async () => 'Zmlyc3QtZnJhbWU=',
-  extractLastFrame: async () => 'bGFzdC1mcmFtZQ==',
-}));
 vi.mock('@/providers/flow/rpc/project', () => ({
   resolveFlowProjectId: async () => 'fcf16651-14f3-4335-9557-0a808bd11946',
 }));
@@ -635,32 +631,103 @@ describe('generateViaRpc references', () => {
     );
     expect(calls).toContain('eb1hJf');
   });
-  it('starts the next scene from the last frame of the previous clip', async () => {
-    const { calls } = fakeFlow({});
-    const sources: string[] = [];
+  it('continues an Omni scene through MZZa6b with the last frame as the first image', async () => {
+    const { calls, submitted } = fakeFlow({});
+    const freqs: BatchRpcCmd[] = [];
     const base = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (tab, cmd) => {
-      if (cmd.rpcid === 'eb1hJf') sources.push(sourceOf(cmd));
+      if (cmd.rpcid === 'MZZa6b') freqs.push(cmd);
       return base(tab, cmd);
     });
-    await run({
+    const BG = '33333333-3333-3333-3333-333333333333';
+    const result = await run({
       model: 'Omni Flash',
       mode: 'continue-video',
-      continueFrom: { mime: 'video/mp4', dataBase64: 'Y2xpcA==' },
+      durationSec: 4,
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+      prompt: '[Character] mặc [Outfit] trong [Background]',
+      refs: [
+        { kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' },
+        { kind: 'image', label: 'Outfit', mediaId: '55555555-5555-5555-5555-555555555555' },
+        { kind: 'image', label: 'Background', mediaId: BG },
+      ],
     });
     expect(calls[0]).toBe('maseQ');
-    expect(calls).toContain('eb1hJf');
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
+    expect(calls).toContain('MZZa6b');
+    expect(calls).not.toContain('eb1hJf');
     expect(calls).not.toContain('YhhmEf');
     expect(calls).not.toContain('ogiZ0b');
-    expect(sources).toEqual([IMAGE_ID]);
-    const refs = payloadLogRefs('eb1hJf');
+    expect(submitted).toEqual(['abra_r2v_4s']);
+    expect(refMediaIdsOf(freqs[0]!)).toEqual([
+      IMAGE_ID,
+      '44444444-4444-4444-4444-444444444444',
+      '55555555-5555-5555-5555-555555555555',
+      BG,
+    ]);
+    const refs = payloadLogRefs('MZZa6b');
     expect(refs[0]).toMatchObject({
-      label: strings.continueStartFrameLabel,
+      label: strings.continueFrameRefLabel,
       mediaId: IMAGE_ID,
-      role: 'startFrame',
       source: 'upload',
     });
-    expect(refs[0]!.label).not.toBe('Character');
+    expect(result.medias).toHaveLength(1);
+  });
+
+  it('counts the last frame against the Omni reference cap', async () => {
+    const { calls } = fakeFlow({});
+    const refs = Array.from({ length: 7 }, (_, i) => ({
+      kind: 'image' as const,
+      label: `Ref${i}`,
+      mediaId: `6666666${i}-6666-6666-6666-666666666666`,
+    }));
+    await expect(
+      run({
+        model: 'Omni Flash',
+        mode: 'continue-video',
+        continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+        refs,
+      }),
+    ).rejects.toMatchObject({ code: 'OMNI_TOO_MANY_REFS' });
+    expect(calls).not.toContain('maseQ');
+  });
+
+  it('fails immediately when Veo operation complains Media not found', async () => {
+    fakeFlow({});
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (tab, cmd) => {
+      if (cmd.rpcid === 'jwpduf') {
+        const target = ((inner(cmd)[2] as string[][])[0]!)[0]!;
+        if (typeof target === 'string' && target.startsWith('op-')) {
+          const detail = new Array(9).fill(null);
+          detail[8] = [4, 'Media not found.'];
+          return {
+            status: 200,
+            text: envelope('jwpduf', [null, 50, [[target, PROJECT, 'scene', 'FAILED', null, detail]]]),
+          };
+        }
+      }
+      return base(tab, cmd);
+    });
+    const promise = run({
+      model: 'Veo 3.1 Lite',
+      mode: 'continue-video',
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+      prompt: '[Character] walks in [Background]',
+      refs: [
+        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Background', mediaId: '33333333-3333-3333-3333-333333333333' },
+      ],
+      timeoutSec: 600,
+    });
+    promise.catch(() => undefined);
+    await vi.runAllTimersAsync();
+    await expect(promise).rejects.toMatchObject({ code: 'FLOW_RENDER_FAILED' });
+    await expect(promise).rejects.toThrow(/Media not found/i);
+    await expect(promise).rejects.toThrow(/chọn Omni Flash/i);
+    // Must not sit on the full timeout — one complaint poll is enough after submit.
+    const jwp = rpc.mock.calls.filter((c) => c[1].rpcid === 'jwpduf');
+    expect(jwp.length).toBeLessThan(5);
   });
 
   it('continues from last frame and keeps Character/Outfit in prompt only (no media-id slots)', async () => {
@@ -679,7 +746,7 @@ describe('generateViaRpc references', () => {
     await run({
       model: 'Veo 3.1 Lite',
       mode: 'continue-video',
-      continueFrom: { mime: 'video/mp4', dataBase64: 'Y2xpcA==' },
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
       prompt: '[Character] mặc [Outfit] bước tiếp.\n\nDanh sách tham chiếu\n[Character]: cô gái\n\n[Outfit]: áo nâu',
       refs: [
         { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
@@ -709,7 +776,7 @@ describe('generateViaRpc references', () => {
     await run({
       model: 'Veo 3.1 Lite',
       mode: 'continue-video',
-      continueFrom: { mime: 'video/mp4', dataBase64: 'Y2xpcA==' },
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
       prompt: '[Character] bước tiếp',
       refs: [
         {

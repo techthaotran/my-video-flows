@@ -99,6 +99,7 @@ export const strings = {
   catInput: 'Input',
   catLlm: 'LLM',
   catGenerate: 'Generate',
+  catEdit: 'Dựng video',
   catOutput: 'Output',
   catAnnotation: 'Annotation',
 
@@ -129,8 +130,25 @@ export const strings = {
   geminiDroppedLabels: (labels: string) =>
     `Gemini đã làm mất nhãn trong prompt: ${labels}. Giữ nguyên mọi [Label].`,
   defaultImageRefLabel: 'Ảnh',
-  omniContinueUsesVeo: 'Omni Flash chưa nối cảnh trên API batch - dùng Veo i2v từ frame cuối…',
-  extractLastFrameProgress: 'Lấy frame cuối của cảnh trước để I2V…',
+  /** `[Label]` anchoring the previous scene's last frame in the Omni MZZa6b prompt. */
+  continueFrameRefLabel: 'Cảnh trước',
+  omniContinuePromptLead: (label: string) =>
+    `Nối tiếp liền mạch từ khung hình cuối [${label}].\n\n`,
+  extractLastFrameProgress: 'Lấy frame cuối của cảnh trước…',
+  continueNoVideoFile: 'Cảnh trước chưa có file video để nối tiếp',
+  continueFrameCacheMissing:
+    'Không tìm thấy frame cuối đã lưu của cảnh trước. Nối lại Generate Video trước vào Prompt và chạy, hoặc bỏ frame đã lưu để tạo cảnh mới.',
+  continueFrameCachedTitle: 'Frame cuối cảnh trước (đã lưu)',
+  continueFrameCachedHint: 'Đã lưu - dùng khi không còn nối Generate Video trước',
+  continueFrameClear: 'Bỏ frame đã lưu',
+  incomingOriginCache: 'đã lưu',
+  generateReusedPreviousClip: 'Không có prompt - dùng video đã tạo trước đó cho node phía sau',
+  generateOnlyThisNode: 'Chỉ node này',
+  generateOnlyThisNodeHint:
+    'Chỉ tạo video cho node này; các node Generate phía trước dùng lại kết quả đã có, không tạo lại',
+  generateReusedForOnly: 'Dùng lại kết quả đã có (chỉ tạo node được chọn)',
+  generateOnlyMissingUpstream: (name: string) =>
+    `${name} chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước.`,
   omniReferenceDenied: (model: string) =>
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni tham chiếu (${model}). Bỏ ảnh tham chiếu (Omni text-only) hoặc chọn model Veo.`,
   omniReferenceSubmitFailed: (model: string, detail: string) =>
@@ -146,6 +164,10 @@ export const strings = {
     const detail = code ?? (reasons.length ? reasons.join(', ') : null) ?? 'không rõ';
     return `Flow từ chối render video: ${detail}`;
   },
+  /** Veo i2v operation complained (often "Media not found"). */
+  flowVideoOpFailed: (detail: string) =>
+    `Flow không tạo được video (${detail}). ` +
+    `Nếu đang nối cảnh trước bằng Veo: thử chọn Omni Flash (nối cảnh qua ảnh tham chiếu) hoặc chạy lại cảnh trước.`,
   omniTextDenied: (model: string) =>
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni Flash (${model}). Thử chọn model Veo.`,
   omniTextSubmitFailed: (model: string, detail: string) =>
@@ -156,11 +178,57 @@ export const strings = {
   nodeGenerateImageDesc: 'Tạo ảnh (tỉ lệ, số lượng, độ phân giải, model)',
   nodeGenerateVideo: 'Generate Video',
   nodeGenerateVideoDesc: 'Tạo video (tỉ lệ, độ dài, độ phân giải, model)',
+  nodeMergeVideo: 'Ghép video',
+  nodeMergeVideoDesc: 'Nối nhiều video, lồng audio và dán logo overlay',
   nodeAutoDownload: 'Auto Download',
   nodeAutoDownloadDesc: 'Tự tải kết quả của node trước',
   nodeNote: 'Note',
   nodeNoteDesc: 'Ghi chú trên canvas, không thực thi',
+  // Ghép video
+  mergeNoClips: 'Chưa nối video nào vào node Ghép video',
+  mergeClipNoFile: (name: string) =>
+    `Clip "${name}" chỉ có media id trên Google Flow, chưa có file để ghép — chạy lại node tạo video hoặc dùng asset file cục bộ`,
+  mergeAudioNoFile: (name: string) =>
+    `Audio "${name}" chưa có file cục bộ để ghép — chọn file audio từ máy`,
+  mergeLogoNoFile: (name: string) =>
+    `Logo "${name}" chưa có file cục bộ để ghép — chọn ảnh từ máy`,
+  mergeStarting: (n: number) => `Ghép ${n} clip…`,
+  mergeOutputName: 'Video đã ghép',
+  mergeOrderTitle: 'Thứ tự ghép',
+  mergeOrderEmpty: 'Nối các node video vào cổng 🎥 để ghép',
+  mergeOrderCount: (n: number, total: string) => `${n} clip · ${total}`,
+  mergeMoveUp: 'Lên trước',
+  mergeMoveDown: 'Xuống sau',
+  mergeClipNoPreview: 'Chưa chạy',
+  mergeDurationUnknown: '—',
+  mergeAudioTitle: 'Audio nền',
+  mergeAudioEmpty: 'Nối 1 asset audio vào cổng 🔊 (thay toàn bộ tiếng gốc)',
+  mergeAudioStart: 'Bắt đầu từ giây',
+  mergeAudioStartHint: 'Cắt tới khi hết video; audio ngắn hơn thì phần cuối im lặng',
+  mergeAudioRange: (from: string, to: string) => `Dùng đoạn ${from} → ${to}`,
+  mergeAudioTooShort: 'Audio không đủ dài cho đoạn này — phần cuối video sẽ im lặng',
+  mergeAudioStartTooLate: 'Mốc bắt đầu vượt quá độ dài file audio',
+  mergeLogoTitle: 'Logo overlay',
+  mergeLogoEmpty: 'Nối 1 asset ảnh vào cổng 🖼 để dán logo',
+  mergeLogoDragHint: 'Kéo để đổi vị trí, kéo góc dưới-phải để đổi kích thước',
+  mergeLogoSize: 'Rộng',
+  mergeLogoOpacity: 'Độ mờ',
+  mergeOutputTitle: 'Xuất',
+  mergeFps: 'FPS',
+  mergeBitrate: 'Bitrate (Mbps)',
+  mergeFrameHint: 'Khung hình lấy theo clip đầu tiên; clip khác tỉ lệ sẽ có viền đen',
+  mergeRun: 'Ghép video',
+  mergeRunning: 'Đang ghép…',
+  mergeExport: 'Tải video',
+  mergeExportName: 'ghep-video',
+  mergeResultTitle: 'Kết quả',
+  mergeResultEmpty: 'Chưa ghép lần nào',
+  mergeResultEmptyHint: 'Bấm Ghép video để tạo file mp4',
+  mergeNotReady: 'Nối ít nhất 1 video vào cổng 🎥',
+
   assetLabel: 'Label',
+  assetLocal: '· local (upload khi chạy)',
+  assetLocalAudio: '· local',
   missingFile: 'Thiếu file',
   pickFileAgain: 'Chọn lại',
   dropOrPick: 'Kéo thả hoặc chọn file',

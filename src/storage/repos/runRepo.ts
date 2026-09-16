@@ -86,6 +86,7 @@ export const runRepo = {
       mime: partial.mime,
       text: partial.text,
       size: partial.size ?? partial.blob?.size,
+      flowMediaId: partial.flowMediaId,
       createdAt: Date.now(),
       blob: partial.blob,
     };

@@ -8,6 +8,7 @@ import {
   PromptNodeDataSchema,
   GenerateImageNodeDataSchema,
   GenerateVideoNodeDataSchema,
+  MergeVideoNodeDataSchema,
   AutoDownloadNodeDataSchema,
   NoteNodeDataSchema,
   UnknownNodeDataSchema,
@@ -23,6 +24,7 @@ import {
   Sparkles,
   ImagePlus,
   Clapperboard,
+  Film,
   Download,
   StickyNote,
   type LucideIcon,
@@ -32,7 +34,7 @@ export interface NodeDefinition {
   type: NodeType;
   title: string;
   description: string;
-  category: 'input' | 'llm' | 'generate' | 'output' | 'annotation';
+  category: 'input' | 'llm' | 'generate' | 'edit' | 'output' | 'annotation';
   inputs: PortSpec[];
   outputs: PortSpec[];
   dataSchema: ZodTypeAny;
@@ -112,6 +114,18 @@ export const nodeDefinitions: NodeDefinition[] = [
     dataSchema: GenerateVideoNodeDataSchema,
     defaultData: () => GenerateVideoNodeDataSchema.parse({}),
     icon: Clapperboard,
+    showInToolbar: true,
+  },
+  {
+    type: 'mergeVideo',
+    title: strings.nodeMergeVideo,
+    description: strings.nodeMergeVideoDesc,
+    category: 'edit',
+    inputs: DEFAULT_PORTS.mergeVideo.inputs,
+    outputs: DEFAULT_PORTS.mergeVideo.outputs,
+    dataSchema: MergeVideoNodeDataSchema,
+    defaultData: () => MergeVideoNodeDataSchema.parse({}),
+    icon: Film,
     showInToolbar: true,
   },
   {

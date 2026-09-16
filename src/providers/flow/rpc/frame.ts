@@ -4,58 +4,9 @@
  * subject to that page's media CSP.
  */
 
-const OFFSCREEN_PATH = 'src/pages/offscreen/index.html';
+import { sendToOffscreen } from '@/media/offscreenBridge';
+
 const FRAME_TIMEOUT_MS = 60_000;
-
-let creating: Promise<void> | null = null;
-
-async function ensureOffscreenDocument(): Promise<void> {
-  const contexts = await chrome.runtime.getContexts({
-    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-  });
-  if (contexts.length) return;
-  creating ??= chrome.offscreen
-    .createDocument({
-      url: OFFSCREEN_PATH,
-      reasons: [chrome.offscreen.Reason.BLOBS],
-      justification: 'Đọc frame cuối của video để nối cảnh tiếp theo bằng I2V',
-    })
-    .finally(() => {
-      creating = null;
-    });
-  await creating;
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function isNoReceiver(e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.includes('Receiving end does not exist') || msg.includes('Could not establish connection');
-}
-
-/**
- * createDocument() resolves before the offscreen module script has registered its
- * onMessage listener (notably in dev, where it loads from the Vite server), so an
- * immediate sendMessage throws "Receiving end does not exist". Retry with backoff;
- * if the document still never answers, recreate it once.
- */
-async function sendToOffscreen(message: unknown): Promise<unknown> {
-  for (let recreated = false; ; recreated = true) {
-    await ensureOffscreenDocument();
-    for (let i = 0; i < 10; i++) {
-      try {
-        return await chrome.runtime.sendMessage(message);
-      } catch (e) {
-        if (!isNoReceiver(e)) throw e;
-        await sleep(150 * (i + 1));
-      }
-    }
-    if (recreated) throw new Error('OFFSCREEN_NOT_READY');
-    await chrome.offscreen.closeDocument().catch(() => undefined);
-  }
-}
 
 async function extractFrame(
   video: { mime: string; dataBase64: string },

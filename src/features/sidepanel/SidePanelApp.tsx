@@ -68,7 +68,7 @@ export function SidePanelApp() {
       setSearch(s.search);
     });
     void getSettings().then(setSettingsState);
-    const port = connectRunEvents((ev) => {
+    const channel = connectRunEvents((ev) => {
       if (ev.type === 'queue.update') setQueue({ running: ev.running, waiting: ev.waiting });
     });
     void sendToSw<{ authenticated: boolean }>({ type: 'provider.checkAuth', provider: 'flow' }).then(
@@ -81,7 +81,7 @@ export function SidePanelApp() {
         if (r.ok) setProviderStatus((p) => ({ ...p, gemini: r.data.authenticated }));
       },
     );
-    return () => port.disconnect();
+    return () => channel.disconnect();
   }, []);
 
   useEffect(() => {

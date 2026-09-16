@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
-/** v3: node Text gộp vào Prompt. */
-export const SCHEMA_VERSION = 3;
+/**
+ * v3: node Text gộp vào Prompt.
+ * v4: Prompt có `continueFrameAssetId` (optional) - không cần biến đổi dữ liệu cũ.
+ * v5: thêm node `mergeVideo` - node type mới, dữ liệu node cũ giữ nguyên shape.
+ */
+export const SCHEMA_VERSION = 5;
 export const FORMAT_VERSION = 1;
 
 export const PortTypeSchema = z.enum(['text', 'image', 'video', 'audio', 'any']);
@@ -13,6 +17,7 @@ export const NodeTypeSchema = z.enum([
   'prompt',
   'generateImage',
   'generateVideo',
+  'mergeVideo',
   'autoDownload',
   'note',
   'unknown',
@@ -29,6 +34,8 @@ export const ASSET_LABELS = [
 ] as const;
 export type AssetLabel = (typeof ASSET_LABELS)[number];
 export const AssetLabelSchema = z.enum(ASSET_LABELS);
+/** Label duy nhất dành cho audio — đủ để tự chuyển khi người dùng chọn file audio. */
+export const AUDIO_ASSET_LABEL: AssetLabel = 'Audio voice';
 
 /** Labels mirror Flow's composer; rpc/batch.ts maps them to wire ids. */
 export const IMAGE_MODELS = ['Nano Banana 2', 'Nano Banana 2 Lite'] as const;
@@ -108,6 +115,11 @@ export const PromptNodeDataSchema = z.object({
   newChat: z.boolean().default(true),
   /** Output của lần chạy gần nhất (read-only trên UI). */
   formattedOutput: z.string().optional(),
+  /**
+   * Asset (IndexedDB) giữ frame cuối của cảnh trước lần nối gần nhất.
+   * Vẫn chuyển tiếp khi đã xoá liên kết tới Generate Video trước; xoá field để tạo cảnh mới.
+   */
+  continueFrameAssetId: z.string().optional(),
 });
 
 export const GenerateImageNodeDataSchema = z.object({
@@ -130,6 +142,24 @@ export const GenerateVideoNodeDataSchema = z.object({
   durationSec: z.number().int().min(1).max(30).default(4),
   timeoutSec: z.number().int().min(30).max(3600).default(600),
   retry: z.number().int().min(0).max(10).optional(),
+  previewOutputId: z.string().optional(),
+});
+
+/** Vị trí + kích thước logo tính theo % khung hình, nên đổi resolution vẫn đúng chỗ. */
+export const MergeVideoNodeDataSchema = z.object({
+  /**
+   * Thứ tự ghép, theo id node nguồn. Node nguồn mới nối vào mà chưa có trong
+   * danh sách sẽ được ghép sau cùng.
+   */
+  order: z.array(z.string()).default([]),
+  fps: z.number().int().min(1).max(60).default(30),
+  bitrateMbps: z.number().min(0.5).max(50).default(8),
+  /** Giây bắt đầu cắt audio; điểm kết thúc luôn bằng tổng độ dài video. */
+  audioStartSec: z.number().min(0).default(0),
+  logoXPercent: z.number().min(0).max(100).default(4),
+  logoYPercent: z.number().min(0).max(100).default(4),
+  logoWidthPercent: z.number().min(1).max(100).default(18),
+  logoOpacity: z.number().min(0).max(100).default(100),
   previewOutputId: z.string().optional(),
 });
 
@@ -158,6 +188,7 @@ export const NodeDataSchemas = {
   prompt: PromptNodeDataSchema,
   generateImage: GenerateImageNodeDataSchema,
   generateVideo: GenerateVideoNodeDataSchema,
+  mergeVideo: MergeVideoNodeDataSchema,
   autoDownload: AutoDownloadNodeDataSchema,
   note: NoteNodeDataSchema,
   unknown: UnknownNodeDataSchema,
@@ -237,7 +268,7 @@ export const AssetSchema = z.object({
   mime: z.string(),
   size: z.number(),
   originalName: z.string(),
-  kind: z.enum(['image', 'video', 'other']).default('other'),
+  kind: z.enum(['image', 'video', 'audio', 'other']).default('other'),
   createdAt: z.number(),
 });
 export type AssetMeta = z.infer<typeof AssetSchema>;
@@ -277,7 +308,7 @@ export const RunSchema = z.object({
   finishedAt: z.number().optional(),
   error: z.string().optional(),
   fromNodeId: z.string().optional(),
-  mode: z.enum(['full', 'node', 'from', 'runAll']).default('full'),
+  mode: z.enum(['full', 'node', 'only', 'from', 'runAll']).default('full'),
 });
 export type Run = z.infer<typeof RunSchema>;
 
@@ -305,6 +336,8 @@ export const OutputSchema = z.object({
   mime: z.string().optional(),
   text: z.string().optional(),
   size: z.number().optional(),
+  /** Media id trên Google Flow của kết quả generate - để dùng lại mà không upload. */
+  flowMediaId: z.string().optional(),
   createdAt: z.number(),
 });
 export type OutputMeta = z.infer<typeof OutputSchema>;

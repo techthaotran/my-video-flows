@@ -176,6 +176,19 @@ export function NodeVideoPlayer({ src, onError }: { src: string; onError?: () =>
     setFailed(false);
   }, [src]);
 
+  // Sự kiện `error` của thẻ video tới bất đồng bộ. Khi src vừa đổi sang video
+  // mới, lỗi còn treo lại của src cũ vẫn kịp bắn và sẽ khoá player ở màn hình
+  // "không phát được" dù video mới hoàn toàn bình thường — đối chiếu src của
+  // đúng phần tử bắn lỗi trước khi tin.
+  const onVideoError = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      if (e.currentTarget !== videoRef.current) return;
+      setFailed(true);
+      onError?.();
+    },
+    [onError],
+  );
+
   const toggle = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -217,6 +230,8 @@ export function NodeVideoPlayer({ src, onError }: { src: string; onError?: () =>
       tabIndex={0}
     >
       <video
+        /* Video mới = phần tử mới: không giữ lại buffer, timeline hay lỗi của video cũ. */
+        key={src}
         ref={videoRef}
         src={src}
         className="h-full w-full cursor-pointer object-contain"
@@ -237,10 +252,7 @@ export function NodeVideoPlayer({ src, onError }: { src: string; onError?: () =>
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration)}
-        onError={() => {
-          setFailed(true);
-          onError?.();
-        }}
+        onError={onVideoError}
       />
 
       {!playing && (

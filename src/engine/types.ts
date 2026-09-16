@@ -19,6 +19,8 @@ export interface NodeOutputValue {
   fromFlow?: boolean;
   /** Asset label ([Character], [Outfit]…) used for placeholder replacement. */
   assetLabel?: string;
+  /** Node this value came out of — Merge Video orders its clips by it. */
+  sourceNodeId?: string;
   /** IndexedDB asset id of a local file — uploaded to Flow at most once per run. */
   localAssetId?: string;
   /**
@@ -38,6 +40,16 @@ export interface ExecutorContext {
   resolveSlug: (slug: string) => NodeOutputValue | undefined;
   getAsset: (assetId: string) => Promise<Blob | undefined>;
   saveOutput: (value: NodeOutputValue) => Promise<string>;
+  /** Store a blob in IndexedDB assets (deduped by hash); returns the asset id. */
+  putAsset: (blob: Blob, name: string) => Promise<string>;
+  /** Merge into this node's saved data and push the change to the open editor. */
+  patchNodeData: (data: Record<string, unknown>) => Promise<void>;
+  /** JPEG of a clip's final frame (decoded in the offscreen document). */
+  extractLastFrame: (video: Blob) => Promise<Blob>;
+  /** Ghép clip + audio + logo thành một mp4 (encode trong offscreen document). */
+  composeVideo: (
+    job: Omit<import('@/media/composeClient').ComposeVideoJob, 'workflowId'>,
+  ) => Promise<Blob>;
   callDriver: (
     provider: 'flow' | 'gemini',
     action: import('@/shared/messaging').DriverAction,

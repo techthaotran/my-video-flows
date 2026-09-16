@@ -8,6 +8,7 @@ import {
   stripAssetLegend,
   type AssetRef,
 } from '@/engine/resolver';
+import { strings } from '@/shared/strings';
 
 export type IncomingKind = 'text' | 'image' | 'video' | 'audio' | 'genImage' | 'genVideo' | 'unknown';
 
@@ -32,8 +33,11 @@ export interface IncomingItem {
   assetLabel?: string;
   /** Mirrors the runtime role: prompt text, a reference, or the previous clip */
   role?: 'prompt' | 'ref' | 'continuation';
-  /** edge = wired into this node, prompt = forwarded by a connected Prompt, label = unresolved `[Label]` */
-  origin: 'edge' | 'prompt' | 'label';
+  /**
+   * edge = wired into this node, prompt = forwarded by a connected Prompt,
+   * label = unresolved `[Label]`, cache = last frame a Prompt kept from a removed link
+   */
+  origin: 'edge' | 'prompt' | 'label' | 'cache';
   missing?: boolean;
 }
 
@@ -51,6 +55,7 @@ function kindFromNode(n: FlowNode): IncomingKind {
     case 'generateImage':
       return 'genImage';
     case 'generateVideo':
+    case 'mergeVideo':
       return 'genVideo';
     default:
       return 'unknown';
@@ -113,6 +118,9 @@ function itemFromSource(src: FlowNode, e: Edge): IncomingItem {
   if (src.data.nodeType === 'generateVideo') {
     return { ...base, role: 'continuation', subtitle: 'Cảnh trước — I2V từ frame cuối' };
   }
+  if (src.data.nodeType === 'mergeVideo') {
+    return { ...base, role: 'ref', subtitle: strings.nodeMergeVideo };
+  }
   if (src.data.nodeType === 'generateImage') {
     return { ...base, role: 'ref', subtitle: 'Ảnh generate — dùng làm reference' };
   }
@@ -128,6 +136,24 @@ export interface PromptPreview {
   continuation?: IncomingItem;
   /** `[Label]` without a connected Flow/local asset yet. */
   unresolved: string[];
+}
+
+/** Last frame a Prompt kept from the previous scene; the executor forwards it when no clip is linked. */
+function cachedFrameItem(node: FlowNode): IncomingItem | undefined {
+  const assetId = node.data.nodeType === 'prompt' ? node.data.data.continueFrameAssetId : undefined;
+  if (typeof assetId !== 'string' || !assetId) return undefined;
+  return {
+    id: `cache:${node.id}`,
+    sourceNodeId: `cache:${node.id}`,
+    portType: 'image',
+    kind: 'image',
+    assetKind: 'image',
+    assetId,
+    title: strings.continueFrameCachedTitle,
+    subtitle: strings.continueFrameCachedHint,
+    role: 'continuation',
+    origin: 'cache',
+  };
 }
 
 /**
@@ -170,6 +196,7 @@ export function computePromptPreview(
     else addRef(item);
   }
   visiting.delete(nodeId);
+  continuation ??= cachedFrameItem(node);
 
   const assetRefs: AssetRef[] = refs
     .filter((r) => r.assetLabel)
@@ -210,7 +237,7 @@ export function resolveIncomingItems(nodeId: string, nodes: FlowNode[], edges: E
       });
     const forwarded = [
       ...preview.refs.filter((r) => r.origin === 'prompt'),
-      ...(preview.continuation?.origin === 'prompt' ? [preview.continuation] : []),
+      ...(preview.continuation && preview.continuation.origin !== 'edge' ? [preview.continuation] : []),
     ];
     return [...direct, ...forwarded, ...unresolvedItems(preview, direct)];
   }

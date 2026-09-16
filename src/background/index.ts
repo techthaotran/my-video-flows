@@ -91,6 +91,14 @@ chrome.runtime.onConnect.addListener((port) => {
     const q = runManager.getQueueCounts();
     port.postMessage({ type: 'queue.update', ...q } satisfies SwToUiEvent);
     port.postMessage({ type: 'log.snapshot', entries: getLogs() } satisfies SwToUiEvent);
+    // UI có thể vừa nối lại sau khi port chết — trả lại trạng thái run đang dở.
+    void runManager.replayActiveStatuses((ev) => {
+      try {
+        port.postMessage(ev);
+      } catch {
+        /* port đã đóng */
+      }
+    });
   }
   if (port.name === 'driver-keepalive') {
     // holding the port keeps SW alive during long generates

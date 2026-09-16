@@ -3,11 +3,13 @@ import { annotateAssetLabels, composePrompt, extractLabels, resolveTemplate, typ
 import type { FlowGenerateRef } from '@/shared/messaging';
 import { parseFlowMediaUrl } from '@/providers/flow/media';
 import { strings } from '@/shared/strings';
+import { orderedClipIds } from '@/media/layout';
 import type {
   AssetNodeDataSchema,
   AutoDownloadNodeDataSchema,
   GenerateImageNodeDataSchema,
   GenerateVideoNodeDataSchema,
+  MergeVideoNodeDataSchema,
   PromptNodeDataSchema,
 } from '@/shared/schema';
 import {
@@ -21,6 +23,7 @@ type AssetData = z.infer<typeof AssetNodeDataSchema>;
 type PromptData = z.infer<typeof PromptNodeDataSchema>;
 type GenImageData = z.infer<typeof GenerateImageNodeDataSchema>;
 type GenVideoData = z.infer<typeof GenerateVideoNodeDataSchema>;
+type MergeVideoData = z.infer<typeof MergeVideoNodeDataSchema>;
 type DownloadData = z.infer<typeof AutoDownloadNodeDataSchema>;
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -43,6 +46,17 @@ function fail(message: string, code = 'UNKNOWN'): Error {
 /** Every value that reached this node, whichever handle it came in on. */
 function allInputs(ctx: ExecutorContext): NodeOutputValue[] {
   return Object.values(ctx.inputs).flat();
+}
+
+/** A generator has something to generate from: its own prompt or incoming text. */
+export function hasGeneratePrompt(
+  ownPrompt: string | undefined,
+  inputs: Record<string, NodeOutputValue[]>,
+): boolean {
+  if ((ownPrompt ?? '').trim()) return true;
+  return Object.values(inputs)
+    .flat()
+    .some((v) => v.kind === 'text' && !!v.text?.trim());
 }
 
 /** One entry per referenced media — the same asset can arrive directly and via a Prompt. */
@@ -73,9 +87,50 @@ function asAssetRefs(refs: NodeOutputValue[]): AssetRef[] {
     .map((r) => ({ label: r.assetLabel!, kind: r.kind, flowMediaId: r.flowMediaId }));
 }
 
-/** The most recent previous clip a Prompt forwarded (or that was wired in). */
+/** The most recent previous scene: a wired clip, or the last frame a Prompt forwarded. */
 function continuationOf(values: NodeOutputValue[]): NodeOutputValue | undefined {
-  return values.filter((v) => v.role === 'continuation' && v.kind === 'video').at(-1);
+  return values
+    .filter((v) => v.role === 'continuation' && (v.kind === 'video' || v.kind === 'image'))
+    .at(-1);
+}
+
+/** Last frame (JPEG) of a continuation value: clips are decoded, forwarded frames pass through. */
+async function lastFrameOf(ctx: ExecutorContext, continuation: NodeOutputValue): Promise<Blob> {
+  if (!continuation.blob) throw fail(strings.continueNoVideoFile);
+  if (continuation.kind === 'image') return continuation.blob;
+  ctx.onProgress(3, strings.extractLastFrameProgress);
+  return ctx.extractLastFrame(continuation.blob);
+}
+
+/**
+ * Prompt keeps the previous scene's last frame (asset + `continueFrameAssetId`), so the
+ * next scene can be regenerated after the link to the previous Generate Video is removed.
+ */
+async function promptContinuation(
+  ctx: ExecutorContext,
+  data: PromptData,
+  live: NodeOutputValue | undefined,
+): Promise<NodeOutputValue | undefined> {
+  let frame: Blob;
+  if (live) {
+    frame = await lastFrameOf(ctx, live);
+    const assetId = await ctx.putAsset(frame, 'previous-scene-last-frame.jpg');
+    if (assetId !== data.continueFrameAssetId) {
+      await ctx.patchNodeData({ continueFrameAssetId: assetId });
+    }
+  } else {
+    if (!data.continueFrameAssetId) return undefined;
+    const cached = await ctx.getAsset(data.continueFrameAssetId);
+    if (!cached) throw fail(strings.continueFrameCacheMissing);
+    frame = cached;
+  }
+  return {
+    kind: 'image',
+    blob: frame,
+    mime: frame.type || 'image/jpeg',
+    name: strings.continueStartFrameLabel,
+    role: 'continuation',
+  };
 }
 
 /**
@@ -152,7 +207,7 @@ export const promptExecutor: NodeExecutor = async (ctx) => {
     .filter((v) => v.kind === 'text' && v.role === 'prompt' && v.text?.trim())
     .map((v) => v.text!);
   const refs = refsOf(inputs);
-  const continuation = continuationOf(inputs);
+  const continuation = await promptContinuation(ctx, data, continuationOf(inputs));
 
   let text = annotateAssetLabels(composePrompt(upstream, data.instruction ?? ''), asAssetRefs(refs));
 
@@ -300,20 +355,20 @@ export const generateVideoExecutor: NodeExecutor = async (ctx) => {
   // Legacy labels like "google omni flash" must stay Omni — never land on Veo via resolveVideoModel.
   const model = normalizeModelLabel(data.model, DEFAULT_VIDEO_MODEL);
 
-  const continueFrom = continuation?.blob
-    ? { mime: continuation.mime ?? continuation.blob.type, dataBase64: await blobToBase64(continuation.blob) }
+  const frame = continuation ? await lastFrameOf(ctx, continuation) : undefined;
+  const continueFrame = frame
+    ? { mime: frame.type || 'image/jpeg', dataBase64: await blobToBase64(frame) }
     : undefined;
-  if (continuation && !continueFrom) throw fail('Cảnh trước chưa có file video để nối tiếp');
 
   const imageRefs = refs.filter((r) => r.kind === 'image').length;
   // Mode is informational for the driver; video never invents a mid-scene image.
-  const mode = continueFrom
+  const mode = continueFrame
     ? 'continue-video'
     : imageRefs >= 1
       ? 'frames-to-video'
       : 'text-to-video';
 
-  ctx.onProgress(5, continueFrom ? 'Tạo cảnh tiếp theo…' : 'Tạo video…');
+  ctx.onProgress(5, continueFrame ? 'Tạo cảnh tiếp theo…' : 'Tạo video…');
   const result = await ctx.callDriver('flow', {
     name: 'generate',
     payload: {
@@ -324,7 +379,7 @@ export const generateVideoExecutor: NodeExecutor = async (ctx) => {
       durationSec: data.durationSec,
       prompt,
       refs,
-      continueFrom,
+      continueFrame,
       timeoutSec: data.timeoutSec,
       logCtx: { runId: ctx.runId, nodeId: ctx.node.id },
     },
@@ -337,6 +392,71 @@ export const generateVideoExecutor: NodeExecutor = async (ctx) => {
     );
   }
   return outputs.slice(0, data.count);
+};
+
+/**
+ * Các clip nối vào Merge Video, xếp đúng thứ tự người dùng đặt trên node. Một
+ * node nguồn sinh nhiều clip (count > 1) thì giữ nguyên thứ tự nội bộ của nó.
+ */
+export function orderClipsForMerge(
+  order: readonly string[],
+  values: NodeOutputValue[],
+): NodeOutputValue[] {
+  const clips = values.filter((v) => v.kind === 'video');
+  const byNode = new Map<string, NodeOutputValue[]>();
+  for (const clip of clips) {
+    const key = clip.sourceNodeId ?? clip.outputId ?? '';
+    byNode.set(key, [...(byNode.get(key) ?? []), clip]);
+  }
+  return orderedClipIds(order, [...byNode.keys()]).flatMap((id) => byNode.get(id) ?? []);
+}
+
+/**
+ * Merge Video: ghép các clip theo thứ tự, thay toàn bộ tiếng gốc bằng audio nối
+ * vào (cắt từ `audioStartSec` cho tới khi hết video), và dán logo lên mỗi frame.
+ * Toàn bộ chạy trong offscreen document bằng WebCodecs — không gọi Flow/Gemini.
+ */
+export const mergeVideoExecutor: NodeExecutor = async (ctx) => {
+  const data = ctx.node.data as MergeVideoData;
+  const inputs = allInputs(ctx);
+
+  const clips = orderClipsForMerge(data.order ?? [], inputs);
+  if (!clips.length) throw fail(strings.mergeNoClips, 'UPLOAD_FAILED');
+  const missing = clips.find((c) => !c.blob);
+  if (missing) {
+    throw fail(strings.mergeClipNoFile(missing.name ?? 'video'), FLOW_NO_UPLOAD);
+  }
+
+  const audioValue = inputs.find((v) => v.kind === 'audio');
+  if (audioValue && !audioValue.blob) {
+    throw fail(strings.mergeAudioNoFile(audioValue.name ?? 'audio'), FLOW_NO_UPLOAD);
+  }
+  const logoValue = inputs.find((v) => v.kind === 'image');
+  if (logoValue && !logoValue.blob) {
+    throw fail(strings.mergeLogoNoFile(logoValue.name ?? 'logo'), FLOW_NO_UPLOAD);
+  }
+
+  ctx.onProgress(2, strings.mergeStarting(clips.length));
+  const blob = await ctx.composeVideo({
+    clips: clips.map((c) => c.blob!),
+    audio: audioValue?.blob
+      ? { blob: audioValue.blob, startSec: data.audioStartSec }
+      : undefined,
+    logo: logoValue?.blob
+      ? {
+          blob: logoValue.blob,
+          xPercent: data.logoXPercent,
+          yPercent: data.logoYPercent,
+          widthPercent: data.logoWidthPercent,
+          opacity: data.logoOpacity,
+        }
+      : undefined,
+    fps: data.fps,
+    bitrateMbps: data.bitrateMbps,
+    onProgress: (progress, message) => ctx.onProgress(progress, message),
+  });
+
+  return [{ kind: 'video', blob, mime: 'video/mp4', name: strings.mergeOutputName }];
 };
 
 export const autoDownloadExecutor: NodeExecutor = async (ctx) => {
@@ -383,5 +503,6 @@ export const executors: Record<string, NodeExecutor> = {
   prompt: promptExecutor,
   generateImage: generateImageExecutor,
   generateVideo: generateVideoExecutor,
+  mergeVideo: mergeVideoExecutor,
   autoDownload: autoDownloadExecutor,
 };

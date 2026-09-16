@@ -182,7 +182,7 @@ function EditorInner() {
       }
     };
 
-    const port = connectRunEvents((ev) => {
+    const channel = connectRunEvents((ev) => {
       if (ev.type === 'log') {
         ingestLog(ev.entry);
         return;
@@ -220,7 +220,7 @@ function EditorInner() {
         window.setTimeout(() => store.setEdgeRunState('clear'), 400);
       }
     });
-    return () => port.disconnect();
+    return () => channel.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

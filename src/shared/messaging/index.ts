@@ -4,7 +4,7 @@ import type { LogEntry } from '@/shared/log';
 /** Typed messages UI ↔ Service Worker ↔ Content scripts */
 
 export type UiToSwMessage =
-  | { type: 'workflow.run'; workflowId: string; fromNodeId?: string; mode?: 'full' | 'node' | 'from' }
+  | { type: 'workflow.run'; workflowId: string; fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from' }
   | { type: 'run.cancel'; runId: string }
   | { type: 'workflow.cancel'; workflowId: string }
   | { type: 'runAll'; workspaceId: string }
@@ -94,8 +94,8 @@ export interface FlowGeneratePayload {
   prompt: string;
   /** Asset/ảnh tham chiếu đã nối vào node (qua Prompt hoặc trực tiếp). */
   refs?: FlowGenerateRef[];
-  /** Clip trước (Generate Video → Prompt → Generate Video): frame cuối làm ảnh nguồn i2v. */
-  continueFrom?: { mime: string; dataBase64: string };
+  /** Frame cuối (JPEG) của cảnh trước: start frame Veo i2v, ảnh đầu tiên của Omni MZZa6b. */
+  continueFrame?: { mime: string; dataBase64: string };
   projectTarget?: string;
   /** Clip length; Omni Flash snaps to 4/6/8/10s. Veo i2v has no duration slot. */
   durationSec?: number;
@@ -164,8 +164,78 @@ export async function sendToSw<T = unknown>(message: UiToSwMessage): Promise<Mes
   return chrome.runtime.sendMessage(message) as Promise<MessageResponse<T>>;
 }
 
-export function connectRunEvents(onEvent: (ev: SwToUiEvent) => void): chrome.runtime.Port {
-  const port = chrome.runtime.connect({ name: 'run-events' });
-  port.onMessage.addListener((msg) => onEvent(msg as SwToUiEvent));
-  return port;
+export interface RunEventsChannel {
+  /** Đóng hẳn kênh — không nối lại nữa. */
+  disconnect(): void;
+  /** Đang có port sống hay không (dùng cho test/chẩn đoán). */
+  readonly connected: boolean;
+}
+
+/** Thời gian chờ trước lần nối lại đầu tiên; gấp đôi mỗi lần, tối đa 5s. */
+const RECONNECT_BASE_MS = 250;
+const RECONNECT_MAX_MS = 5_000;
+
+/**
+ * Kênh nhận sự kiện chạy workflow, **tự nối lại**.
+ *
+ * Service worker MV3 bị Chrome tắt khi rảnh, và port chết theo nó. Port một lần
+ * như trước thì mọi thứ vẫn chạy ở service worker nhưng UI câm: bấm chạy lần
+ * hai không thấy trạng thái, không thấy progress, preview không đổi — vì không
+ * còn `node.status` / `node.progress` / `node.output` nào tới nơi.
+ */
+export function connectRunEvents(onEvent: (ev: SwToUiEvent) => void): RunEventsChannel {
+  let closed = false;
+  let port: chrome.runtime.Port | null = null;
+  let attempt = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleReconnect = () => {
+    if (closed || timer) return;
+    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt++);
+    timer = setTimeout(() => {
+      timer = undefined;
+      open();
+    }, delay);
+  };
+
+  const open = () => {
+    if (closed) return;
+    let next: chrome.runtime.Port;
+    try {
+      next = chrome.runtime.connect({ name: 'run-events' });
+    } catch {
+      // Extension vừa reload → context cũ không còn kết nối được nữa.
+      scheduleReconnect();
+      return;
+    }
+    port = next;
+    next.onMessage.addListener((msg) => {
+      // Nhận được tin là kênh chắc chắn thông — cho backoff về mốc đầu.
+      attempt = 0;
+      onEvent(msg as SwToUiEvent);
+    });
+    next.onDisconnect.addListener(() => {
+      if (port === next) port = null;
+      scheduleReconnect();
+    });
+  };
+
+  open();
+
+  return {
+    disconnect() {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      try {
+        port?.disconnect();
+      } catch {
+        /* port đã chết */
+      }
+      port = null;
+    },
+    get connected() {
+      return port !== null;
+    },
+  };
 }

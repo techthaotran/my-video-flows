@@ -4,8 +4,9 @@ import { assetRepo } from '@/storage/repos/assetRepo';
 import { cn } from '@/shared/utils';
 import type { IncomingItem } from '@/features/editor/incomingInputs';
 import { PORT_COLORS } from '@/nodes/ports';
+import { strings } from '@/shared/strings';
 
-function useAssetUrl(assetId?: string, missing?: boolean) {
+export function useAssetUrl(assetId?: string, missing?: boolean) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let revoked: string | null = null;
@@ -168,10 +169,10 @@ export function ReferencedAssetsStrip({
       {shown.map((item) => (
         <div key={item.id} className="group relative">
           <AssetThumb item={item} size="sm" />
-          {removable && item.origin === 'edge' && onRemove && (
+          {removable && (item.origin === 'edge' || item.origin === 'cache') && onRemove && (
             <button
               type="button"
-              title="Gỡ attachment"
+              title={item.origin === 'cache' ? strings.continueFrameClear : 'Gỡ attachment'}
               className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-90 shadow hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
@@ -220,7 +221,13 @@ export function IncomingInputsDetail({ items }: { items: IncomingItem[] }) {
             <div className="flex items-center gap-1.5">
               <span className="truncate text-[11px] font-medium">{item.title}</span>
               <span className="rounded bg-background px-1 text-[9px] uppercase text-muted-foreground">
-                {item.origin === 'edge' ? item.portType : item.origin === 'prompt' ? 'qua prompt' : 'label'}
+                {item.origin === 'edge'
+                  ? item.portType
+                  : item.origin === 'prompt'
+                    ? 'qua prompt'
+                    : item.origin === 'cache'
+                      ? strings.incomingOriginCache
+                      : 'label'}
               </span>
             </div>
             {item.subtitle && (

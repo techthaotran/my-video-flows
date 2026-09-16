@@ -8,6 +8,7 @@ const CAT_LABEL: Record<string, string> = {
   input: strings.catInput,
   llm: strings.catLlm,
   generate: strings.catGenerate,
+  edit: strings.catEdit,
   output: strings.catOutput,
   annotation: strings.catAnnotation,
 };

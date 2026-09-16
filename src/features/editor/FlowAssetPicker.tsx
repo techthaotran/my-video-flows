@@ -103,12 +103,16 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
     [listKind],
   );
 
-  const interpretListError = (msg: string) => {
-    if (/đăng nhập|AUTH_REQUIRED|auth/i.test(msg)) {
+  /**
+   * Lỗi kết nối tab luôn hiện hướng dẫn tiếng Việt — không để lọt chuỗi gốc của
+   * Chrome ("Could not establish connection…") ra dialog.
+   */
+  const interpretError = (msg: string) => {
+    if (/content script|TAB_LOST|kết nối|Receiving end|establish connection/i.test(msg)) {
+      setError(strings.flowPickerConnError);
+    } else if (/đăng nhập|AUTH_REQUIRED|auth/i.test(msg)) {
       setAuthenticated(false);
       setError(msg);
-    } else if (/content script|TAB_LOST|kết nối|Receiving end/i.test(msg)) {
-      setError(strings.flowPickerConnError);
     } else {
       setError(msg);
     }
@@ -125,22 +129,24 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
       });
       if (!auth.ok) {
         setAuthenticated(false);
-        setError(auth.error || strings.flowPickerConnError);
+        interpretError(auth.error || strings.flowPickerConnError);
         return;
       }
       const okAuth = !!auth.data?.authenticated;
       setAuthenticated(okAuth);
       if (!okAuth) {
-        setError(auth.data?.error || strings.flowPickerAuth);
+        interpretError(auth.data?.error || strings.flowPickerAuth);
         return;
       }
       const listed = await fetchPage(0, null);
       if (!listed.ok) {
-        interpretListError(listed.error || strings.error);
+        interpretError(listed.error || strings.error);
       }
     } catch (e) {
+      // sendToSw reject = service worker chưa sẵn sàng (hay gặp sau khi cập
+      // nhật extension), cùng loại lỗi kết nối với tab mất content script.
       setAuthenticated(false);
-      setError(e instanceof Error ? e.message : strings.error);
+      interpretError(e instanceof Error ? e.message : strings.error);
     } finally {
       setLoading(false);
     }
@@ -289,7 +295,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
         if (!pagesRef.current[0]) {
           const first = await fetchPage(0, null);
           if (!first.ok) {
-            interpretListError(first.error || strings.error);
+            interpretError(first.error || strings.error);
             return;
           }
         }
@@ -310,7 +316,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
           if (pagesRef.current[before + 1]) continue;
           const listed = await fetchPage(before + 1, token);
           if (!listed.ok) {
-            interpretListError(listed.error || strings.error);
+            interpretError(listed.error || strings.error);
             return;
           }
         }

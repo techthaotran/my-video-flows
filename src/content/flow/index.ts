@@ -8,6 +8,20 @@ import {
 } from '@/providers/flow/driver';
 import type { SwToContentMessage, ContentToSwMessage, DriverAction } from '@/shared/messaging';
 
+/**
+ * Service worker inject lại file này khi tab mất listener (extension vừa
+ * reload, hoặc loader dev không chạy). Inject lặp không được đăng ký listener
+ * hai lần — nếu không, mỗi message sẽ có hai handler cùng chạy.
+ */
+declare global {
+  interface Window {
+    __myXFlowsFlowContent?: boolean;
+  }
+}
+
+const alreadyInstalled = window.__myXFlowsFlowContent === true;
+window.__myXFlowsFlowContent = true;
+
 const aborts = new Map<string, AbortController>();
 let rpcKeepaliveStop: (() => void) | null = null;
 
@@ -53,7 +67,12 @@ type BatchRpcMsg = {
   match?: string | null;
 };
 
-chrome.runtime.onMessage.addListener((message: SwToContentMessage | CaptchaMsg | RpcKeepaliveMsg | BatchRpcMsg, _sender, sendResponse) => {
+if (!alreadyInstalled) {
+  chrome.runtime.onMessage.addListener(onSwMessage);
+  console.debug('[My X Flows] Flow content script loaded (RPC captcha bridge)');
+}
+
+function onSwMessage(message: SwToContentMessage | CaptchaMsg | RpcKeepaliveMsg | BatchRpcMsg, _sender: chrome.runtime.MessageSender, sendResponse: (r?: unknown) => void) {
   void (async () => {
     try {
       if ((message as CaptchaMsg).type === 'GET_CAPTCHA') {
@@ -147,7 +166,7 @@ chrome.runtime.onMessage.addListener((message: SwToContentMessage | CaptchaMsg |
     }
   })();
   return true;
-});
+}
 
 function requestCaptchaFromMain(
   requestId: string,
@@ -232,5 +251,3 @@ if (import.meta.env.DEV) {
     fetchMedia,
   };
 }
-
-console.debug('[My X Flows] Flow content script loaded (RPC captcha bridge)');

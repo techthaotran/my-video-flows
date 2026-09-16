@@ -8,10 +8,12 @@ import { cn } from '@/shared/utils';
 import { useEditorStore } from '@/features/editor/store';
 import {
   ASSET_LABELS,
+  AUDIO_ASSET_LABEL,
   defaultKindForLabel,
   type AssetLabel,
 } from '@/shared/schema';
 import { assetRepo } from '@/storage/repos/assetRepo';
+import { MEDIA_ACCEPT, mediaKindOf } from '@/shared/media';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
 import { ImagePlus, Clapperboard, Square } from 'lucide-react';
 import { FlowAssetPicker } from '@/features/editor/FlowAssetPicker';
@@ -25,6 +27,8 @@ import {
 import { ReferencedAssetsStrip } from '@/features/editor/IncomingAssets';
 import { sendToSw } from '@/shared/messaging';
 import { GenerateMediaStage, NodeVideoPlayer } from '@/features/editor/nodes/MediaPreview';
+import { MergeVideoBody } from '@/features/editor/nodes/MergeVideoBody';
+import { useMediaDuration, useNodeOutputUrl } from '@/features/editor/nodes/useMediaUrl';
 
 const STATUS_BORDER: Record<string, string> = {
   queued: 'border-muted-foreground',
@@ -45,7 +49,7 @@ function useIncomingItems(nodeId: string): IncomingItem[] {
   return useMemo(() => resolveIncomingItems(nodeId, nodes, edges), [edges, nodes, nodeId]);
 }
 
-async function runWorkflowNode(nodeId: string, mode: 'node' | 'full' = 'node') {
+async function runWorkflowNode(nodeId: string, mode: 'node' | 'only' | 'full' = 'node') {
   const state = useEditorStore.getState();
   const wfId = state.workflowId;
   if (!wfId) return;
@@ -75,7 +79,7 @@ async function runWorkflowNode(nodeId: string, mode: 'node' | 'full' = 'node') {
     type: 'workflow.run',
     workflowId: wfId,
     mode,
-    fromNodeId: mode === 'node' ? nodeId : undefined,
+    fromNodeId: mode === 'full' ? undefined : nodeId,
   });
   if (res.ok && res.data?.runId) state.setActiveRun(res.data.runId, true);
 }
@@ -109,7 +113,8 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
   const isPrompt = data.nodeType === 'prompt';
   const isGenerate = data.nodeType === 'generateImage' || data.nodeType === 'generateVideo';
   const isText = data.nodeType === 'text';
-  const wideBody = isPrompt || isGenerate || isText;
+  const isMerge = data.nodeType === 'mergeVideo';
+  const wideBody = isPrompt || isGenerate || isText || isMerge;
 
   return (
     <div
@@ -195,7 +200,19 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             hasInputs={hasInputs}
             onPromptChange={(prompt) => updateNodeData(id, { prompt })}
             onGenerate={() => void runWorkflowNode(id, 'node')}
+            onGenerateOnly={() => void runWorkflowNode(id, 'only')}
             onStop={() => void stopWorkflow()}
+          />
+        )}
+        {data.nodeType === 'mergeVideo' && (
+          <MergeVideoNode
+            nodeId={id}
+            data={data.data}
+            items={incoming}
+            status={data.status}
+            progress={data.progress}
+            statusMessage={data.statusMessage}
+            onChange={(patch) => updateNodeData(id, patch)}
           />
         )}
         {data.nodeType === 'autoDownload' && (
@@ -248,6 +265,11 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             {String(data.data.durationSec ?? 4)}s
           </span>
         )}
+        {data.nodeType === 'mergeVideo' && (
+          <span className="truncate">
+            mp4 · {String(data.data.fps ?? 30)}fps · {String(data.data.bitrateMbps ?? 8)}Mbps
+          </span>
+        )}
         {data.nodeType === 'prompt' && (
           <span className="truncate">
             Output · {((data.data.formattedOutput as string) ?? (data.data.instruction as string) ?? '').length}{' '}
@@ -298,6 +320,10 @@ function InputSummary({
         onRemove={
           removable && nodeId
             ? (item) => {
+                if (item.origin === 'cache') {
+                  useEditorStore.getState().updateNodeData(nodeId, { continueFrameAssetId: undefined });
+                  return;
+                }
                 const edgeId = item.id.startsWith('edge:') ? item.id.slice(5) : undefined;
                 useEditorStore
                   .getState()
@@ -392,8 +418,6 @@ function AssetBody({
 }) {
   const label = (data.assetLabel as AssetLabel) || 'Character';
   const kind = (data.kind as 'image' | 'video' | 'audio') || defaultKindForLabel(label);
-  const accept =
-    kind === 'video' ? 'video/*' : kind === 'audio' ? 'audio/*' : 'image/*';
   const flowMediaId = data.flowMediaId as string | undefined;
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [previewBroken, setPreviewBroken] = useState(false);
@@ -429,19 +453,22 @@ function AssetBody({
   const hasAsset = !!flowMediaId || (!flowWithoutId && !!data.assetId && !data.missing);
 
   const applyLocalFile = async (file: File) => {
+    // `file.type` rỗng hoặc lạ (hay gặp với .mp3) thì đuôi file quyết định —
+    // đoán bừa thành ảnh sẽ làm node xuất sai cổng.
+    const nextKind = mediaKindOf(file) ?? kind;
     const asset = await assetRepo.put(
       file,
       file.name,
       useEditorStore.getState().workflowId ?? undefined,
     );
-    const nextKind = file.type.startsWith('video/')
-      ? 'video'
-      : file.type.startsWith('audio/')
-        ? 'audio'
-        : 'image';
     onChange({
       assetId: asset.id,
       kind: nextKind,
+      // Đúng một label dành cho audio, nên đổi được mà không mơ hồ. Ảnh/video
+      // có nhiều label nên giữ nguyên lựa chọn của người dùng.
+      ...(nextKind === 'audio' && defaultKindForLabel(label) !== 'audio'
+        ? { assetLabel: AUDIO_ASSET_LABEL }
+        : {}),
       mime: file.type,
       originalName: file.name,
       missing: false,
@@ -458,7 +485,7 @@ function AssetBody({
       </span>
       <input
         type="file"
-        accept={accept}
+        accept={MEDIA_ACCEPT}
         className="hidden"
         onChange={async (e) => {
           const file = e.target.files?.[0];
@@ -501,12 +528,17 @@ function AssetBody({
       )}
       {previewUrl && kind === 'audio' && <audio src={previewUrl} className="w-full" controls />}
 
-      {hasAsset && (
+      {hasAsset && flowMediaId && (
         <div className="truncate text-[11px] text-muted-foreground" title={flowMediaId}>
-          {flowMediaId
-            ? `Google Flow · ${flowMediaId.slice(0, 8)}${previewBroken ? ' · preview hết hạn' : ''}`
-            : `${(data.originalName as string) ?? kind} · local (upload khi chạy)`}
+          {`Google Flow · ${flowMediaId.slice(0, 8)}${previewBroken ? ' · preview hết hạn' : ''}`}
         </div>
+      )}
+      {hasAsset && !flowMediaId && (
+        <LocalAssetInfo
+          name={(data.originalName as string) ?? kind}
+          kind={kind}
+          url={localUrl}
+        />
       )}
       {!hasAsset && (
         <div className="rounded border border-dashed border-border py-2 text-center text-[11px] text-muted-foreground">
@@ -514,7 +546,9 @@ function AssetBody({
             ? 'Asset Google Flow mất media id — chọn lại từ Flow (không upload lại)'
             : data.missing
               ? strings.missingFile
-              : strings.pickFlowAssetHint}
+              : kind === 'audio'
+                ? strings.dropOrPickAudio
+                : strings.pickFlowAssetHint}
         </div>
       )}
 
@@ -557,6 +591,72 @@ function AssetBody({
   );
 }
 
+function MergeVideoNode({
+  nodeId,
+  data,
+  items,
+  status,
+  progress,
+  statusMessage,
+  onChange,
+}: {
+  nodeId: string;
+  data: Record<string, unknown>;
+  items: IncomingItem[];
+  status?: string;
+  progress?: number;
+  statusMessage?: string;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const previewUrl = useNodeOutputUrl(nodeId);
+  // Chạy ở mode `only`: node generate phía trước dùng lại kết quả gần nhất thay
+  // vì tạo lại — bấm Ghép video không được âm thầm đốt quota Flow.
+  return (
+    <MergeVideoBody
+      nodeId={nodeId}
+      data={data}
+      items={items}
+      status={status}
+      progress={progress}
+      statusMessage={statusMessage}
+      previewUrl={previewUrl}
+      onChange={onChange}
+      onRun={() => void runWorkflowNode(nodeId, 'only')}
+      onStop={() => void stopWorkflow()}
+    />
+  );
+}
+
+/**
+ * Dòng mô tả file local của Asset node. Audio/video hiện thêm độ dài — node Ghép
+ * video cắt audio theo giây nên người dùng cần biết file dài bao nhiêu.
+ */
+function LocalAssetInfo({
+  name,
+  kind,
+  url,
+}: {
+  name: string;
+  kind: 'image' | 'video' | 'audio';
+  url: string | null;
+}) {
+  const duration = useMediaDuration(
+    kind === 'audio' || kind === 'video' ? url : null,
+    kind === 'audio' ? 'audio' : 'video',
+  );
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span className="min-w-0 flex-1 truncate" title={name}>
+        {name}
+      </span>
+      {duration != null && (
+        <span className="shrink-0 tabular-nums">{duration.toFixed(1)}s</span>
+      )}
+      <span className="shrink-0">{kind === 'audio' ? strings.assetLocalAudio : strings.assetLocal}</span>
+    </div>
+  );
+}
+
 function GeneratePreview({
   nodeId,
   kind,
@@ -568,6 +668,7 @@ function GeneratePreview({
   hasInputs,
   onPromptChange,
   onGenerate,
+  onGenerateOnly,
   onStop,
 }: {
   nodeId: string;
@@ -580,58 +681,19 @@ function GeneratePreview({
   hasInputs: boolean;
   onPromptChange: (prompt: string) => void;
   onGenerate: () => void;
+  /** Generate this node only; upstream generators reuse their last result. */
+  onGenerateOnly?: () => void;
   onStop: () => void;
 }) {
   const Icon = kind === 'image' ? ImagePlus : Clapperboard;
   const label = kind === 'image' ? 'Generate Image' : 'Generate Video';
-  // Subscribe from the store so React Flow's memo'd node still refreshes preview.
-  const previewId = useEditorStore(
-    (s) => s.nodes.find((n) => n.id === nodeId)?.data.data.previewOutputId as string | undefined,
-  );
-  const previewRev = useEditorStore(
-    (s) => s.nodes.find((n) => n.id === nodeId)?.data.data.previewRev as number | undefined,
-  );
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewUrl = useNodeOutputUrl(nodeId);
   const running = status === 'running';
   const summary = summarizeIncoming(items);
   const storedPrompt = String(data.prompt ?? '');
   const incomingPrompt = summary.texts.join('\n\n');
   const promptValue = storedPrompt || incomingPrompt;
 
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    void (async () => {
-      if (!previewId) {
-        if (!cancelled) setPreviewUrl(null);
-        return;
-      }
-      const { runRepo } = await import('@/storage/repos/runRepo');
-      // Brief retry — SW may finish IndexedDB put a tick before the UI reads it.
-      let out = await runRepo.getOutput(previewId);
-      if (!out?.blob) {
-        await new Promise((r) => setTimeout(r, 50));
-        if (cancelled) return;
-        out = await runRepo.getOutput(previewId);
-      }
-      if (cancelled) return;
-      if (!out?.blob) {
-        setPreviewUrl(null);
-        return;
-      }
-      const url = URL.createObjectURL(out.blob);
-      if (cancelled) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-      objectUrl = url;
-      setPreviewUrl(url);
-    })();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [previewId, previewRev, status]);
 
   return (
     <div className="min-w-0 space-y-1.5 overflow-hidden">
@@ -676,6 +738,22 @@ function GeneratePreview({
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{running ? `${progress ?? 0}%` : label}</span>
         </Button>
+        {onGenerateOnly && !running && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5"
+            title={strings.generateOnlyThisNodeHint}
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerateOnly();
+            }}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{strings.generateOnlyThisNode}</span>
+          </Button>
+        )}
         {running && (
           <Button
             type="button"

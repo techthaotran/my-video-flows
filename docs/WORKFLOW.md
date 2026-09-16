@@ -21,6 +21,21 @@ Flow tab (MAIN world)
   → fetch('/_/AiSandboxAngularFrontend/data/batchexecute?rpcids=…')
 ```
 
+Node `mergeVideo` không đi qua ProviderRouter — nó xử lý media ngay trong máy:
+
+```
+mergeVideoExecutor (Service Worker)
+  → composeVideoInOffscreen: ghi blob vào IndexedDB assets, gửi asset id
+Offscreen document (có WebCodecs / OffscreenCanvas / AudioContext)
+  → composeVideo (mediabunny): decode từng clip → vẽ canvas + logo → encode → mp4
+  ← trả asset id của mp4; tiến độ bắn về bằng message riêng
+```
+
+Blob không đi qua `chrome.runtime.sendMessage` (không serialize được, base64 thì
+quá nặng cho nhiều clip) — cả đầu vào lẫn kết quả đều đi qua bảng `assets` của
+IndexedDB, message chỉ mang id. Các message tiến độ còn giữ service worker khỏi
+ngủ giữa lúc encode.
+
 | Lớp | Path | Vai trò |
 |---|---|---|
 | Schema | `src/shared/schema/index.ts` | Node/edge/workflow Zod schema, migrate |
@@ -31,6 +46,7 @@ Flow tab (MAIN world)
 | Scheduler | `src/engine/scheduler.ts` | Topo-sort, upstream/downstream |
 | Resolver | `src/engine/resolver.ts` | Ghép prompt, giữ `[Label]` + mô tả (không nhúng URL) |
 | Flow RPC | `src/providers/flow/rpc/*` | Generate không click DOM |
+| Ghép video | `src/media/*` | WebCodecs compose chạy ở offscreen document |
 | Editor | `src/features/editor/*` | Canvas React Flow |
 
 Workflow lưu **IndexedDB** (local). UI tiếng Việt.
@@ -47,6 +63,7 @@ Workflow lưu **IndexedDB** (local). UI tiếng Việt.
 | `prompt` | ✅ | `promptExecutor` | Ghép text + forward refs; optional Gemini preset |
 | `generateImage` | ✅ | `generateImageExecutor` | Tạo ảnh qua Flow RPC |
 | `generateVideo` | ✅ | `generateVideoExecutor` | Tạo video qua Flow RPC (Omni / Veo) |
+| `mergeVideo` | ✅ | `mergeVideoExecutor` | Ghép clip + audio + logo bằng WebCodecs (offscreen) |
 | `autoDownload` | ✅ | `autoDownloadExecutor` | `chrome.downloads.download` |
 | `note` | ✅ | — (skip) | Ghi chú trên canvas |
 | `text` | ❌ | — | Legacy; schema v3 migrate → `prompt` |
@@ -75,6 +92,7 @@ Workflow = {
 | **prompt** | `in:text` (≤16), `in:image` (≤16), `in:video` (≤8), `in:audio` (≤8) | `out:text` |
 | **generateImage** | `in:text` (≤4), `in:image` (≤8) | `out:image` |
 | **generateVideo** | `in:text` (≤4), `in:image` (≤8), `in:video` (≤2), `in:audio` (≤2) | `out:video` |
+| **mergeVideo** | `in:video` (≤32), `in:audio` (≤1), `in:image` (≤1, logo) | `out:video` |
 | **autoDownload** | `in:any` (≤16) | — |
 | **note** | — | — |
 
@@ -85,13 +103,17 @@ Workflow = {
 | `prompt` | asset, prompt, generateImage, generateVideo |
 | `generateImage` | asset, prompt |
 | `generateVideo` | asset, prompt |
-| `autoDownload` | generateImage, generateVideo |
+| `mergeVideo` | asset, generateImage, generateVideo, mergeVideo |
+| `autoDownload` | generateImage, generateVideo, mergeVideo |
 
 Validate thêm: tương thích port type, `maxConnections`, không tạo cycle.
 
 ### 2.4 Data từng node
 
 **Asset**
+
+- File local: `accept` gồm cả MIME lẫn đuôi (`MEDIA_ACCEPT`), và `kind` suy ra bằng `mediaKindOf` — MIME trước, đuôi file sau. Chrome trả `file.type` rỗng cho `.mp3` trên máy thiếu mapping, đoán theo mặc định sẽ biến mp3 thành ảnh và node xuất sai cổng.
+- Chọn file audio ở node đang mang label ảnh/video → label tự chuyển sang `Audio voice` (chỉ một label audio nên không mơ hồ). Ảnh/video có nhiều label nên giữ nguyên lựa chọn của người dùng.
 
 - `assetLabel`: Outfit | Background | Character | Video reference | Video expand | Audio voice
 - `kind`: image | video | audio
@@ -112,6 +134,21 @@ Validate thêm: tương thích port type, `maxConnections`, không tạo cycle.
 
 - Như image + `durationSec` (Omni: 4/6/8/10)
 - Models: Omni Flash | Veo 3.1 Lite | Lite Low Priority | Fast (Ultra)
+
+**Merge Video** (`mergeVideo`)
+
+- `order`: mảng id node nguồn, quyết định thứ tự ghép. Node mới nối vào mà chưa có trong `order` được ghép sau cùng (`orderedClipIds`).
+- `fps` (30), `bitrateMbps` (8) — thông số encode ra mp4.
+- `audioStartSec`: mốc bắt đầu cắt trong file audio. Điểm kết thúc luôn là tổng độ dài video; audio ngắn hơn thì phần cuối im lặng.
+- `logoXPercent` / `logoYPercent` / `logoWidthPercent` / `logoOpacity`: vị trí, kích thước, độ mờ của logo tính theo % khung hình nên đổi độ phân giải vẫn đúng chỗ (`logoRect`).
+
+Hành vi cố định (không có setting):
+
+- Nút **Ghép video** trên node chạy mode `only`: node generate phía trước dùng lại `previewOutputId` thay vì tạo lại, nên bấm ghép không đốt quota Flow. Upstream chưa từng chạy → báo lỗi rõ thay vì generate ngầm.
+- Không blind retry (`retries = 0` như node generate): ghép là việc tất định, chạy lại chỉ lặp đúng lỗi cũ và tốn thêm vài phút CPU.
+- **Tiếng gốc của clip bị bỏ hoàn toàn** khi có audio nối vào — audio nền thay thế, không trộn.
+- Khung hình đích lấy theo clip đầu tiên; clip khác tỉ lệ được `contain` (viền đen), không cắt xén.
+- Chỉ nhận clip **có blob**. Asset Flow chỉ có `flowMediaId` bị từ chối với lỗi `FLOW_ASSET_NO_UPLOAD` — không tải về, không upload lại.
 
 **Auto Download**
 
@@ -142,7 +179,14 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
 - Border status: queued / running / success / error
 - Run một node: lưu dirty → `workflow.run` mode `node`
 - Port `run-events`: `node.status` | `node.progress` | `node.output` | `run.done`
-- Chỉ generate*, autoDownload, và prompt (preset ≠ custom) hiện trạng thái chạy trên canvas
+  - Kênh **tự nối lại** (`connectRunEvents` trả về `RunEventsChannel`). Service worker MV3 bị Chrome tắt khi rảnh và port chết theo; port một lần thì run vẫn chạy ở service worker nhưng UI câm hẳn — bấm chạy lần hai không thấy progress, preview không đổi.
+  - Khi UI nối (lại), service worker gửi `queue.update` + `log.snapshot` + `replayActiveStatuses()` (trạng thái các node đang chạy), để reconnect giữa chừng không để UI treo ở trạng thái cũ.
+- Chỉ generate*, mergeVideo, autoDownload, và prompt (preset ≠ custom) hiện trạng thái chạy trên canvas
+- `mergeVideo` có UI riêng (`nodes/MergeVideoBody.tsx`), không dùng chung khối preview của node generate: mỗi clip là một hàng có thumbnail + id/slug node nguồn + độ dài, nút ↑↓ đổi thứ tự; logo kéo thả / kéo góc để resize trên preview khung hình; thanh progress riêng khi ghép; player + nút Tải video cho kết quả
+- Hook dùng chung cho preview media: `nodes/useMediaUrl.ts` (`useOutputUrl`, `useNodeOutputUrl`, `useMediaDuration`). Hai bẫy đã gặp, đừng làm lại:
+  - Object URL cũ chỉ được `revokeObjectURL` **sau khi** URL mới đã set. Thu hồi trong cleanup của effect thì `<video>` còn đang render URL cũ (state chưa đổi) trong lúc blob mới còn đọc dở → thẻ video trỏ vào blob đã huỷ.
+  - Không nạp lại preview theo trạng thái chạy (`running`/`success`) — chỉ theo `previewOutputId` + `previewRev`. Trạng thái đổi không làm nội dung đổi, nạp lại theo nó chỉ tạo thêm một nhịp không có video.
+- `NodeVideoPlayer` đặt `key={src}`: đổi video là thay hẳn phần tử, không giữ buffer/timeline cũ. Sự kiện `error` cũng phải đối chiếu `e.currentTarget === videoRef.current` — lỗi bất đồng bộ của src cũ tới sau khi src đã đổi sẽ khoá player ở màn hình "không phát được" dù video mới bình thường.
 
 ### 2.7 Graph mẫu
 
@@ -159,8 +203,16 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
   Mọi label `kind: image` (Character, Outfit, Background, …) đều neo media id như nhau.
 - **Veo:** đúng 1 ảnh = start frame → `eb1hJf`; ≥ 2 ảnh → lỗi
 - **Audio / Video reference:** nối vào Generate Video → lỗi rõ (`refKindUnsupported`); mô tả chữ `[Audio voice]: …` trong prompt vẫn được.
-- **Kéo dài / scene tiếp:** video → Prompt → Generate Video → extract last frame → upload → Veo i2v.
-  Ảnh Character/Outfit/Background nối kèm vẫn giữ `[Label]` + mô tả trong prompt; **không** gửi media id (slot start frame đã dùng cho frame cuối).
+- **Kéo dài / scene tiếp:** video → Prompt (cắt frame cuối, offscreen) → Generate Video → driver upload frame → Veo i2v hoặc Omni `MZZa6b`.
+  Veo: Character/Outfit/Background giữ `[Label]` + mô tả trong prompt, **không** gửi media id (slot start frame đã dùng cho frame cuối).
+  Omni: frame cuối là ảnh đầu tiên `[Cảnh trước]`, sau đó các ảnh tham chiếu (tính vào `OMNI_MAX_REFS`).
+- **Cache frame cuối:** Prompt nhận video lưu frame cuối vào assets và gắn `continueFrameAssetId` trên chính Prompt.
+  Xoá liên kết Generate Video → Prompt thì Prompt vẫn hiện frame đã lưu và chuyển tiếp nó; bấm × trên thumbnail để tạo cảnh mới.
+  Asset của frame bị mất → lỗi rõ, không tự chuyển sang cảnh mới.
+- **Generate Video không có prompt nhưng còn nối node phía sau:** khi chạy, node không generate mà chuyển tiếp video đã tạo lần trước (`previewOutputId`), trạng thái success kèm thông báo.
+  Không có video cũ (vd. đã Reset) → lỗi "Thiếu prompt" như trước.
+- **Generate Video → "Chỉ node này"** (run mode `only`): các node phía trước vẫn chạy (Prompt, Asset), nhưng mọi Generate Image/Video phía trước dùng lại kết quả đã hiển thị (`previewOutputId`, kèm `flowMediaId` lưu trong output), chỉ node được chọn gọi Flow.
+  Node Generate phía trước chưa có kết quả → run dừng với lỗi rõ; nút "Generate" giữ hành vi cũ (tạo lại cả phía trước).
 
 ---
 
@@ -228,8 +280,8 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 | Omni, > `OMNI_MAX_REFS` ảnh | Lỗi rõ ràng, không cắt bớt |
 | Veo, 1 ảnh | Start frame → `eb1hJf` + model fallback |
 | Veo, ≥ 2 ảnh | Lỗi rõ ràng |
-| continueFrom | Extract last frame → `maseQ` → Veo i2v |
-| continueFrom + ảnh tham chiếu | Frame cuối = start frame; `[Label]` giữ trong prompt; không upload / không wire media id của Character/Outfit |
+| continueFrame, Veo | Frame cuối → `maseQ` → Veo i2v; `[Label]` giữ trong prompt; không upload / không wire media id của Character/Outfit |
+| continueFrame, Omni | Frame cuối → `maseQ` → `MZZa6b` (frame cuối trước, rồi ảnh tham chiếu) |
 | Không frame + không Omni | Lỗi: chọn Omni hoặc cung cấp 1 ảnh / scene trước |
 
 Poll: mỗi 10s (`jwpduf` + định kỳ `Zzl0ze` → `as29s`).
@@ -281,6 +333,14 @@ Poll: mỗi 10s (`jwpduf` + định kỳ `Zzl0ze` → `as29s`).
 **Driver / RPC thường gặp:**  
 `NO_AT_TOKEN`, `NO_FLOW_PROJECT`, `CAPTCHA_FAILED`, `TIMEOUT`, `TAB_LOST`, `UPLOAD_FAILED`, `MODEL_ACCESS_DENIED` (có fallback Veo), `[13]` INTERNAL trên Veo (fail cứng, không blind retry)
 
+`TAB_LOST` chỉ ném ra sau khi `sendToContent` đã thử phục hồi: gửi message →
+nếu Chrome trả `Receiving end does not exist` thì inject lại content script của
+provider (`chrome.scripting.executeScript`, giữ nguyên trang) → vẫn hỏng thì
+reload tab rồi thử lần cuối. Cả hai entry point content script đều idempotent
+(cờ `__myXFlowsFlowContent` / `__myXFlowsGeminiContent`) nên inject lặp không
+đăng ký listener hai lần. Thông điệp cuối là tiếng Việt chỉ rõ việc cần làm;
+chuỗi gốc của Chrome chỉ nằm ở `error.cause` cho log.
+
 Debug: Editor → **Console** (Ctrl+\`) — log `run` / `node` / `driver` / `rpc`. RPC lỗi có thể kèm `freq` (vẫn `__CAPTCHA__`, không lộ token).
 
 ### 4.4 Hằng số hữu ích
@@ -314,5 +374,9 @@ Debug: Editor → **Console** (Ctrl+\`) — log `run` / `node` / `driver` / `rpc
 | RPC codec | `src/providers/flow/rpc/batch.ts` |
 | RPC runner | `src/providers/flow/rpc/runner.ts` |
 | Captcha | `src/providers/flow/rpc/captcha.ts` |
-| Editor node | `src/features/editor/nodes/WorkflowNodeView.tsx` |
+| Ghép video — engine | `src/media/composeVideo.ts` (WebCodecs, chạy ở offscreen) |
+| Ghép video — bridge SW | `src/media/composeClient.ts`, `src/media/composeTypes.ts` |
+| Ghép video — toán bố cục | `src/media/layout.ts` |
+| Offscreen document | `src/pages/offscreen/main.ts`, `src/media/offscreenBridge.ts` |
+| Editor node | `src/features/editor/nodes/WorkflowNodeView.tsx`, `nodes/MergeVideoBody.tsx` |
 | Editor shell | `src/features/editor/EditorApp.tsx` |
