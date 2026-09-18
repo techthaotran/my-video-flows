@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MEDIA_ACCEPT, kindFromExtension, kindFromMime, mediaKindOf } from '@/shared/media';
+import { MEDIA_ACCEPT, kindFromExtension, kindFromMime, localAssetPatch, mediaKindOf } from '@/shared/media';
 import { assetRepo } from '@/storage/repos/assetRepo';
 import { AssetSchema, AUDIO_ASSET_LABEL, defaultKindForLabel } from '@/shared/schema';
 
@@ -65,5 +65,21 @@ describe('lưu asset audio', () => {
 
   it('có đúng một label dành cho audio nên tự chuyển label được', () => {
     expect(defaultKindForLabel(AUDIO_ASSET_LABEL)).toBe('audio');
+  });
+});
+
+describe('localAssetPatch', () => {
+  it('trả patch local và xoá tham chiếu Flow', () => {
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+    expect(localAssetPatch(file, 'asset-1', 'image')).toEqual({
+      assetId: 'asset-1',
+      kind: 'image',
+      mime: 'image/png',
+      originalName: 'a.png',
+      missing: false,
+      source: 'local',
+      flowMediaId: undefined,
+      flowPreviewUrl: undefined,
+    });
   });
 });

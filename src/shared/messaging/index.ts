@@ -3,12 +3,42 @@ import type { LogEntry } from '@/shared/log';
 
 /** Typed messages UI ↔ Service Worker ↔ Content scripts */
 
+export interface RunnerOpenPayload {
+  workflowId: string;
+}
+
+export interface EditorOpenPayload {
+  workflowId: string;
+}
+
+export interface WorkflowRegeneratePayload {
+  workflowId: string;
+  /** Node generateImage/generateVideo cần tạo lại. */
+  nodeId: string;
+}
+
+export interface WorkflowRegenerateResult {
+  /** Run tạo lại node; bước ghép (nếu có) dùng run riêng, báo qua run-events. */
+  runId: string;
+}
+
+export interface RunDoneEvent {
+  runId: string;
+  /** Optional để tương thích nơi phát cũ. */
+  workflowId?: string;
+  status: RunStatus;
+  error?: string;
+}
+
 export type UiToSwMessage =
   | { type: 'workflow.run'; workflowId: string; fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from' }
   | { type: 'run.cancel'; runId: string }
   | { type: 'workflow.cancel'; workflowId: string }
   | { type: 'runAll'; workspaceId: string }
   | { type: 'node.runFrom'; workflowId: string; nodeId: string }
+  | ({ type: 'runner.open' } & RunnerOpenPayload)
+  | ({ type: 'editor.open' } & EditorOpenPayload)
+  | ({ type: 'workflow.regenerate' } & WorkflowRegeneratePayload)
   | { type: 'provider.checkAuth'; provider: 'flow' | 'gemini' }
   | { type: 'provider.diagnose'; provider: 'flow' | 'gemini' }
   | { type: 'provider.capabilities'; provider: 'flow' | 'gemini' }
@@ -26,7 +56,7 @@ export type SwToUiEvent =
   | { type: 'node.progress'; runId: string; nodeId: string; progress: number; message?: string }
   | { type: 'node.output'; runId: string; nodeId: string; outputId: string; kind: string }
   | { type: 'node.data'; runId: string; nodeId: string; data: Record<string, unknown> }
-  | { type: 'run.done'; runId: string; status: RunStatus; error?: string }
+  | ({ type: 'run.done' } & RunDoneEvent)
   | { type: 'queue.update'; running: number; waiting: number }
   | { type: 'notification'; title: string; body: string; level: 'info' | 'success' | 'error' }
   | { type: 'log'; entry: LogEntry }

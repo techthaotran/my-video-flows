@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evenSize, frameTimestamps, logoRect, orderedClipIds } from '@/media/layout';
+import { evenSize, frameTimestamps, logoRect, moveInOrder, orderedClipIds } from '@/media/layout';
 import { orderClipsForMerge } from '@/engine/executors';
 import { sourceAllowed } from '@/nodes/ports';
 import { DEFAULT_PORTS } from '@/nodes/ports';
@@ -44,6 +44,16 @@ describe('thứ tự ghép', () => {
       'v1-a',
       'v1-b',
     ]);
+  });
+
+  it('giữ nguyên khi vượt biên', () => {
+    expect(moveInOrder(['a', 'b'], 0, -1)).toEqual(['a', 'b']);
+    expect(moveInOrder(['a', 'b'], 1, 1)).toEqual(['a', 'b']);
+  });
+
+  it('đổi chỗ lên/xuống trong biên', () => {
+    expect(moveInOrder(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+    expect(moveInOrder(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c']);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Clapperboard,
+  Download,
   ExternalLink,
   ImagePlus,
   Loader2,
@@ -11,10 +12,54 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { cn } from '@/shared/utils';
+import { Button } from '@/components/ui/button';
+import { strings } from '@/shared/strings';
+import { chromeDownload, cn } from '@/shared/utils';
 
 /** React Flow ignores drag/pan/wheel that start on these elements. */
 const NO_CANVAS = 'nodrag nopan nowheel';
+
+/** Nút tải video mp4 từ URL blob/preview - dùng chung editor và cửa sổ "Chạy". */
+export function ExportVideoButton({
+  url,
+  disabled,
+  className,
+  onClick,
+}: {
+  url: string | null;
+  disabled?: boolean;
+  className?: string;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className={cn('shrink-0 gap-1.5', className)}
+      disabled={!url || disabled || busy}
+      title={strings.mergeExport}
+      onClick={(e) => {
+        onClick?.(e);
+        if (!url) return;
+        setBusy(true);
+        void (async () => {
+          try {
+            const blob = await (await fetch(url)).blob();
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            await chromeDownload(blob, `${strings.mergeExportName}-${stamp}.mp4`);
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
+    >
+      <Download className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{strings.mergeExport}</span>
+    </Button>
+  );
+}
 
 /** Stage box per aspect ratio — portrait clips stay tall without blowing up the node. */
 function stageStyle(aspect: string | undefined): { className: string; style: React.CSSProperties } {

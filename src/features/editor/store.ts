@@ -37,6 +37,12 @@ interface EditorState {
   enabled: boolean;
   locked: boolean;
   dirty: boolean;
+  /** Node ids whose data the editor has edited since last save. */
+  dirtyNodeIds: Set<string>;
+  /** True if the user edited the workflow name since last save. */
+  nameDirty: boolean;
+  /** Last workflow.updatedAt applied from DB (load / external sync / save). */
+  lastSyncedAt: number;
   settings: Workflow['settings'];
   nodes: FlowNode[];
   edges: FlowEdge[];
@@ -49,6 +55,7 @@ interface EditorState {
   isRunning: boolean;
 
   loadWorkflow: (wf: Workflow) => void;
+  applyExternalWorkflow: (wf: Workflow) => void;
   setName: (name: string) => void;
   setEnabled: (v: boolean) => void;
   setLocked: (v: boolean) => void;
@@ -62,6 +69,8 @@ interface EditorState {
   updateNodeData: (id: string, data: Record<string, unknown>) => void;
   /** Runtime-only node data (preview, etc.) — does not mark the workflow dirty. */
   setNodePreview: (id: string, outputId: string) => void;
+  /** Runtime SW `node.data` patch — no dirty / dirtyNodeIds. */
+  applyRuntimeNodeData: (id: string, data: Record<string, unknown>) => void;
   removeEdgeToSource: (targetId: string, sourceId: string, edgeId?: string) => void;
   removeEdge: (edgeId: string) => void;
   setViewport: (v: Viewport) => void;
@@ -114,6 +123,9 @@ export const useEditorStore = create<EditorState>()(
       enabled: false,
       locked: false,
       dirty: false,
+      dirtyNodeIds: new Set<string>(),
+      nameDirty: false,
+      lastSyncedAt: 0,
       settings: { concurrency: 1, retry: 2, stopOnError: true },
       nodes: [],
       edges: [],
@@ -132,6 +144,9 @@ export const useEditorStore = create<EditorState>()(
           enabled: wf.enabled,
           locked: wf.locked,
           dirty: false,
+          dirtyNodeIds: new Set(),
+          nameDirty: false,
+          lastSyncedAt: wf.updatedAt,
           settings: wf.settings,
           nodes: wf.nodes.map((n) => wfNodeToFlow(n, wf.locked)),
           edges: wf.edges.map((e) => ({
@@ -150,7 +165,45 @@ export const useEditorStore = create<EditorState>()(
         });
       },
 
-      setName: (name) => set({ name, dirty: true }),
+      applyExternalWorkflow: (wf) => {
+        const s = get();
+        if (wf.updatedAt <= s.lastSyncedAt) return;
+
+        const temporalApi = useEditorStore.temporal.getState();
+        temporalApi.pause();
+        try {
+          const byId = new Map(wf.nodes.map((n) => [n.id, n]));
+          const nodes = s.nodes.map((n) => {
+            const lockedData = { ...n.data, locked: wf.locked };
+            if (s.dirtyNodeIds.has(n.id)) {
+              return { ...n, data: lockedData };
+            }
+            const ext = byId.get(n.id);
+            if (!ext) {
+              return { ...n, data: lockedData };
+            }
+            return {
+              ...n,
+              data: {
+                ...lockedData,
+                label: ext.label,
+                slug: ext.slug ?? n.data.slug,
+                data: ext.data as Record<string, unknown>,
+              },
+            };
+          });
+          set({
+            nodes,
+            name: s.nameDirty ? s.name : wf.name,
+            locked: wf.locked,
+            lastSyncedAt: wf.updatedAt,
+          });
+        } finally {
+          temporalApi.resume();
+        }
+      },
+
+      setName: (name) => set({ name, dirty: true, nameDirty: true }),
       setEnabled: (enabled) => set({ enabled, dirty: true }),
       setLocked: (locked) =>
         set({
@@ -158,7 +211,7 @@ export const useEditorStore = create<EditorState>()(
           dirty: true,
           nodes: get().nodes.map((n) => ({ ...n, data: { ...n.data, locked } })),
         }),
-      markSaved: () => set({ dirty: false }),
+      markSaved: () => set({ dirty: false, dirtyNodeIds: new Set(), nameDirty: false }),
       markDirty: () => set({ dirty: true }),
 
       onNodesChange: (changes) => {
@@ -319,6 +372,8 @@ export const useEditorStore = create<EditorState>()(
       },
 
       updateNodeData: (id, data) => {
+        const dirtyNodeIds = new Set(get().dirtyNodeIds);
+        dirtyNodeIds.add(id);
         set({
           nodes: get().nodes.map((n) =>
             n.id === id
@@ -334,6 +389,7 @@ export const useEditorStore = create<EditorState>()(
               : n,
           ),
           dirty: true,
+          dirtyNodeIds,
         });
       },
 
@@ -350,6 +406,22 @@ export const useEditorStore = create<EditorState>()(
                       previewOutputId: outputId,
                       previewRev: Date.now(),
                     },
+                  },
+                }
+              : n,
+          ),
+        });
+      },
+
+      applyRuntimeNodeData: (id, data) => {
+        set({
+          nodes: get().nodes.map((n) =>
+            n.id === id
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    data: { ...n.data.data, ...data },
                   },
                 }
               : n,
@@ -482,6 +554,12 @@ export const useEditorStore = create<EditorState>()(
         });
       },
     }),
-    { limit: 50 },
+    {
+      limit: 50,
+      partialize: (state) => {
+        const { dirtyNodeIds: _d, lastSyncedAt: _l, nameDirty: _n, ...rest } = state;
+        return rest;
+      },
+    },
   ),
 );

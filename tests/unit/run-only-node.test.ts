@@ -63,6 +63,7 @@ describe('generate only this node', () => {
     const { calls, done } = await runToEnd(wf, { mode: 'only', nodeId: 'vid' });
 
     expect(done.status).toBe('success');
+    expect(done.workflowId).toBe(wf.id);
     expect(calls).toHaveLength(1);
     const payload = (calls[0] as Extract<DriverAction, { name: 'generate' }>).payload as FlowGeneratePayload;
     expect(payload.mode).not.toBe('text-to-image');

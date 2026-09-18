@@ -10,6 +10,7 @@ import {
   type Connection,
 } from '@xyflow/react';
 import dagre from 'dagre';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Lock,
   Unlock,
@@ -148,6 +149,15 @@ function EditorInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowId]);
 
+  const liveWorkflow = useLiveQuery(
+    () => (workflowId ? workflowRepo.get(workflowId) : Promise.resolve(undefined)),
+    [workflowId],
+  );
+  useEffect(() => {
+    if (!liveWorkflow) return;
+    store.applyExternalWorkflow(liveWorkflow);
+  }, [liveWorkflow, store]);
+
   useEffect(() => {
     if (store.dirty) saveDraft();
   }, [store.nodes, store.edges, store.name, store.enabled, store.locked, store.viewport, store.dirty, saveDraft]);
@@ -208,7 +218,7 @@ function EditorInner() {
         store.setNodePreview(ev.nodeId, ev.outputId);
       }
       if (ev.type === 'node.data') {
-        store.updateNodeData(ev.nodeId, ev.data);
+        store.applyRuntimeNodeData(ev.nodeId, ev.data);
       }
       if (ev.type === 'node.progress') {
         store.setNodeStatus(ev.nodeId, 'running', ev.progress, undefined, ev.message);
@@ -285,10 +295,24 @@ function EditorInner() {
       workspaceId: existing?.workspaceId ?? workspaceIdRef.current,
       createdAt: existing?.createdAt ?? createdAtRef.current,
     };
-    await workflowRepo.save(wf);
+    const saved = await workflowRepo.saveFromEditor(wf, store.dirtyNodeIds);
     store.markSaved();
+    useEditorStore.setState({ lastSyncedAt: saved.updatedAt });
     store.pushLog(strings.saved);
   }, [store, workflowId]);
+
+  const handleToggleLock = useCallback(async () => {
+    if (!workflowId) return;
+    const prev = useEditorStore.getState();
+    const next = !prev.locked;
+    await workflowRepo.setLocked(workflowId, next);
+    const saved = await workflowRepo.get(workflowId);
+    useEditorStore.setState({
+      locked: next,
+      nodes: prev.nodes.map((n) => ({ ...n, data: { ...n.data, locked: next } })),
+      lastSyncedAt: saved?.updatedAt ?? prev.lastSyncedAt,
+    });
+  }, [workflowId]);
 
   const handleRun = async () => {
     if (store.dirty) await handleSave();
@@ -505,7 +529,7 @@ function EditorInner() {
             variant="ghost"
             size="icon"
             title={store.locked ? strings.unlock : strings.lock}
-            onClick={() => store.setLocked(!store.locked)}
+            onClick={() => void handleToggleLock()}
           >
             {store.locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           </Button>

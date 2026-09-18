@@ -25,12 +25,47 @@ export const runRepo = {
   },
 
   async listByWorkflow(workflowId: string, limit = 20): Promise<Run[]> {
-    return db.runs.where('workflowId').equals(workflowId).reverse().limit(limit).sortBy('startedAt');
+    const rows = await db.runs.where('workflowId').equals(workflowId).sortBy('startedAt');
+    return rows.reverse().slice(0, limit);
   },
 
   async latest(workflowId: string): Promise<Run | undefined> {
-    const rows = await db.runs.where('workflowId').equals(workflowId).reverse().sortBy('startedAt');
-    return rows.at(-1) ?? rows[0];
+    const rows = await this.listByWorkflow(workflowId, 1);
+    return rows[0];
+  },
+
+  /**
+   * Bản NodeRun mới nhất cho mỗi node trong `limit` run gần nhất.
+   * So theo run.startedAt, cùng run thì so finishedAt ?? startedAt.
+   */
+  async latestNodeRuns(workflowId: string, limit = 20): Promise<Map<string, NodeRun>> {
+    const runs = await this.listByWorkflow(workflowId, limit);
+    const result = new Map<string, NodeRun>();
+    if (runs.length === 0) return result;
+
+    const runById = new Map(runs.map((r) => [r.id, r]));
+    const runIds = runs.map((r) => r.id);
+    const nodeRuns = await db.nodeRuns.where('runId').anyOf(runIds).toArray();
+
+    for (const nr of nodeRuns) {
+      const run = runById.get(nr.runId);
+      if (!run) continue;
+      const prev = result.get(nr.nodeId);
+      if (!prev) {
+        result.set(nr.nodeId, nr);
+        continue;
+      }
+      const prevRun = runById.get(prev.runId)!;
+      if (run.startedAt > prevRun.startedAt) {
+        result.set(nr.nodeId, nr);
+        continue;
+      }
+      if (run.startedAt < prevRun.startedAt) continue;
+      const nrAt = nr.finishedAt ?? nr.startedAt ?? 0;
+      const prevAt = prev.finishedAt ?? prev.startedAt ?? 0;
+      if (nrAt >= prevAt) result.set(nr.nodeId, nr);
+    }
+    return result;
   },
 
   async listRunning(): Promise<Run[]> {

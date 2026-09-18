@@ -3,7 +3,7 @@
 Tài liệu kỹ thuật về **node-based workflow**: loại node, kết nối, chạy trên service worker, và pipeline RPC Google Flow.
 
 > Provider Flow chi tiết hơn: [providers/flow.md](./providers/flow.md)  
-> Schema version hiện tại: **3** (`SCHEMA_VERSION` trong `src/shared/schema/index.ts`)
+> Schema version hiện tại: **5** (`SCHEMA_VERSION` trong `src/shared/schema/index.ts`)
 
 ---
 
@@ -188,6 +188,17 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
   - Không nạp lại preview theo trạng thái chạy (`running`/`success`) — chỉ theo `previewOutputId` + `previewRev`. Trạng thái đổi không làm nội dung đổi, nạp lại theo nó chỉ tạo thêm một nhịp không có video.
 - `NodeVideoPlayer` đặt `key={src}`: đổi video là thay hẳn phần tử, không giữ buffer/timeline cũ. Sự kiện `error` cũng phải đối chiếu `e.currentTarget === videoRef.current` — lỗi bất đồng bộ của src cũ tới sau khi src đã đổi sẽ khoá player ở màn hình "không phát được" dù video mới bình thường.
 
+**Cửa sổ "Chạy"** (`src/features/runner/`, page `src/pages/runner/`):
+- Mở bằng `runner.open` (nút "Tải lên" ở side panel); popup 1280×800, tối đa một cửa sổ mỗi workflow.
+- Đọc workflow bằng `useLiveQuery(() => workflowRepo.get(id))`; ghi field bằng `workflowRepo.patchNodeData` (không tạo revision).
+- Trạng thái chạy: `useRunnerStore` hydrate từ `runRepo.latestNodeRuns` + `connectRunEvents`.
+- Tạo lại một cảnh: `workflow.regenerate` (SW chạy mode `only`, rồi tự ghép nếu đủ clip).
+
+**Editor đồng bộ bên ngoài:**
+- `useLiveQuery` + `applyExternalWorkflow`: node không thuộc `dirtyNodeIds` nhận `data` mới từ DB; node đang sửa giữ bản editor.
+- Lưu bằng `workflowRepo.saveFromEditor(wf, dirtyNodeIds)` - cấu trúc lấy từ editor, data node không dirty lấy từ DB.
+- Khoá workflow ghi ngay bằng `workflowRepo.setLocked` để cửa sổ "Chạy" khoá theo.
+
 ### 2.7 Graph mẫu
 
 ```
@@ -321,7 +332,9 @@ Poll: mỗi 10s (`jwpduf` + định kỳ `Zzl0ze` → `as29s`).
 |---|---|
 | `workflow.run` · `full` | Toàn bộ DAG |
 | `workflow.run` · `node` + `fromNodeId` | Upstream + node đó |
+| `workflow.run` · `only` + `nodeId` | Upstream chạy (generate phía trước dùng lại `previewOutputId`); chỉ node được chọn gọi Flow / compose |
 | `workflow.run` · `from` / `node.runFrom` | Node + downstream |
+| `workflow.regenerate` | Mode `only` trên một generate; nếu thành công và đủ clip thì xếp thêm run `only` trên Merge |
 | `runAll` | Mọi workflow `enabled` trong workspace |
 | `run.cancel` / `workflow.cancel` | AbortController |
 
@@ -347,7 +360,7 @@ Debug: Editor → **Console** (Ctrl+\`) — log `run` / `node` / `driver` / `rpc
 
 | Tên | Ý nghĩa |
 |---|---|
-| `SCHEMA_VERSION` | `3` |
+| `SCHEMA_VERSION` | `5` |
 | `BATCH_PATH` | `/_/AiSandboxAngularFrontend/data/batchexecute` |
 | `VIDEO_POLL_INTERVAL_MS` | 10_000 |
 | `IMAGE_SUBMIT_OFFSETS_MS` | `[0, 500, 1500, 2500]` |
@@ -365,10 +378,12 @@ Debug: Editor → **Console** (Ctrl+\`) — log `run` / `node` / `driver` / `rpc
 | Registry | `src/nodes/registry.ts` |
 | Executors | `src/engine/executors.ts` |
 | RunManager | `src/engine/RunManager.ts` |
+| Merge ready (isMergeReady) | `src/engine/mergeReady.ts` |
 | Scheduler | `src/engine/scheduler.ts` |
 | Resolver | `src/engine/resolver.ts` |
 | Messaging | `src/shared/messaging/index.ts` |
 | SW entry | `src/background/index.ts` |
+| Popup windows | `src/background/windows.ts` |
 | TabPool / router | `src/providers/TabPool.ts` |
 | RPC generate | `src/providers/flow/rpc/generate.ts` |
 | RPC codec | `src/providers/flow/rpc/batch.ts` |
@@ -380,3 +395,5 @@ Debug: Editor → **Console** (Ctrl+\`) — log `run` / `node` / `driver` / `rpc
 | Offscreen document | `src/pages/offscreen/main.ts`, `src/media/offscreenBridge.ts` |
 | Editor node | `src/features/editor/nodes/WorkflowNodeView.tsx`, `nodes/MergeVideoBody.tsx` |
 | Editor shell | `src/features/editor/EditorApp.tsx` |
+| Cửa sổ "Chạy" | `src/features/runner/` |
+| Page runner | `src/pages/runner/` |

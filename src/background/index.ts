@@ -4,6 +4,7 @@ import { bootstrapStorage, getSettings, setSettings } from '@/storage/repos/sett
 import type { UiToSwMessage, SwToUiEvent, MessageResponse } from '@/shared/messaging';
 import { isUiToSwMessage } from '@/shared/messaging';
 import { clearLogs, createLogger, getLogs, subscribeLogs } from '@/shared/log';
+import { openOrFocusWindow } from '@/background/windows';
 
 const ports = new Set<chrome.runtime.Port>();
 
@@ -31,6 +32,10 @@ self.addEventListener('unhandledrejection', (e) => {
 const pool = new TabPool();
 const router = new ProviderRouter(pool);
 const runManager = new RunManager(router, broadcast);
+
+/** Cửa sổ editor / "Chạy" đang mở theo workflowId. */
+const editorWindows = new Map<string, number>();
+const runnerWindows = new Map<string, number>();
 
 /** Mở side panel khi bấm icon — không phụ thuộc setPanelBehavior (hay mất sau reload) */
 async function openSidePanel(tab?: chrome.tabs.Tab) {
@@ -138,6 +143,10 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
       });
       return { ok: true, data: { runId } };
     }
+    case 'workflow.regenerate': {
+      const runId = await runManager.regenerate(message.workflowId, message.nodeId);
+      return { ok: true, data: { runId } };
+    }
     case 'node.runFrom': {
       const runId = await runManager.runWorkflow(message.workflowId, {
         mode: 'from',
@@ -155,6 +164,12 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
       const ids = await runManager.runAll(message.workspaceId);
       return { ok: true, data: { runIds: ids } };
     }
+    case 'editor.open':
+      await openOrFocusWindow(editorWindows, message.workflowId, 'src/pages/editor/index.html');
+      return { ok: true, data: {} };
+    case 'runner.open':
+      await openOrFocusWindow(runnerWindows, message.workflowId, 'src/pages/runner/index.html');
+      return { ok: true, data: {} };
     case 'provider.checkAuth': {
       const result = await router.checkAuth(message.provider);
       return { ok: true, data: result };
@@ -222,54 +237,6 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
     default:
       return { ok: false, error: 'Unknown message' };
   }
-}
-
-// Track open editor windows per workflow
-const editorWindows = new Map<string, number>();
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === 'editor.open') {
-    const workflowId = message.workflowId as string;
-    const existing = editorWindows.get(workflowId);
-    if (existing != null) {
-      chrome.windows.update(existing, { focused: true }).then(
-        () => sendResponse({ ok: true }),
-        () => {
-          editorWindows.delete(workflowId);
-          void openEditor(workflowId).then((id) => {
-            editorWindows.set(workflowId, id);
-            sendResponse({ ok: true });
-          });
-        },
-      );
-      return true;
-    }
-    void openEditor(workflowId).then((id) => {
-      editorWindows.set(workflowId, id);
-      sendResponse({ ok: true });
-    });
-    return true;
-  }
-  return false;
-});
-
-async function openEditor(workflowId: string): Promise<number> {
-  const url = chrome.runtime.getURL(`src/pages/editor/index.html?id=${workflowId}`);
-  const win = await chrome.windows.create({
-    url,
-    type: 'popup',
-    width: 1280,
-    height: 800,
-  });
-  const windowId = win.id!;
-  const onRemoved = (id: number) => {
-    if (id === windowId) {
-      editorWindows.delete(workflowId);
-      chrome.windows.onRemoved.removeListener(onRemoved);
-    }
-  };
-  chrome.windows.onRemoved.addListener(onRemoved);
-  return windowId;
 }
 
 log.info('Service worker ready');

@@ -13,7 +13,7 @@ import {
   type AssetLabel,
 } from '@/shared/schema';
 import { assetRepo } from '@/storage/repos/assetRepo';
-import { MEDIA_ACCEPT, mediaKindOf } from '@/shared/media';
+import { MEDIA_ACCEPT, localAssetPatch, mediaKindOf } from '@/shared/media';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
 import { ImagePlus, Clapperboard, Square } from 'lucide-react';
 import { FlowAssetPicker } from '@/features/editor/FlowAssetPicker';
@@ -462,19 +462,12 @@ function AssetBody({
       useEditorStore.getState().workflowId ?? undefined,
     );
     onChange({
-      assetId: asset.id,
-      kind: nextKind,
+      ...localAssetPatch(file, asset.id, nextKind),
       // Đúng một label dành cho audio, nên đổi được mà không mơ hồ. Ảnh/video
       // có nhiều label nên giữ nguyên lựa chọn của người dùng.
       ...(nextKind === 'audio' && defaultKindForLabel(label) !== 'audio'
         ? { assetLabel: AUDIO_ASSET_LABEL }
         : {}),
-      mime: file.type,
-      originalName: file.name,
-      missing: false,
-      source: 'local',
-      flowMediaId: undefined,
-      flowPreviewUrl: undefined,
     });
   };
 

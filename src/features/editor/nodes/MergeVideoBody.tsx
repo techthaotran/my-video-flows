@@ -3,7 +3,6 @@ import {
   ArrowDown,
   ArrowUp,
   Clapperboard,
-  Download,
   Film,
   Loader2,
   Square,
@@ -13,11 +12,11 @@ import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/features/editor/store';
 import { useAssetUrl } from '@/features/editor/IncomingAssets';
 import type { IncomingItem } from '@/features/editor/incomingInputs';
-import { NodeVideoPlayer } from '@/features/editor/nodes/MediaPreview';
+import { ExportVideoButton, NodeVideoPlayer } from '@/features/editor/nodes/MediaPreview';
 import { useMediaDuration, useOutputUrl } from '@/features/editor/nodes/useMediaUrl';
-import { logoRect, orderedClipIds } from '@/media/layout';
+import { logoRect, moveInOrder, orderedClipIds } from '@/media/layout';
 import { strings } from '@/shared/strings';
-import { chromeDownload, cn } from '@/shared/utils';
+import { cn } from '@/shared/utils';
 
 /** React Flow bỏ qua drag/pan/wheel bắt đầu trên phần tử có class này. */
 const NO_CANVAS = 'nodrag nopan nowheel';
@@ -89,11 +88,7 @@ export function MergeVideoBody(props: MergeVideoBodyProps) {
   });
 
   const move = (index: number, delta: number) => {
-    const next = [...order];
-    const to = index + delta;
-    if (to < 0 || to >= next.length) return;
-    [next[index], next[to]] = [next[to]!, next[index]!];
-    onChange({ order: next });
+    onChange({ order: moveInOrder(order, index, delta) });
   };
 
   return (
@@ -215,7 +210,11 @@ export function MergeVideoBody(props: MergeVideoBodyProps) {
             {running ? `${strings.mergeRunning} ${Math.round(props.progress ?? 0)}%` : strings.mergeRun}
           </span>
         </Button>
-        <ExportButton url={props.previewUrl} disabled={running} />
+        <ExportVideoButton
+          url={props.previewUrl}
+          disabled={running}
+          onClick={(e) => e.stopPropagation()}
+        />
         {running && (
           <Button
             type="button"
@@ -440,37 +439,6 @@ function MergeProgress({ progress, message }: { progress: number; message?: stri
         />
       </div>
     </div>
-  );
-}
-
-function ExportButton({ url, disabled }: { url: string | null; disabled: boolean }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      className="shrink-0 gap-1.5"
-      disabled={!url || disabled || busy}
-      title={strings.mergeExport}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!url) return;
-        setBusy(true);
-        void (async () => {
-          try {
-            const blob = await (await fetch(url)).blob();
-            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-            await chromeDownload(blob, `${strings.mergeExportName}-${stamp}.mp4`);
-          } finally {
-            setBusy(false);
-          }
-        })();
-      }}
-    >
-      <Download className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{strings.mergeExport}</span>
-    </Button>
   );
 }
 

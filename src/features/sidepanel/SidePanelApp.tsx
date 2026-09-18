@@ -41,7 +41,16 @@ import type { Workflow, AppSettings } from '@/shared/schema';
 import type { ImportPreview } from '@/storage/transfer';
 
 function openEditor(workflowId: string) {
-  chrome.runtime.sendMessage({ type: 'editor.open', workflowId });
+  void sendToSw({ type: 'editor.open', workflowId });
+}
+
+function openRunner(workflowId: string) {
+  void sendToSw({ type: 'runner.open', workflowId });
+}
+
+async function deleteWorkflow(workflowId: string) {
+  await workflowRepo.softDelete(workflowId);
+  await sendToSw({ type: 'workflow.cancel', workflowId });
 }
 
 export function SidePanelApp() {
@@ -252,7 +261,13 @@ export function SidePanelApp() {
             try {
               if (wfCount > 0) {
                 if (!confirm(strings.workspaceDeleteWithWorkflows(wfCount))) return;
+                const toCancel = workflows.filter(
+                  (w) => w.workspaceId === current.id && !w.deletedAt,
+                );
                 await workspaceRepo.remove(current.id, { force: true });
+                for (const w of toCancel) {
+                  void sendToSw({ type: 'workflow.cancel', workflowId: w.id });
+                }
               } else {
                 await workspaceRepo.remove(current.id);
               }
@@ -410,10 +425,11 @@ export function SidePanelApp() {
                         });
                       }}
                       onOpen={() => openEditor(w.id)}
+                      onOpenRunner={() => openRunner(w.id)}
                       onToggle={(en) => void workflowRepo.setEnabled(w.id, en)}
                       onExport={() => void onExport([w.id])}
                       onDuplicate={() => void workflowRepo.duplicate(w.id)}
-                      onDelete={() => void workflowRepo.softDelete(w.id)}
+                      onDelete={() => void deleteWorkflow(w.id)}
                       onRename={async () => {
                         const name = prompt(strings.rename, w.name);
                         if (name) await workflowRepo.rename(w.id, name);
@@ -435,7 +451,7 @@ export function SidePanelApp() {
       {/* Batch bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs">
-          <span>Đã chọn {selected.size}</span>
+          <span>{strings.selectedCount(selected.size)}</span>
           <Button size="sm" variant="secondary" onClick={() => void onExport([...selected])}>
             <Download className="h-3.5 w-3.5" />
             {strings.export}
@@ -583,6 +599,7 @@ function WorkflowRow(props: {
   selected: boolean;
   onSelect: (v: boolean) => void;
   onOpen: () => void;
+  onOpenRunner: () => void;
   onToggle: (v: boolean) => void;
   onExport: () => void;
   onDuplicate: () => void;
@@ -593,7 +610,7 @@ function WorkflowRow(props: {
 }) {
   const { workflow: w } = props;
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-2 hover:border-primary/40">
+    <div className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-2 hover:border-primary/40">
       <input
         type="checkbox"
         checked={props.selected}
@@ -606,15 +623,25 @@ function WorkflowRow(props: {
           {strings.nodesCount(w.nodes.length)} · {formatRelativeTime(w.updatedAt)}
         </div>
       </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        title={strings.openRunner}
+        onClick={props.onOpenRunner}
+      >
+        <Upload className="h-4 w-4" />
+      </Button>
       <Switch checked={w.enabled} onCheckedChange={props.onToggle} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={props.onOpen}>{strings.openEditor}</DropdownMenuItem>
+          <DropdownMenuItem onClick={props.onOpenRunner}>{strings.openRunner}</DropdownMenuItem>
           <DropdownMenuItem onClick={props.onRun}>{strings.run}</DropdownMenuItem>
           <DropdownMenuItem onClick={props.onRename}>{strings.rename}</DropdownMenuItem>
           <DropdownMenuItem onClick={props.onDuplicate}>{strings.duplicate}</DropdownMenuItem>

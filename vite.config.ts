@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         sidepanel: resolve(root, 'src/pages/sidepanel/index.html'),
         editor: resolve(root, 'src/pages/editor/index.html'),
+        runner: resolve(root, 'src/pages/runner/index.html'),
         offscreen: resolve(root, 'src/pages/offscreen/index.html'),
       },
     },

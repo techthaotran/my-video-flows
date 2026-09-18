@@ -14,8 +14,44 @@ import { strings } from '@/shared/strings';
 
 const MAX_REVISIONS = 20;
 
+export const WORKFLOW_ERROR = {
+  deleted: 'WORKFLOW_DELETED',
+  nodeNotFound: 'WORKFLOW_NODE_NOT_FOUND',
+  notFound: 'WORKFLOW_NOT_FOUND',
+} as const;
+
+export type WorkflowErrorCode = (typeof WORKFLOW_ERROR)[keyof typeof WORKFLOW_ERROR];
+
+function workflowError(code: WorkflowErrorCode): Error {
+  const err = new Error(code);
+  (err as Error & { code: WorkflowErrorCode }).code = code;
+  return err;
+}
+
 function defaultNodeData(type: NodeType) {
   return validateNodeData(type, {});
+}
+
+/** Ghi workflow đã parse: put + optional revision + xoá draft. Gọi trong transaction. */
+async function writeWorkflow(parsed: Workflow, opts?: { revision?: boolean }): Promise<void> {
+  await db.workflows.put(parsed);
+  if (opts?.revision !== false) {
+    await db.workflowRevisions.add({
+      id: nanoid(),
+      workflowId: parsed.id,
+      workflow: parsed,
+      createdAt: Date.now(),
+    });
+    const revs = await db.workflowRevisions
+      .where('workflowId')
+      .equals(parsed.id)
+      .sortBy('createdAt');
+    if (revs.length > MAX_REVISIONS) {
+      const drop = revs.slice(0, revs.length - MAX_REVISIONS);
+      await db.workflowRevisions.bulkDelete(drop.map((r) => r.id));
+    }
+  }
+  await db.drafts.delete(parsed.id);
 }
 
 export function createEmptyWorkflow(workspaceId: string, name = 'Workflow mới'): Workflow {
@@ -84,27 +120,83 @@ export const workflowRepo = {
     const parsed = WorkflowSchema.parse(cleaned);
 
     await db.transaction('rw', db.workflows, db.workflowRevisions, db.drafts, async () => {
-      await db.workflows.put(parsed);
-      if (opts?.revision !== false) {
-        await db.workflowRevisions.add({
-          id: nanoid(),
-          workflowId: parsed.id,
-          workflow: parsed,
-          createdAt: Date.now(),
-        });
-        const revs = await db.workflowRevisions
-          .where('workflowId')
-          .equals(parsed.id)
-          .sortBy('createdAt');
-        if (revs.length > MAX_REVISIONS) {
-          const drop = revs.slice(0, revs.length - MAX_REVISIONS);
-          await db.workflowRevisions.bulkDelete(drop.map((r) => r.id));
-        }
-      }
-      await db.drafts.delete(parsed.id);
+      await writeWorkflow(parsed, opts);
     });
 
     return parsed;
+  },
+
+  /**
+   * Gộp patch vào data của đúng một node. Không tạo revision, không xoá draft.
+   * @throws WORKFLOW_NOT_FOUND | WORKFLOW_DELETED | WORKFLOW_NODE_NOT_FOUND
+   */
+  async patchNodeData(
+    workflowId: string,
+    nodeId: string,
+    patch: Record<string, unknown>,
+  ): Promise<Workflow> {
+    return db.transaction('rw', db.workflows, async () => {
+      const raw = await db.workflows.get(workflowId);
+      if (!raw) throw workflowError(WORKFLOW_ERROR.notFound);
+      if (raw.deletedAt) throw workflowError(WORKFLOW_ERROR.deleted);
+
+      const wf = upgradeStoredWorkflow(raw);
+      const idx = wf.nodes.findIndex((n) => n.id === nodeId);
+      if (idx < 0) throw workflowError(WORKFLOW_ERROR.nodeNotFound);
+
+      const node = wf.nodes[idx]!;
+      const nextData = validateNodeData(node.type as NodeType, {
+        ...node.data,
+        ...patch,
+      }) as Record<string, unknown>;
+      const nodes = wf.nodes.slice();
+      nodes[idx] = { ...node, data: nextData };
+      const updated: Workflow = {
+        ...wf,
+        nodes,
+        schemaVersion: SCHEMA_VERSION,
+        updatedAt: Date.now(),
+      };
+      const parsed = WorkflowSchema.parse(updated);
+      await db.workflows.put(parsed);
+      return parsed;
+    });
+  },
+
+  /**
+   * Lưu từ editor: cấu trúc lấy từ editor; data node không dirty lấy từ DB.
+   * Giữ revision + xoá draft như `save`.
+   */
+  async saveFromEditor(
+    workflow: Workflow,
+    dirtyNodeIds: ReadonlySet<string>,
+  ): Promise<Workflow> {
+    return db.transaction('rw', db.workflows, db.workflowRevisions, db.drafts, async () => {
+      const raw = await db.workflows.get(workflow.id);
+      const dbById = new Map(
+        (raw ? upgradeStoredWorkflow(raw).nodes : []).map((n) => [n.id, n]),
+      );
+
+      const nodes = workflow.nodes.map((n) => {
+        const fromDb = dbById.get(n.id);
+        const dataSource =
+          !dirtyNodeIds.has(n.id) && fromDb ? fromDb.data : n.data;
+        return {
+          ...n,
+          data: validateNodeData(n.type as NodeType, dataSource) as Record<string, unknown>,
+        };
+      });
+
+      const cleaned: Workflow = {
+        ...workflow,
+        schemaVersion: SCHEMA_VERSION,
+        updatedAt: Date.now(),
+        nodes,
+      };
+      const parsed = WorkflowSchema.parse(cleaned);
+      await writeWorkflow(parsed);
+      return parsed;
+    });
   },
 
   async saveDraft(workflow: Workflow): Promise<void> {
@@ -125,6 +217,10 @@ export const workflowRepo = {
 
   async setEnabled(id: string, enabled: boolean): Promise<void> {
     await db.workflows.update(id, { enabled, updatedAt: Date.now() });
+  },
+
+  async setLocked(id: string, locked: boolean): Promise<void> {
+    await db.workflows.update(id, { locked, updatedAt: Date.now() });
   },
 
   async rename(id: string, name: string): Promise<void> {

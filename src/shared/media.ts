@@ -63,3 +63,33 @@ export function kindFromMime(mime: string | undefined): MediaKind | undefined {
 export function mediaKindOf(file: { type?: string; name?: string }): MediaKind | undefined {
   return kindFromMime(file.type) ?? kindFromExtension(file.name);
 }
+
+/**
+ * Patch data cho node Asset khi chọn file local.
+ * Xoá tham chiếu Flow để không bị dùng lại id cũ.
+ */
+export function localAssetPatch(
+  file: File,
+  assetId: string,
+  kind: MediaKind,
+): {
+  assetId: string;
+  kind: MediaKind;
+  mime: string;
+  originalName: string;
+  missing: false;
+  source: 'local';
+  flowMediaId: undefined;
+  flowPreviewUrl: undefined;
+} {
+  return {
+    assetId,
+    kind,
+    mime: file.type,
+    originalName: file.name,
+    missing: false,
+    source: 'local',
+    flowMediaId: undefined,
+    flowPreviewUrl: undefined,
+  };
+}

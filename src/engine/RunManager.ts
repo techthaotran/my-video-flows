@@ -1,8 +1,9 @@
-import { workflowRepo } from '@/storage/repos/workflowRepo';
+import { WORKFLOW_ERROR, workflowRepo } from '@/storage/repos/workflowRepo';
 import { runRepo } from '@/storage/repos/runRepo';
 import { assetRepo } from '@/storage/repos/assetRepo';
 import { getSettings } from '@/storage/repos/settingsRepo';
 import { topoSort, collectDownstream, collectUpstream } from '@/engine/scheduler';
+import { firstMergeNode, isMergeReady, mergeClipNodeIds } from '@/engine/mergeReady';
 import { buildSlugIndex } from '@/engine/resolver';
 import { computeInputHash } from '@/engine/cache';
 import { executors, hasGeneratePrompt } from '@/engine/executors';
@@ -11,7 +12,7 @@ import { composeVideoInOffscreen } from '@/media/composeClient';
 import { NON_RETRYABLE, type NodeOutputValue } from '@/engine/types';
 import type { ProviderRouter, EventBroadcaster } from '@/providers/TabPool';
 import type { SwToUiEvent } from '@/shared/messaging';
-import type { Workflow, WorkflowNode } from '@/shared/schema';
+import type { RunStatus, Workflow, WorkflowNode } from '@/shared/schema';
 import { nanoid } from '@/shared/utils';
 import { createLogger } from '@/shared/log';
 import { strings } from '@/shared/strings';
@@ -48,7 +49,7 @@ function shouldShowRunStatus(node: WorkflowNode): boolean {
 
 export class RunManager {
   private active = new Map<string, ActiveRun>();
-  private globalQueue: Array<() => Promise<void>> = [];
+  private globalQueue: Array<() => Promise<unknown>> = [];
   private globalRunning = 0;
   private cache = new Map<string, NodeOutputValue[]>(); // inputHash -> outputs
 
@@ -72,6 +73,7 @@ export class RunManager {
   ): Promise<string> {
     const workflow = await workflowRepo.get(workflowId);
     if (!workflow) throw new Error('Workflow không tồn tại');
+    if (workflow.deletedAt) throw new Error(strings.workflowDeleted);
 
     const run = await runRepo.create({
       workflowId,
@@ -94,6 +96,57 @@ export class RunManager {
     return ids;
   }
 
+  /**
+   * Tạo lại một node generate (mode `only`), rồi tự xếp run ghép nếu đủ clip.
+   * Trả `runId` của bước tạo lại ngay sau khi xếp hàng (không chờ xong).
+   */
+  async regenerate(workflowId: string, nodeId: string): Promise<string> {
+    const workflow = await workflowRepo.get(workflowId);
+    if (!workflow) throw new Error('Workflow không tồn tại');
+    if (workflow.deletedAt) throw new Error(strings.workflowDeleted);
+
+    const node = workflow.nodes.find((n) => n.id === nodeId);
+    if (!node) throw new Error(strings.nodeNotFound);
+    if (node.disabled) throw new Error(strings.regenerateNodeDisabled);
+    if (node.type !== 'generateImage' && node.type !== 'generateVideo') {
+      throw new Error(strings.regenerateNotGenerateNode);
+    }
+
+    const run = await runRepo.create({
+      workflowId,
+      mode: 'only',
+      fromNodeId: nodeId,
+    });
+    const runLog = log.child({ runId: run.id });
+    runLog.info('Xếp hàng tạo lại node', { workflowId, nodeId });
+
+    const job = async () => {
+      const status = await this.executeRun(run.id, workflow, { mode: 'only', nodeId });
+      if (status !== 'success') return;
+
+      const fresh = await workflowRepo.get(workflowId);
+      if (!fresh || fresh.deletedAt) return;
+
+      const merge = firstMergeNode(fresh);
+      if (!merge) return;
+      const clips = mergeClipNodeIds(fresh, merge.id);
+      if (!clips.includes(nodeId)) return;
+      if (!isMergeReady(fresh, merge.id)) {
+        runLog.info(strings.mergeWaitingClips, { mergeId: merge.id, nodeId });
+        return;
+      }
+
+      const mergeRunId = await this.runWorkflow(workflowId, {
+        mode: 'only',
+        nodeId: merge.id,
+      });
+      runLog.info('Tự ghép sau tạo lại', { regenerateRunId: run.id, mergeRunId });
+    };
+
+    this.enqueue(job);
+    return run.id;
+  }
+
   cancel(runId: string) {
     const a = this.active.get(runId);
     if (a) a.abort.abort();
@@ -105,10 +158,31 @@ export class RunManager {
     }
   }
 
-  private enqueue(job: () => Promise<void>) {
+  private enqueue(job: () => Promise<unknown>) {
     this.globalQueue.push(job);
     this.emitQueue();
     void this.pump();
+  }
+
+  /**
+   * Ghi patch vào node; bỏ qua nếu workflow/node đã xoá.
+   * Caller vẫn có thể broadcast `node.data` sau khi gọi.
+   */
+  private async patchNodeSafely(
+    workflowId: string,
+    nodeId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await workflowRepo.patchNodeData(workflowId, nodeId, patch);
+    } catch (e) {
+      const code = (e as { code?: string } | null)?.code;
+      if (code === WORKFLOW_ERROR.deleted || code === WORKFLOW_ERROR.nodeNotFound) {
+        log.warn(`Bỏ qua patch node (${code})`, { workflowId, nodeId });
+        return;
+      }
+      throw e;
+    }
   }
 
   private async pump() {
@@ -156,7 +230,25 @@ export class RunManager {
     runId: string,
     workflow: Workflow,
     opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from'; nodeId?: string },
-  ) {
+  ): Promise<RunStatus> {
+    // Job có thể xếp hàng trước khi workflow bị xoá mềm — kiểm tra lại lúc bắt đầu.
+    const fresh = await workflowRepo.get(workflow.id);
+    if (!fresh || fresh.deletedAt) {
+      await runRepo.update(runId, {
+        status: 'cancelled',
+        finishedAt: Date.now(),
+        error: strings.workflowDeleted,
+      });
+      this.broadcast({
+        type: 'run.done',
+        runId,
+        workflowId: workflow.id,
+        status: 'cancelled',
+        error: strings.workflowDeleted,
+      });
+      return 'cancelled';
+    }
+
     const abort = new AbortController();
     this.active.set(runId, { runId, abort, workflowId: workflow.id });
     await runRepo.update(runId, { status: 'running' });
@@ -166,6 +258,7 @@ export class RunManager {
     const runLog = log.child({ runId });
     const startedAt = Date.now();
     let failure: unknown;
+    let finalStatus: RunStatus = 'success';
 
     try {
       let nodeIds: Set<string> | undefined;
@@ -235,19 +328,22 @@ export class RunManager {
 
       await runRepo.update(runId, { status: 'success', finishedAt: Date.now() });
       runLog.info(`Xong sau ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
-      this.broadcast({ type: 'run.done', runId, status: 'success' });
+      this.broadcast({ type: 'run.done', runId, workflowId: workflow.id, status: 'success' });
       this.notify('Workflow xong', workflow.name, 'success');
+      finalStatus = 'success';
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const status = abort.signal.aborted && failure === undefined ? 'cancelled' : 'error';
+      const status: RunStatus = abort.signal.aborted && failure === undefined ? 'cancelled' : 'error';
       await runRepo.update(runId, { status, finishedAt: Date.now(), error: msg });
       if (status === 'cancelled') runLog.warn(`Đã huỷ: ${msg}`);
       else runLog.error(`Lỗi: ${msg}`, e);
-      this.broadcast({ type: 'run.done', runId, status, error: msg });
+      this.broadcast({ type: 'run.done', runId, workflowId: workflow.id, status, error: msg });
       this.notify(status === 'cancelled' ? 'Đã huỷ' : 'Workflow lỗi', msg, 'error');
+      finalStatus = status;
     } finally {
       this.active.delete(runId);
     }
+    return finalStatus;
   }
 
   private async runNode(
@@ -403,13 +499,7 @@ export class RunManager {
           },
           putAsset: async (blob, name) => (await assetRepo.put(blob, name, workflow.id)).id,
           patchNodeData: async (patch) => {
-            const wf = await workflowRepo.get(workflow.id);
-            if (wf) {
-              wf.nodes = wf.nodes.map((n) =>
-                n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n,
-              );
-              await workflowRepo.save(wf);
-            }
+            await this.patchNodeSafely(workflow.id, nodeId, patch);
             this.broadcast({ type: 'node.data', runId, nodeId, data: patch });
           },
           extractLastFrame: async (video) => {
@@ -481,15 +571,7 @@ export class RunManager {
           node.type === 'mergeVideo'
         ) {
           if (outputIds[0]) {
-            const wf = await workflowRepo.get(workflow.id);
-            if (wf) {
-              wf.nodes = wf.nodes.map((n) =>
-                n.id === nodeId
-                  ? { ...n, data: { ...n.data, previewOutputId: outputIds[0] } }
-                  : n,
-              );
-              await workflowRepo.save(wf);
-            }
+            await this.patchNodeSafely(workflow.id, nodeId, { previewOutputId: outputIds[0] });
             this.broadcast({
               type: 'node.output',
               runId,
@@ -501,13 +583,7 @@ export class RunManager {
         } else if (node.type === 'prompt') {
           const text = results.find((r) => r.kind === 'text')?.text;
           if (text) {
-            const wf = await workflowRepo.get(workflow.id);
-            if (wf) {
-              wf.nodes = wf.nodes.map((n) =>
-                n.id === nodeId ? { ...n, data: { ...n.data, formattedOutput: text } } : n,
-              );
-              await workflowRepo.save(wf);
-            }
+            await this.patchNodeSafely(workflow.id, nodeId, { formattedOutput: text });
             this.broadcast({
               type: 'node.data',
               runId,

@@ -73,6 +73,19 @@ export function orderedClipIds(order: readonly string[], connected: readonly str
   return result;
 }
 
+/** Đổi chỗ phần tử tại `index` với `index + delta`; vượt biên → giữ nguyên. */
+export function moveInOrder(
+  order: readonly string[],
+  index: number,
+  delta: number,
+): string[] {
+  const to = index + delta;
+  if (to < 0 || to >= order.length) return [...order];
+  const next = [...order];
+  [next[index], next[to]] = [next[to]!, next[index]!];
+  return next;
+}
+
 /** Mốc thời gian (giây) của từng frame trong một clip, theo fps cố định. */
 export function frameTimestamps(durationSec: number, fps: number): number[] {
   const count = Math.max(1, Math.round(durationSec * fps));
