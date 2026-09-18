@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "seconder-webapp-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "sec.gui.seconder-webapp-extension", "run", "dev:web"],
+      "port": 8388
+    }
+  ]
+}

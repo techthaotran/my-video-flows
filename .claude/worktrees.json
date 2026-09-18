@@ -1,0 +1,5 @@
+{
+  "_comment": "Used by /implement_plan when you run the code-writing stage in an isolated git worktree (parallel phases, experiments, or keeping main clean). NOT needed for /research-codebase, /create-plan, or /iterate_plan — those are read-only or edit only the plan file. To enable: rename to worktrees.json and set a setup command that installs deps with a fast package manager (bun/pnpm/uv). Do not symlink node_modules into the worktree.",
+  "setup-worktree-unix": "pnpm install --prefer-offline",
+  "setup-worktree-windows": "pnpm install --prefer-offline"
+}

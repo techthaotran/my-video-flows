@@ -1,0 +1,83 @@
+{
+  "run_id": "<run-id>",
+  "diff_sha256": "<sha256>",
+  "workflow_status": "RUNNING",
+  "scope": {
+    "code_files": 0,
+    "changed_lines": 0,
+    "modules": 0,
+    "domains": []
+  },
+  "context": {
+    "confirmed_items": 0,
+    "missing_items": 0,
+    "context_gaps": 0
+  },
+  "review": {
+    "findings": { "critical": 0, "high": 0, "medium": 0, "low": 0 },
+    "suppressed_noise": 0,
+    "human_decision_items": 0
+  },
+  "preflight": {
+    "commands_passed": 0,
+    "commands_failed": 0,
+    "commands_blocked": 0,
+    "missing_check_categories": []
+  },
+  "verify": {
+    "contracts": {
+      "confirmed": 0,
+      "not_reproduced": 0,
+      "refuted": 0,
+      "blocked": 0,
+      "blocked_auth": 0,
+      "blocked_port_conflict": 0,
+      "blocked_screenshot_permission": 0,
+      "weak_oracle": 0,
+      "test_gap": 0
+    },
+    "deterministic_commands_passed": 0,
+    "deterministic_commands_failed": 0,
+    "chrome": "NOT_NEEDED",
+    "service_readiness": {
+      "reused": 0,
+      "started": 0,
+      "blocked_port_conflict": 0
+    },
+    "sequential_execution": {
+      "verifier_agents": 1,
+      "cases_total": 0,
+      "cases_completed": 0,
+      "current_case": null,
+      "pending_cases": 0,
+      "screenshot_permission": "NOT_CHECKED",
+      "chrome_session_model": "NOT_APPLICABLE",
+      "browser_session_source": "NOT_APPLICABLE",
+      "verification_tabs": 0
+    },
+    "test_cases": {
+      "pass": 0,
+      "ng": 0,
+      "blocked": 0
+    },
+    "evidence_summary": "test-cases/summary.md"
+  },
+  "human_follow_up": {
+    "waiting_for_guidance": false,
+    "blocked_case": null,
+    "guidance_question": null,
+    "resolution_status": null,
+    "durable_learning": null,
+    "durable_file_updated": null,
+    "accepted_findings": null,
+    "rejected_findings": null,
+    "ignored_findings": null,
+    "review_minutes": null
+  },
+  "quality": {
+    "precision": null,
+    "recall": null,
+    "escaped_defects": null,
+    "note": "Populate only from human disposition and ground-truth follow-up."
+  }
+}

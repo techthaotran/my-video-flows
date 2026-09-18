@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Code Review Evidence Viewer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f5f7;
+        --panel: #ffffff;
+        --text: #172033;
+        --muted: #667085;
+        --border: #d8dee9;
+        --accent: #2563eb;
+        --pass: #15803d;
+        --ng: #b91c1c;
+        --blocked: #a16207;
+        --code: #101828;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --panel: #161b22;
+          --text: #e6edf3;
+          --muted: #8b949e;
+          --border: #30363d;
+          --accent: #58a6ff;
+          --code: #0d1117;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 18px 24px;
+        background: color-mix(in srgb, var(--panel) 92%, transparent);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(12px);
+      }
+      h1 { margin: 0 0 6px; font-size: 22px; }
+      p { line-height: 1.6; }
+      .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+      .tabs, .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+      .tabs { width: min(1180px, calc(100% - 32px)); margin: 16px auto 0; }
+      .tab-button, .filter-button { font-weight: 650; }
+      .tab-button.active, .filter-button.active {
+        color: #fff;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .filters { margin: 0 0 16px; align-items: center; }
+      .filter-label { margin-right: 4px; color: var(--muted); font-size: 13px; }
+      button, select, .picker {
+        min-height: 38px;
+        padding: 8px 12px;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font: inherit;
+      }
+      button, .picker { cursor: pointer; }
+      button:hover, .picker:hover { border-color: var(--accent); }
+      input[type="file"] { display: none; }
+      main { width: min(1180px, calc(100% - 32px)); margin: 24px auto 80px; }
+      .notice {
+        padding: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--muted);
+      }
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .overview-card {
+        padding: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .overview-card span { display: block; color: var(--muted); font-size: 12px; }
+      .overview-card strong { display: block; margin-top: 6px; font-size: 24px; }
+      .overview-card.ng strong { color: var(--ng); }
+      .overview-card.blocked strong { color: var(--blocked); }
+      .overview-card.pass strong { color: var(--pass); }
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0;
+      }
+      .toc a {
+        padding: 6px 10px;
+        color: var(--accent);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        text-decoration: none;
+        font-size: 13px;
+      }
+      section {
+        margin: 16px 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      section.ng { border-left: 5px solid var(--ng); }
+      section.blocked { border-left: 5px solid var(--blocked); }
+      section.pass { border-left: 5px solid var(--pass); }
+      details > summary {
+        padding: 15px 18px;
+        cursor: pointer;
+        font-weight: 700;
+        list-style-position: inside;
+      }
+      .meta { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 8px; }
+      .content { padding: 0 18px 18px; }
+      pre {
+        margin: 0;
+        padding: 16px;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #e6edf3;
+        background: var(--code);
+        border-radius: 8px;
+        line-height: 1.55;
+        tab-size: 2;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+        max-height: 760px;
+        margin: 10px auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .missing { color: var(--muted); font-style: italic; }
+      .count { color: var(--muted); font-size: 13px; }
+      .artifact { margin-top: 12px; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+      .artifact-head { display: flex; gap: 8px; align-items: center; padding: 9px 12px; background: var(--bg); }
+      .artifact-title { margin-right: auto; font-family: ui-monospace, monospace; font-size: 13px; }
+      .view-button { min-height: 30px; padding: 4px 9px; font-size: 12px; }
+      .view-button.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+      .artifact-body { padding: 12px; }
+      .markdown { line-height: 1.65; overflow-wrap: anywhere; }
+      .markdown h1, .markdown h2, .markdown h3 { margin: 1.2em 0 .5em; }
+      .markdown h1 { font-size: 1.55rem; }
+      .markdown h2 { font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+      .markdown h3 { font-size: 1.1rem; }
+      .markdown code { padding: 2px 5px; background: var(--bg); border-radius: 4px; }
+      .markdown pre code { padding: 0; color: inherit; background: transparent; }
+      .markdown table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+      .markdown th, .markdown td { padding: 8px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+      .markdown blockquote { margin-left: 0; padding-left: 14px; color: var(--muted); border-left: 3px solid var(--accent); }
+      .case-files { padding: 0 18px 18px; }
+      .metric-header { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+      .metric-card { padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+      .metric-card strong { display: block; margin-top: 5px; font-size: 18px; }
+      .metric-table { width: 100%; border-collapse: collapse; }
+      .metric-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+      .metric-table td:first-child { color: var(--muted); font-family: ui-monospace, monospace; }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Code Review Evidence Viewer</h1>
+      <p class="subtitle">Đọc artifact theo đúng thứ tự và ưu tiên NG/BLOCKED trước PASS.</p>
+      <div class="controls">
+        <label class="picker">
+          Chọn folder test-features hoặc một run
+          <input id="folderInput" type="file" webkitdirectory multiple />
+        </label>
+        <select id="runSelect" disabled aria-label="Chọn run">
+          <option>Chưa có run</option>
+        </select>
+        <button id="expandAll" type="button" disabled>Mở tất cả</button>
+        <button id="collapseAll" type="button" disabled>Thu gọn</button>
+        <span id="fileCount" class="count"></span>
+      </div>
+    </header>
+
+    <nav id="tabs" class="tabs" aria-label="Nhóm nội dung">
+      <button class="tab-button active" data-tab="overview" type="button">Tổng quan</button>
+      <button class="tab-button" data-tab="review" type="button">Review</button>
+      <button class="tab-button" data-tab="cases" type="button">Test cases</button>
+      <button class="tab-button" data-tab="metrics" type="button">Metrics</button>
+      <button class="tab-button" data-tab="debug" type="button">Debug files</button>
+    </nav>
+
+    <main>
+      <div id="emptyState" class="notice">
+        Chọn folder <code>test-features/</code> hoặc trực tiếp một folder
+        <code>&lt;feature-slug&gt;/&lt;run-id&gt;/</code>. File chỉ được đọc trong browser và không được tải lên server.
+      </div>
+      <div id="overview" class="overview-grid" hidden></div>
+      <div id="caseFilters" class="filters hidden" aria-label="Lọc test case">
+        <span class="filter-label">Lọc kết quả:</span>
+        <button class="filter-button active" data-filter="all" type="button">Tất cả</button>
+        <button class="filter-button" data-filter="ng" type="button">Chỉ NG</button>
+        <button class="filter-button" data-filter="blocked" type="button">Chỉ BLOCKED</button>
+        <button class="filter-button" data-filter="pass" type="button">Chỉ PASS</button>
+      </div>
+      <nav id="toc" class="toc" aria-label="Mục lục"></nav>
+      <div id="viewer"></div>
+    </main>
+
+    <script>
+      const folderInput = document.querySelector("#folderInput");
+      const runSelect = document.querySelector("#runSelect");
+      const viewer = document.querySelector("#viewer");
+      const toc = document.querySelector("#toc");
+      const emptyState = document.querySelector("#emptyState");
+      const expandAll = document.querySelector("#expandAll");
+      const collapseAll = document.querySelector("#collapseAll");
+      const fileCount = document.querySelector("#fileCount");
+      const overview = document.querySelector("#overview");
+      const tabs = document.querySelector("#tabs");
+      const caseFilters = document.querySelector("#caseFilters");
+
+      let filesByPath = new Map();
+      let runRoots = [];
+      let objectUrls = [];
+      let activeTab = "overview";
+      let activeFilter = "all";
+
+      const normalizePath = (value) => value.replaceAll("\\", "/").replace(/^\.\//, "");
+
+      function escapeHtml(value) {
+        return value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function clearObjectUrls() {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        objectUrls = [];
+      }
+
+      function detectRunRoots(paths) {
+        const markers = ["context.md", "review.md", "diff.sha256"];
+        const candidates = new Set();
+        for (const path of paths) {
+          for (const marker of markers) {
+            if (path.endsWith(`/${marker}`) || path === marker) {
+              candidates.add(path.slice(0, Math.max(0, path.length - marker.length - 1)));
+            }
+          }
+        }
+        return [...candidates]
+          .filter((root) => markers.some((marker) => filesByPath.has(root ? `${root}/${marker}` : marker)))
+          .sort();
+      }
+
+      function relativeToRun(path, root) {
+        if (!root) return path;
+        if (path === root) return "";
+        return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : `../${path}`;
+      }
+
+      function statusRank(path) {
+        if (path.includes("/BLOCKED-")) return 0;
+        if (path.includes("/NG-")) return 1;
+        if (path.includes("/PASS-")) return 2;
+        return 3;
+      }
+
+      function caseFolder(path) {
+        const parts = path.split("/");
+        const index = parts.findIndex((part) => /^(PASS|NG|BLOCKED)-\d{2}-/.test(part));
+        return index >= 0 ? parts.slice(0, index + 1).join("/") : "";
+      }
+
+      function itemTab(item) {
+        if (item.type === "case" || item.path === "verify-plan.md") return "cases";
+        if (["context.md", "review.md"].includes(item.path)) return "review";
+        if (item.path === "metrics.json") return "metrics";
+        if (["verify.md", "test-cases/summary.md", "test-cases/summary.json"].includes(item.path)) return "overview";
+        return "debug";
+      }
+
+      function itemStatus(path) {
+        if (path.includes("/NG-")) return "ng";
+        if (path.includes("/BLOCKED-")) return "blocked";
+        if (path.includes("/PASS-")) return "pass";
+        return "other";
+      }
+
+      function renderOverview(items) {
+        const counts = { pass: 0, ng: 0, blocked: 0 };
+        items.filter((item) => item.type === "case").forEach((item) => {
+          const status = itemStatus(item.path);
+          if (status in counts) counts[status] += 1;
+        });
+        const status = counts.blocked ? "WAITING_HUMAN" : counts.ng ? "CẦN HUMAN REVIEW" : counts.pass ? "ĐÃ VERIFY" : "CHƯA VERIFY";
+        overview.innerHTML = [
+          ["Trạng thái cần chú ý", status, counts.blocked ? "blocked" : counts.ng ? "ng" : ""],
+          ["PASS", counts.pass, "pass"],
+          ["NG cần kiểm tra", counts.ng, "ng"],
+          ["BLOCKED cần hướng dẫn", counts.blocked, "blocked"],
+        ].map(([label, value, className]) => `<div class="overview-card ${className}"><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong></div>`).join("");
+        overview.hidden = false;
+      }
+
+      function applyView() {
+        tabs.querySelectorAll(".tab-button").forEach((button) => button.classList.toggle("active", button.dataset.tab === activeTab));
+        caseFilters.classList.toggle("hidden", activeTab !== "cases");
+        viewer.querySelectorAll("section").forEach((section) => {
+          const tabMatches = section.dataset.tab === activeTab;
+          const filterMatches = activeTab !== "cases" || activeFilter === "all" || section.dataset.status === activeFilter;
+          section.classList.toggle("hidden", !tabMatches || !filterMatches);
+        });
+        toc.querySelectorAll("a").forEach((link) => {
+          const target = document.querySelector(link.getAttribute("href"));
+          link.classList.toggle("hidden", !target || target.classList.contains("hidden"));
+        });
+        overview.hidden = activeTab !== "overview";
+      }
+
+      function buildOrderedItems(root) {
+        const runFiles = [...filesByPath.entries()]
+          .map(([path, file]) => ({ path: relativeToRun(path, root), file }))
+          .filter(({ path }) => !path.startsWith("../"));
+
+        const exactOrder = [
+          "context.md",
+          "review.md",
+          "verify-plan.md",
+          "test-cases/summary.md",
+          "test-cases/summary.json",
+        ];
+        const finalOrder = ["verify.md", "metrics.json", "scope.txt", "diff.sha256", "diff.patch", "preflight.md"];
+        const used = new Set();
+        const result = [];
+
+        for (const target of exactOrder) {
+          const entry = runFiles.find(({ path }) => path === target);
+          if (entry) { result.push({ type: "file", ...entry }); used.add(entry.path); }
+        }
+
+        const cases = new Map();
+        for (const entry of runFiles) {
+          const folder = caseFolder(entry.path);
+          if (!folder) continue;
+          if (!cases.has(folder)) cases.set(folder, []);
+          cases.get(folder).push(entry);
+        }
+
+        [...cases.entries()]
+          .sort(([a], [b]) => statusRank(a) - statusRank(b) || a.localeCompare(b))
+          .forEach(([folder, entries]) => {
+            entries.sort((a, b) => {
+              const priority = (path) => path.endsWith("case.md") ? 0 : path.endsWith("case.json") ? 1 : 2;
+              return priority(a.path) - priority(b.path) || a.path.localeCompare(b.path);
+            });
+            result.push({ type: "case", path: folder, entries });
+            for (const entry of entries) used.add(entry.path);
+          });
+
+        for (const target of finalOrder) {
+          const entry = runFiles.find(({ path }) => path === target);
+          if (entry) { result.push({ type: "file", ...entry }); used.add(entry.path); }
+        }
+
+        runFiles
+          .filter(({ path }) => !used.has(path))
+          .sort((a, b) => a.path.localeCompare(b.path))
+          .forEach((entry) => result.push({ type: "file", ...entry }));
+
+        return result;
+      }
+
+      function sectionClass(path) {
+        if (path.includes("/NG-")) return "ng";
+        if (path.includes("/BLOCKED-")) return "blocked";
+        if (path.includes("/PASS-")) return "pass";
+        return "";
+      }
+
+      function shouldOpen(path) {
+        return ["context.md", "review.md", "test-cases/summary.md", "verify.md"].includes(path)
+          || path.includes("/NG-")
+          || path.includes("/BLOCKED-");
+      }
+
+      function renderInline(value) {
+        return escapeHtml(value)
+          .replace(/`([^`]+)`/g, "<code>$1</code>")
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span title="$2">$1</span>');
+      }
+
+      function markdownToHtml(markdown) {
+        const lines = markdown.replaceAll("\r\n", "\n").split("\n");
+        const output = [];
+        let inCode = false;
+        let codeLines = [];
+        let listType = "";
+        const closeList = () => {
+          if (listType) output.push(`</${listType}>`);
+          listType = "";
+        };
+
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          if (line.startsWith("```")) {
+            closeList();
+            if (inCode) {
+              output.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+              codeLines = [];
+              inCode = false;
+            } else {
+              inCode = true;
+            }
+            continue;
+          }
+          if (inCode) { codeLines.push(line); continue; }
+
+          if (/^\|.*\|$/.test(line) && /^\|?\s*:?-{3,}/.test(lines[index + 1] || "")) {
+            closeList();
+            const cells = (row) => row.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+            const headers = cells(line);
+            index += 2;
+            const rows = [];
+            while (index < lines.length && /^\|.*\|$/.test(lines[index])) {
+              rows.push(cells(lines[index]));
+              index += 1;
+            }
+            index -= 1;
+            output.push(`<table><thead><tr>${headers.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+            continue;
+          }
+
+          const heading = line.match(/^(#{1,3})\s+(.+)$/);
+          if (heading) {
+            closeList();
+            const level = heading[1].length;
+            output.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+            continue;
+          }
+
+          const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+          const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+          if (unordered || ordered) {
+            const nextType = unordered ? "ul" : "ol";
+            if (listType !== nextType) { closeList(); listType = nextType; output.push(`<${listType}>`); }
+            output.push(`<li>${renderInline((unordered || ordered)[1])}</li>`);
+            continue;
+          }
+
+          closeList();
+          if (!line.trim()) continue;
+          if (line.startsWith("> ")) output.push(`<blockquote>${renderInline(line.slice(2))}</blockquote>`);
+          else output.push(`<p>${renderInline(line)}</p>`);
+        }
+
+        closeList();
+        if (inCode) output.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        return output.join("\n");
+      }
+
+      function flattenMetrics(value, prefix = "", rows = []) {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          for (const [key, child] of Object.entries(value)) {
+            flattenMetrics(child, prefix ? `${prefix}.${key}` : key, rows);
+          }
+        } else {
+          rows.push([prefix, Array.isArray(value) ? value.join(", ") : value]);
+        }
+        return rows;
+      }
+
+      function renderMetrics(data) {
+        const wrapper = document.createElement("div");
+        const header = document.createElement("div");
+        header.className = "metric-header";
+        const cards = [
+          ["Run ID", data.run_id ?? "N/A"],
+          ["Trạng thái", data.workflow_status ?? "N/A"],
+          ["PASS", data.verify?.test_cases?.pass ?? 0],
+          ["NG", data.verify?.test_cases?.ng ?? 0],
+          ["BLOCKED", data.verify?.test_cases?.blocked ?? 0],
+        ];
+        header.innerHTML = cards.map(([label, value]) => `<div class="metric-card">${escapeHtml(String(label))}<strong>${escapeHtml(String(value))}</strong></div>`).join("");
+        const table = document.createElement("table");
+        table.className = "metric-table";
+        table.innerHTML = `<tbody>${flattenMetrics(data).map(([key, value]) => `<tr><td>${escapeHtml(String(key))}</td><td>${escapeHtml(value == null ? "null" : String(value))}</td></tr>`).join("")}</tbody>`;
+        wrapper.append(header, table);
+        return wrapper;
+      }
+
+      async function renderArtifact(entry, defaultPreview = false) {
+        const artifact = document.createElement("div");
+        artifact.className = "artifact";
+        const head = document.createElement("div");
+        head.className = "artifact-head";
+        const title = document.createElement("span");
+        title.className = "artifact-title";
+        title.textContent = entry.path;
+        const body = document.createElement("div");
+        body.className = "artifact-body";
+        head.appendChild(title);
+
+        if (entry.file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(entry.path)) {
+          const url = URL.createObjectURL(entry.file);
+          objectUrls.push(url);
+          const image = document.createElement("img");
+          image.src = url;
+          image.alt = `Bằng chứng: ${entry.path}`;
+          body.appendChild(image);
+        } else {
+          let textValue = "";
+          try { textValue = await entry.file.text(); }
+          catch (error) { textValue = `Không thể đọc file: ${error.message}`; }
+
+          const raw = document.createElement("pre");
+          raw.textContent = textValue;
+
+          if (entry.path.endsWith(".md")) {
+            const preview = document.createElement("div");
+            preview.className = "markdown";
+            preview.innerHTML = markdownToHtml(textValue);
+            const previewButton = document.createElement("button");
+            const rawButton = document.createElement("button");
+            previewButton.type = rawButton.type = "button";
+            previewButton.className = "view-button active";
+            rawButton.className = "view-button";
+            previewButton.textContent = "Preview";
+            rawButton.textContent = "Raw";
+            const show = (isPreview) => {
+              body.replaceChildren(isPreview ? preview : raw);
+              previewButton.classList.toggle("active", isPreview);
+              rawButton.classList.toggle("active", !isPreview);
+            };
+            previewButton.addEventListener("click", () => show(true));
+            rawButton.addEventListener("click", () => show(false));
+            head.append(previewButton, rawButton);
+            body.appendChild(defaultPreview ? preview : raw);
+            if (!defaultPreview) {
+              previewButton.classList.remove("active");
+              rawButton.classList.add("active");
+            }
+          } else if (entry.path === "metrics.json") {
+            try { body.appendChild(renderMetrics(JSON.parse(textValue))); }
+            catch { body.appendChild(raw); }
+          } else {
+            body.appendChild(raw);
+          }
+        }
+
+        artifact.append(head, body);
+        return artifact;
+      }
+
+      async function renderItem(item, index) {
+        const id = `artifact-${index + 1}`;
+        const section = document.createElement("section");
+        section.id = id;
+        section.className = sectionClass(item.path);
+        section.dataset.tab = itemTab(item);
+        section.dataset.status = itemStatus(item.path);
+        const details = document.createElement("details");
+        details.open = shouldOpen(item.path);
+        const summary = document.createElement("summary");
+        const typeLabel = item.type === "case" ? `${item.entries.length} file` : (item.file.type || "text/plain");
+        summary.innerHTML = `${String(index + 1).padStart(2, "0")}. ${escapeHtml(item.path)} <span class="meta">${escapeHtml(typeLabel)}</span>`;
+        const content = document.createElement("div");
+        content.className = item.type === "case" ? "case-files" : "content";
+
+        if (item.type === "case") {
+          for (const entry of item.entries) {
+            content.appendChild(await renderArtifact(entry, entry.path.endsWith("case.md")));
+          }
+        } else {
+          content.appendChild(await renderArtifact(item, item.path.endsWith(".md")));
+        }
+
+        details.append(summary, content);
+        section.appendChild(details);
+        return { section, id, label: item.path };
+      }
+
+      async function renderRun(root) {
+        clearObjectUrls();
+        viewer.replaceChildren();
+        toc.replaceChildren();
+        const items = buildOrderedItems(root);
+        const totalFiles = items.reduce((total, item) => total + (item.type === "case" ? item.entries.length : 1), 0);
+        fileCount.textContent = `${items.length} nhóm · ${totalFiles} file`;
+        renderOverview(items);
+
+        for (let index = 0; index < items.length; index += 1) {
+          const rendered = await renderItem(items[index], index);
+          viewer.appendChild(rendered.section);
+          const link = document.createElement("a");
+          link.href = `#${rendered.id}`;
+          link.textContent = `${index + 1}. ${rendered.label}`;
+          toc.appendChild(link);
+        }
+
+        emptyState.hidden = items.length > 0;
+        expandAll.disabled = items.length === 0;
+        collapseAll.disabled = items.length === 0;
+        applyView();
+      }
+
+      folderInput.addEventListener("change", async () => {
+        clearObjectUrls();
+        filesByPath = new Map(
+          [...folderInput.files].map((file) => [normalizePath(file.webkitRelativePath || file.name), file]),
+        );
+        runRoots = detectRunRoots([...filesByPath.keys()]);
+        runSelect.replaceChildren();
+
+        if (runRoots.length === 0) {
+          const option = document.createElement("option");
+          option.textContent = "Không tìm thấy run hợp lệ";
+          runSelect.appendChild(option);
+          runSelect.disabled = true;
+          viewer.replaceChildren();
+          toc.replaceChildren();
+          emptyState.hidden = false;
+          emptyState.textContent = "Không tìm thấy context.md, review.md hoặc diff.sha256 trong folder đã chọn.";
+          return;
+        }
+
+        for (const root of runRoots) {
+          const option = document.createElement("option");
+          option.value = root;
+          option.textContent = root || "Run đã chọn";
+          runSelect.appendChild(option);
+        }
+        runSelect.disabled = runRoots.length === 1;
+        await renderRun(runRoots[0]);
+      });
+
+      runSelect.addEventListener("change", () => renderRun(runSelect.value));
+      tabs.addEventListener("click", (event) => {
+        const button = event.target.closest(".tab-button");
+        if (!button) return;
+        activeTab = button.dataset.tab;
+        applyView();
+      });
+      caseFilters.addEventListener("click", (event) => {
+        const button = event.target.closest(".filter-button");
+        if (!button) return;
+        activeFilter = button.dataset.filter;
+        caseFilters.querySelectorAll(".filter-button").forEach((item) => item.classList.toggle("active", item === button));
+        applyView();
+      });
+      expandAll.addEventListener("click", () => viewer.querySelectorAll("details").forEach((item) => { item.open = true; }));
+      collapseAll.addEventListener("click", () => viewer.querySelectorAll("details").forEach((item) => { item.open = false; }));
+      window.addEventListener("beforeunload", clearObjectUrls);
+    </script>
+  </body>
+</html>

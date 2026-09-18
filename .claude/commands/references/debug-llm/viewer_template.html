@@ -1,0 +1,2082 @@
+<meta charset="utf-8" />
+<title>Session Debug Viewer</title>
+<style>
+  :root {
+    --bg: #eef2f1;
+    --surface: #ffffff;
+    --surface-2: #f4f6f5;
+    --border: #d7dedc;
+    --text: #161a1e;
+    --text-dim: #5b6470;
+    --text-faint: #8b93a0;
+    --accent: #0f9c8f;
+    --accent-ink: #ffffff;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 4px 16px rgba(20, 30, 28, 0.05);
+
+    --c-user: #2f6fd6;
+    --c-thinking: #7d4fc4;
+    --c-text: #1f9c5a;
+    --c-tooluse: #b9781a;
+    --c-toolresult: #5b6470;
+    --c-skillload: #c1367a;
+    --c-meta: #4a7a72;
+    --c-misc: #8b93a0;
+
+    --c-user-bg: #eaf1fd;
+    --c-thinking-bg: #f2ecfb;
+    --c-text-bg: #e9f7ef;
+    --c-tooluse-bg: #faf1e2;
+    --c-toolresult-bg: #eef0f2;
+    --c-skillload-bg: #fbe9f0;
+    --c-meta-bg: #e8f2ef;
+    --c-misc-bg: #eceff1;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151a;
+      --surface: #1a1e25;
+      --surface-2: #20252d;
+      --border: #2c313b;
+      --text: #e6e8ec;
+      --text-dim: #9096a3;
+      --text-faint: #656c7a;
+      --accent: #4fd1c5;
+      --accent-ink: #0b1210;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+      --c-user: #7dabf8;
+      --c-thinking: #b98af0;
+      --c-text: #57c78a;
+      --c-tooluse: #e2a03f;
+      --c-toolresult: #9096a3;
+      --c-skillload: #ea8fb8;
+      --c-meta: #7fc9ba;
+      --c-misc: #656c7a;
+
+      --c-user-bg: #1c2634;
+      --c-thinking-bg: #241f34;
+      --c-text-bg: #17281f;
+      --c-tooluse-bg: #2b2418;
+      --c-toolresult-bg: #20252d;
+      --c-skillload-bg: #34202a;
+      --c-meta-bg: #1a2e29;
+      --c-misc-bg: #22262c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #12151a;
+    --surface: #1a1e25;
+    --surface-2: #20252d;
+    --border: #2c313b;
+    --text: #e6e8ec;
+    --text-dim: #9096a3;
+    --text-faint: #656c7a;
+    --accent: #4fd1c5;
+    --accent-ink: #0b1210;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+    --c-user: #7dabf8;
+    --c-thinking: #b98af0;
+    --c-text: #57c78a;
+    --c-tooluse: #e2a03f;
+    --c-toolresult: #9096a3;
+    --c-skillload: #ea8fb8;
+    --c-meta: #7fc9ba;
+    --c-misc: #656c7a;
+
+    --c-user-bg: #1c2634;
+    --c-thinking-bg: #241f34;
+    --c-text-bg: #17281f;
+    --c-tooluse-bg: #2b2418;
+    --c-toolresult-bg: #20252d;
+    --c-skillload-bg: #34202a;
+    --c-meta-bg: #1a2e29;
+    --c-misc-bg: #22262c;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #eef2f1;
+    --surface: #ffffff;
+    --surface-2: #f4f6f5;
+    --border: #d7dedc;
+    --text: #161a1e;
+    --text-dim: #5b6470;
+    --text-faint: #8b93a0;
+    --accent: #0f9c8f;
+    --accent-ink: #ffffff;
+    --shadow: 0 1px 2px rgba(20, 30, 28, 0.06), 0 4px 16px rgba(20, 30, 28, 0.05);
+
+    --c-user: #2f6fd6;
+    --c-thinking: #7d4fc4;
+    --c-text: #1f9c5a;
+    --c-tooluse: #b9781a;
+    --c-toolresult: #5b6470;
+    --c-skillload: #c1367a;
+    --c-meta: #4a7a72;
+    --c-misc: #8b93a0;
+
+    --c-user-bg: #eaf1fd;
+    --c-thinking-bg: #f2ecfb;
+    --c-text-bg: #e9f7ef;
+    --c-tooluse-bg: #faf1e2;
+    --c-toolresult-bg: #eef0f2;
+    --c-skillload-bg: #fbe9f0;
+    --c-meta-bg: #e8f2ef;
+    --c-misc-bg: #eceff1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 980px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  header.top {
+    flex: none;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 12.5px;
+    margin: 0 0 16px;
+  }
+
+  .source-tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  /* ---- Load screen ---- */
+  .load-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+
+  .dropzone {
+    width: 100%;
+    max-width: 560px;
+    border: 1.5px dashed var(--border);
+    border-radius: 14px;
+    padding: 40px 32px;
+    text-align: center;
+    background: var(--surface);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .dropzone.drag {
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+
+  .dropzone h2 {
+    font-size: 15px;
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+
+  .dropzone p {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+
+  .dz-icon {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 16px;
+    color: var(--text-faint);
+  }
+
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+
+  .btn:hover { border-color: var(--text-faint); }
+
+  .btn:focus-visible, .chip:focus-visible, textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .btn-primary:hover { filter: brightness(1.05); }
+
+  .btn-icon {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex: none;
+  }
+
+  .or-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-faint);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 18px 0;
+  }
+  .or-divider::before, .or-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  #paste-area {
+    width: 100%;
+    min-height: 96px;
+    resize: vertical;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  #file-input { display: none; }
+
+  .error-msg {
+    color: #d5573b;
+    font-size: 12.5px;
+    margin-top: 10px;
+    display: none;
+  }
+
+  /* ---- Loaded view ---- */
+  .toolbar {
+    flex: none;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stats-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 4px 9px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .stat b {
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 12.5px;
+  }
+
+  .stat-btn {
+    appearance: none;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+  .stat-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--surface);
+  }
+  .stat-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .spacer { flex: 1; }
+
+  .search-wrap {
+    position: relative;
+    width: 220px;
+  }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 10px 6px 28px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .search-wrap svg {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 13px;
+    height: 13px;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .toggle-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 30px;
+    height: 17px;
+    flex: none;
+  }
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .switch-track::before {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .switch input:checked + .switch-track {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .switch input:checked + .switch-track::before {
+    transform: translateX(13px);
+    background: var(--accent-ink);
+  }
+  .switch input:focus-visible + .switch-track {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity 0.12s ease, border-color 0.12s ease;
+  }
+  .chip .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .chip .n {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-faint);
+    font-weight: 700;
+  }
+  .chip.off { opacity: 0.4; }
+  .chip.reset { color: var(--text-faint); font-weight: 500; }
+
+  .top-tools {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .top-tools b {
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .top-tools .tool-name {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    color: var(--text);
+  }
+
+  /* ---- Timeline ---- */
+  .timeline {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 24px 60px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .empty-filtered {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13px;
+    padding: 60px 0;
+  }
+
+  .block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--c-user);
+    border-radius: 9px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .block-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .idx {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    width: 26px;
+    flex: none;
+  }
+
+  .tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    flex: none;
+    cursor: help;
+  }
+
+  .tool-name-inline {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .head-spacer { flex: 1; }
+
+  .chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-faint);
+    transition: transform 0.15s ease;
+    flex: none;
+  }
+  .block.collapsed .chevron { transform: rotate(-90deg); }
+
+  .block-body {
+    padding: 0 14px 14px 14px;
+  }
+  .block.collapsed .block-body { display: none; }
+
+  .content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12.5px;
+    line-height: 1.55;
+    max-height: 340px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+  .content.prose {
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+  }
+
+  .json-key    { color: var(--c-user); }
+  .json-string { color: var(--c-text); }
+  .json-number { color: var(--c-tooluse); }
+  .json-bool, .json-null { color: var(--c-thinking); }
+
+  mark {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  .expand-btn {
+    margin-top: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+
+  /* ---- Tag reference dialog ---- */
+  #tag-reference-dialog {
+    width: min(640px, 92vw);
+    max-height: 84vh;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+  #tag-reference-dialog::backdrop {
+    background: rgba(20, 30, 28, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    #tag-reference-dialog::backdrop { background: rgba(10, 14, 12, 0.55); }
+  }
+  :root[data-theme="dark"] #tag-reference-dialog::backdrop {
+    background: rgba(10, 14, 12, 0.55);
+  }
+  :root[data-theme="light"] #tag-reference-dialog::backdrop {
+    background: rgba(20, 30, 28, 0.35);
+  }
+
+  .dlg-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+  .dlg-head h2 {
+    font-size: 15px;
+    font-weight: 650;
+    margin: 0;
+  }
+
+  .dlg-body {
+    padding: 14px 18px 22px;
+    overflow-y: auto;
+    max-height: calc(84vh - 58px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .tag-ref-entry {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    scroll-margin-top: 12px;
+  }
+  .tag-ref-entry.highlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent) inset;
+  }
+  .tag-ref-entry-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .tag-ref-entry-head .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .tag-ref-entry-head .name {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .tag-ref-entry-head .label {
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+  .tag-ref-row {
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin-bottom: 6px;
+  }
+  .tag-ref-row:last-child { margin-bottom: 0; }
+  .tag-ref-row b {
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .tag-ref-row .fmt {
+    display: block;
+    margin-top: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .tag-ref-row .fmt.src {
+    color: var(--text-dim);
+    border-style: dashed;
+  }
+
+  .tag-ref-intro {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .tag-ref-intro b { color: var(--text); }
+
+  /* ---- Insights dialogs (effectiveness / total tokens / context window) ---- */
+  #insights-dialog, #total-tokens-dialog, #context-window-dialog {
+    width: min(720px, 92vw);
+    max-height: 84vh;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+  #insights-dialog::backdrop, #total-tokens-dialog::backdrop, #context-window-dialog::backdrop {
+    background: rgba(20, 30, 28, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    #insights-dialog::backdrop, #total-tokens-dialog::backdrop, #context-window-dialog::backdrop {
+      background: rgba(10, 14, 12, 0.55);
+    }
+  }
+  :root[data-theme="dark"] #insights-dialog::backdrop,
+  :root[data-theme="dark"] #total-tokens-dialog::backdrop,
+  :root[data-theme="dark"] #context-window-dialog::backdrop { background: rgba(10, 14, 12, 0.55); }
+  :root[data-theme="light"] #insights-dialog::backdrop,
+  :root[data-theme="light"] #total-tokens-dialog::backdrop,
+  :root[data-theme="light"] #context-window-dialog::backdrop { background: rgba(20, 30, 28, 0.35); }
+
+  .dlg-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .insight-disclaimer {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+  }
+
+  .insight-section {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+  }
+  .insight-section h3 {
+    font-size: 12.5px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--text);
+  }
+  .insight-section .sub {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin: -6px 0 10px;
+  }
+
+  .stat-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .stat-tile {
+    flex: 1;
+    min-width: 110px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .stat-tile .n {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .stat-tile .l {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+  .stat-tile.warn .n { color: var(--c-skillload); }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .bar-row:last-child { margin-bottom: 0; }
+  .bar-row .bl {
+    width: 130px;
+    flex: none;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+  }
+  .bar-row .bt {
+    flex: 1;
+    height: 14px;
+    background: var(--surface);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-row .bf {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    min-width: 2px;
+  }
+  .bar-row .bv {
+    width: 92px;
+    flex: none;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+  .bar-row .bv .pct {
+    color: var(--text-faint);
+    opacity: 0.75;
+    font-size: 10.5px;
+    margin-left: 3px;
+  }
+
+  .stack-bar {
+    display: flex;
+    height: 20px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .stack-bar div { height: 100%; }
+  .stack-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  .stack-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .stack-legend .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  .flag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .flag-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .flag-item .fi-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--text-faint);
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  .flag-item .fi-head b { color: var(--text-dim); }
+  .flag-item .fi-text {
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60px;
+    overflow: hidden;
+  }
+
+  .empty-note {
+    font-size: 12px;
+    color: var(--text-faint);
+    padding: 8px 0;
+  }
+
+  .trend-svg { width: 100%; height: 140px; display: block; }
+  .trend-svg .axis { stroke: var(--border); stroke-width: 1; }
+  .trend-svg .line { fill: none; stroke: var(--accent); stroke-width: 1.75; }
+  .trend-svg .dot { fill: var(--accent); }
+  .trend-svg text { fill: var(--text-faint); font-size: 9px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="title-row">
+      <h1>Session Debug Viewer</h1>
+      <span class="source-tag" id="source-tag"></span>
+    </div>
+    <p class="subtitle">Load a debug-llm dump (extract_claude.py / extract_cursor.py output) to browse it as a timeline.</p>
+  </header>
+
+  <div class="load-screen" id="load-screen">
+    <div class="dropzone" id="dropzone">
+      <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 4v11m0 0-3.5-3.5M12 15l3.5-3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2>Drop a session file here</h2>
+      <p>.txt output from extract_claude.py or extract_cursor.py</p>
+      <button class="btn btn-primary" id="pick-file">Choose file…</button>
+      <input type="file" id="file-input" accept="*" />
+      <div class="or-divider">or paste text</div>
+      <textarea id="paste-area" class="mono" placeholder="[USER] ...&#10;[THINKING] ...&#10;[TOOL_USE] ...&#10;[TOOL_RESULT] ..."></textarea>
+      <button class="btn" id="load-paste">Load pasted text</button>
+      <div class="error-msg" id="error-msg"></div>
+    </div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="stats-row">
+      <span class="stat">blocks <b id="stat-total">0</b></span>
+      <span class="stat">tool calls <b id="stat-tools">0</b></span>
+      <button class="stat stat-btn" id="effectiveness-btn" title="Effectiveness — tool error rate, correction signals, thinking/tool-use vs text ratio">📊 Effectiveness</button>
+      <button class="stat stat-btn" id="total-tokens-btn" title="Total tokens — cumulative usage breakdown by block type, by tool, and over time">🔢 <span id="stat-tokens-label">≈ tokens</span> <b id="stat-tokens">0</b></button>
+      <button class="stat stat-btn" id="context-window-btn" title="Context window — current conversation size (estimate or real snapshot)">🪟 Context window</button>
+      <div class="spacer"></div>
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+        <input type="text" id="search" placeholder="Search content…" />
+      </div>
+      <label class="toggle-all" for="toggle-all-types">
+        <span class="switch"><input type="checkbox" id="toggle-all-types" /><span class="switch-track"></span></span>
+        Show all message types
+      </label>
+      <button class="btn btn-icon" id="tag-reference-btn" title="Tag reference — what each tag means and how it's formatted" aria-label="Tag reference">?</button>
+      <button class="btn" id="reload-btn">Load another</button>
+    </div>
+    <div class="filter-row" id="filter-row"></div>
+    <div class="top-tools" id="top-tools"></div>
+  </div>
+
+  <div class="timeline" id="timeline"></div>
+</div>
+
+<dialog id="tag-reference-dialog">
+  <div class="dlg-head">
+    <h2>Tag reference</h2>
+    <button class="btn btn-icon" id="tag-reference-close" aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body" id="tag-reference-body"></div>
+</dialog>
+
+<dialog id="insights-dialog">
+  <div class="dlg-head">
+    <h2>Effectiveness</h2>
+    <button class="btn btn-icon" id="insights-close" aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body" id="insights-body">
+    <div class="dlg-panel" id="panel-effectiveness"></div>
+  </div>
+</dialog>
+
+<dialog id="total-tokens-dialog">
+  <div class="dlg-head">
+    <h2>Total tokens</h2>
+    <button class="btn btn-icon" id="total-tokens-close" aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body">
+    <div class="dlg-panel" id="panel-total-tokens"></div>
+  </div>
+</dialog>
+
+<dialog id="context-window-dialog">
+  <div class="dlg-head">
+    <h2>Context window</h2>
+    <button class="btn btn-icon" id="context-window-close" aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body">
+    <div class="dlg-panel" id="panel-context-window"></div>
+  </div>
+</dialog>
+
+<script>
+  // Filled in at build time by preview-debug-llm's build_preview.py; left empty
+  // for the plain manual-load version of this viewer.
+  window.__EMBEDDED_DUMP_B64__ = "";
+  window.__EMBEDDED_SOURCE__ = "";
+</script>
+<script>
+(function () {
+  // Curated: the actual conversation (shown by default). Extra: CLI/session
+  // bookkeeping (attachments, titles, mode changes, queue state, ...) — real
+  // data, but noisy for a "what did the model do" read; hidden by default,
+  // one toggle away.
+  const CURATED_TYPES = ["USER", "THINKING", "TEXT", "TOOL_USE", "TOOL_RESULT", "SKILL_LOAD", "META"];
+  const EXTRA_TYPES = ["ATTACHMENT", "SYSTEM", "TITLE", "MODE", "QUEUE", "FRAME_LINK", "LAST_PROMPT", "TOKENS"];
+
+  const TYPES = {
+    USER: {
+      label: "User", color: "var(--c-user)", bg: "var(--c-user-bg)",
+      hint: "What the human actually typed.\nFormat: plain text (slash commands appear as a <command-message>/<command-name> wrapper).",
+      purpose: "The human's own words — the only block type that represents something a person typed, as opposed to something the model or the CLI produced.",
+      function: "Anchors the conversation: everything else in the timeline is the model (or the CLI tooling) responding to, or acting on behalf of, one of these turns.",
+      format: "Plain text. When the turn came from a slash command, the raw text carries the CLI's own wrapper tags, e.g.:\n<command-message>02-analyzing-requirements</command-message>\n<command-name>/02-analyzing-requirements</command-name>\n<command-args>...</command-args>",
+      source: "Claude Code: JSONL line with type: \"user\", message.content is a string or a [{type:\"text\"}] array, AND isMeta is not true (see SKILL_LOAD/META for when it is).\nCursor: bubble with type: 1 (raw numeric field, no string label), non-empty .text.",
+    },
+    THINKING: {
+      label: "Thinking", color: "var(--c-thinking)", bg: "var(--c-thinking-bg)",
+      hint: "The model's extended-thinking / reasoning, before it replies or calls a tool.\nFormat: plain prose.",
+      purpose: "Extended-thinking output — the model's internal reasoning trace before it produces a reply or decides which tool to call.",
+      function: "Useful for debugging *why* the model did something: a tool call or answer that looks wrong often makes sense once you read the thinking block right before it.",
+      format: "Plain prose, no structure enforced. Not shown to the end user in the normal UI — this extractor is one of the few ways to see it after the fact.",
+      source: "Claude Code: assistant message.content[] block with type: \"thinking\", text in .thinking.\nCursor: bubble's nested thinking.text field (thinking is its own object on the bubble).",
+    },
+    TEXT: {
+      label: "Text", color: "var(--c-text)", bg: "var(--c-text-bg)",
+      hint: "The model's visible reply text, shown to the user.\nFormat: plain prose (often markdown).",
+      purpose: "The model's actual reply — the text a person reading the conversation would see.",
+      function: "One assistant turn can contain THINKING, one or more TOOL_USE calls, and TEXT all together; TEXT is specifically the part meant to be read as the answer.",
+      format: "Plain prose, usually markdown (headers, code fences, lists render as authored).",
+      source: "Claude Code: assistant message.content[] block with type: \"text\".\nCursor: bubble type: 2 (assistant), its .text field.",
+    },
+    TOOL_USE: {
+      label: "Tool use", color: "var(--c-tooluse)", bg: "var(--c-tooluse-bg)",
+      hint: "A tool call the model made (incl. mcp__server__tool calls).\nFormat: ToolName({...JSON input...})\n[SUBAGENT] prefix = called from inside a Task subagent.",
+      purpose: "A tool invocation the model chose to make — file edits, shell commands, web fetches, MCP server calls, spawning a subagent, and so on.",
+      function: "Pairs with the next TOOL_RESULT of the same name: read them together to see exactly what the model asked for and what it got back.",
+      format: "ToolName({...JSON input...}) — the input is the tool call's actual arguments, pretty-printable JSON.\nMCP calls use the dotted form mcp__<server>__<tool>(...).\nA leading [SUBAGENT] marks a call made inside a Task-spawned subagent, not the main thread.",
+      source: "Claude Code: content block type: \"tool_use\" (.name + .input); its .id is remembered to label the matching TOOL_RESULT later. [SUBAGENT] comes from the entry's own isSidechain: true.\nCursor: bubble.toolFormerData. When .tool === 19 it's an MCP call — the real name/args are nested, double-JSON-encoded inside .rawArgs ({name, args, toolCallId, providerIdentifier, toolName}); this is parsed and unwrapped rather than printed raw. Otherwise .name + .rawArgs are used directly.",
+    },
+    TOOL_RESULT: {
+      label: "Tool result", color: "var(--c-toolresult)", bg: "var(--c-toolresult-bg)",
+      hint: "What a tool call returned, labeled with the tool it answers.\nFormat: (ToolName) <output>, [ERROR] suffix on failure.\nNon-text content (e.g. MCP images) shows as [image block: ...].",
+      purpose: "What came back from a tool call: file contents, command output, an MCP server's response, or an error.",
+      function: "Labeled with the name of the TOOL_USE it answers, so you can trace cause -> effect without hunting for a matching id.",
+      format: "(ToolName) <output text>\nAn [ERROR] suffix marks a failed call. Non-text content the API can't render as plain text (e.g. an MCP screenshot) shows as a placeholder like [image block: image/jpeg, ~21 KB] instead of being silently dropped.",
+      source: "Claude Code: the next type: \"user\" line's message.content[] block with type: \"tool_result\"; its .tool_use_id is matched back to the TOOL_USE block's .id to resolve the tool name; .is_error becomes the [ERROR] suffix.\nCursor: the same toolFormerData object as its TOOL_USE — .result (double-JSON-encoded for MCP calls, unwrapped the same way as the input) and .status/.error.",
+    },
+    SKILL_LOAD: {
+      label: "Skill load", color: "var(--c-skillload)", bg: "var(--c-skillload-bg)",
+      hint: "A SKILL.md body injected into context after a `Skill` tool call or slash command — CLI-injected, not human-typed.\nFormat: <skill-name>: <full skill file text>.",
+      purpose: "The full body of a SKILL.md (or a slash command's own file) being injected into context, right after a Skill tool call.",
+      function: "Without this tag, this content is indistinguishable from [USER] in the raw transcript (both are `type: user` entries) — it's the CLI feeding the model instructions, not the person typing. Tagging it separately stops it from being mistaken for something the human wrote.",
+      format: "<skill-name>: <the skill file's full markdown text>\nThe name is resolved from the file's own \"Base directory for this skill:\" line, or its first # Heading as a fallback.",
+      source: "Claude Code only — not a native field. Detected by a type: \"user\" line where isMeta === true AND its text matches the regex /Base directory for this skill:.*\\/\\.claude\\/skills\\/([^\\/\\s]+)/ (the skill name is captured from that path). This is inferred from real content, not a labeled field the CLI exposes — verified by finding this exact line at the top of every Skill-tool-injected body in real transcripts.",
+    },
+    META: {
+      label: "Meta", color: "var(--c-meta)", bg: "var(--c-meta-bg)",
+      hint: "Other CLI-injected (not human-typed) content that isn't a recognizable skill body.\nFormat: plain text.",
+      purpose: "Catch-all for CLI-injected content (isMeta turns) that doesn't match the SKILL_LOAD pattern — e.g. a re-invocation notice, or instructions the CLI prepended that aren't a skill file.",
+      function: "Same reasoning as SKILL_LOAD: keeps synthetic, CLI-authored turns visibly separate from real [USER] input.",
+      format: "Plain text, whatever the CLI injected verbatim.",
+      source: "Claude Code only. Same isMeta === true user lines as SKILL_LOAD, but the text didn't match the skill-header regex (falls back to the first markdown # heading as a label if present, else generic).",
+    },
+    ATTACHMENT: {
+      label: "Attachment", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "Injected context: file snapshots, skill/agent listings, hook output, task reminders, ...\nFormat: <subtype> [filename]: <primary text>, then remaining fields as JSON on the next line.",
+      purpose: "Session-log bookkeeping for context the CLI attached automatically: file snapshots it read/edited, the available skills/agents listing, hook output, background-task reminders, queued commands, and more.",
+      function: "Explains *why* the model knew something it was never explicitly told in a [USER] turn — most \"where did that context come from?\" questions are answered by an ATTACHMENT entry.",
+      format: "<subtype> [filename or path, if any]: <the field carrying the actual text (content/snippet/prompt)>\nfollowed on the next line by whatever other fields that subtype carries, as compact JSON.",
+      source: "Claude Code only, no Cursor equivalent. Native type: \"attachment\" top-level entries; the subtype comes straight from the real attachment.type field (12 distinct values observed: task_reminder, skill_listing, deferred_tools_delta, command_permissions, file, hook_additional_context, agent_listing_delta, mcp_instructions_delta, edited_text_file, already_read_file, queued_command, directory) — each has a different shape, so the renderer picks whichever of content/snippet/prompt is a real string and dumps the rest as JSON.",
+    },
+    SYSTEM: {
+      label: "System", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "CLI-internal events, e.g. stop-hook summaries.\nFormat: <subtype>: <remaining fields as JSON>.",
+      purpose: "CLI-internal events unrelated to the model's own reasoning — currently the only observed subtype is stop_hook_summary (a summary of hooks that ran when the turn ended).",
+      function: "Useful for debugging hook configuration issues (a hook silently failing, or not firing when expected).",
+      format: "<subtype>: <every other field on the entry, as JSON> — e.g. hookCount, hookInfos, hookErrors, level.",
+      source: "Claude Code only. Native type: \"system\" top-level entries; subtype is the real .subtype field.",
+    },
+    TITLE: {
+      label: "Title", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "The session/composer's title (AI-generated or user-set).\nFormat: plain text.",
+      purpose: "The session's display title — either auto-generated by the model or set manually by the person.",
+      function: "In Claude Code, this can be emitted more than once per session (title regenerates as the conversation evolves); in Cursor's dump it appears once, at the top, from composerData.name.",
+      format: "Plain text, the title itself. Claude Code additionally tags it (ai) or (custom) in the raw script output depending on origin (collapsed into one TITLE tag here).",
+      source: "Claude Code: two native top-level types collapsed into one tag — type: \"ai-title\" (.aiTitle) and type: \"custom-title\" (.customTitle).\nCursor: not per-bubble at all — the composerData object's own .name field (falls back to .subtitle), printed once at the top of the dump.",
+    },
+    MODE: {
+      label: "Mode", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "A permission-mode change (normal/plan/...).\nFormat: plain text, the mode name.",
+      purpose: "Records a change to the CLI's permission mode (e.g. normal vs. plan mode).",
+      function: "Explains sudden shifts in behavior — e.g. a stretch of the conversation where the model stopped editing files usually lines up with a MODE entry switching into plan mode.",
+      format: "Plain text: just the mode name.",
+      source: "Claude Code only. Native type: \"mode\" top-level entries, the real .mode field.",
+    },
+    QUEUE: {
+      label: "Queue", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "Prompt-queue bookkeeping.\nFormat: <enqueue|dequeue|remove>[: <queued content>].",
+      purpose: "Bookkeeping for the CLI's prompt queue — a person can queue up a follow-up message while the model is still working.",
+      function: "Mostly noise for reading the conversation itself; occasionally useful for reconstructing exact timing/ordering when multiple prompts were queued back-to-back.",
+      format: "<enqueue|dequeue|remove>[: <the queued prompt text, when present>].",
+      source: "Claude Code only. Native type: \"queue-operation\" top-level entries; .operation is one of exactly three real values (enqueue/dequeue/remove, verified by counting every occurrence in real sessions), .content when present.",
+    },
+    FRAME_LINK: {
+      label: "Frame link", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "A preview-pane/artifact link opened during the session.\nFormat: <title> -> <url> (local: <path>).",
+      purpose: "Records that a preview pane or published Artifact was opened during the session (e.g. this very viewer being published).",
+      function: "A quick way to find every artifact/preview link produced by a session without re-reading the whole transcript.",
+      format: "<title> -> <frame/artifact URL> (local: <the local file path it was built from, if any>).",
+      source: "Claude Code only. Native type: \"frame-link\" top-level entries, real .title/.frameUrl/.path fields.",
+    },
+    LAST_PROMPT: {
+      label: "Last prompt", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "CLI bookkeeping of the most recent prompt (used for resume); usually redundant with the [USER] turn it points at.\nFormat: plain text of the prompt.",
+      purpose: "The CLI's own bookkeeping of \"what was the last prompt sent\", used to support resuming a session later.",
+      function: "Almost always redundant with an actual [USER] turn elsewhere in the timeline — safe to ignore unless you're specifically debugging resume behavior.",
+      format: "Plain text: the prompt content itself.",
+      source: "Claude Code only. Native type: \"last-prompt\" top-level entries, real .lastPrompt field. (This type existed in the raw data before this extractor handled it — earlier versions silently dropped it.)",
+    },
+    TOKENS: {
+      label: "Tokens", color: "var(--c-misc)", bg: "var(--c-misc-bg)",
+      hint: "Real (not estimated) token usage for one assistant turn: input, output, cache, and a total.\nFormat: in=N out=N [cache_read=N cache_write=N] total=N.",
+      purpose: "The actual per-turn token accounting the API returned for one assistant response — not the char-count/4 approximation the toolbar's overall stat used to rely on.",
+      function: "Lets you see exactly which turns were expensive (huge cache_write on the first turn of a long session, huge cache_read on every turn after) instead of only ever seeing one approximate session-wide total.",
+      format: "Claude Code: in=<input_tokens> out=<output_tokens> cache_read=<cache_read_input_tokens> cache_write=<cache_creation_input_tokens> total=<sum of all four>.\nCursor: in=<inputTokens> out=<outputTokens> total=<in+out> (no cache breakdown is exposed there).",
+      source: "Claude Code: the assistant message's own .usage object — input_tokens/output_tokens/cache_read_input_tokens/cache_creation_input_tokens — which is the real Anthropic Messages API response field, not computed or estimated.\nCursor: the bubble's own .tokenCount object — inputTokens/outputTokens — same idea, but Cursor doesn't expose a cache breakdown there.",
+      note: "The toolbar's \"Σ tokens\" stat (and the Insights → Token usage tab) SUM every [TOKENS] block in this list together — that total is CUMULATIVE across the whole session, not a live number. It will not match an IDE's own \"context window used\" indicator (e.g. Claude Code's context-window meter), and that's expected, not a bug:\n\n• Cumulative total (this dump) = Σ over every assistant turn of (in + out + cache_read + cache_write). cache_read in particular gets re-charged on almost every turn (each new API call re-reads most of the prior conversation from cache), so this number necessarily grows with turn count — it reflects total volume processed/billed across the whole session.\n• Context-window-used (IDE indicator) = a snapshot of how much of the model's context window is occupied right now, for the NEXT call — a point-in-time size, not a running sum. It resets in spirit every time old messages fall off the front of the window (autocompact, or a fresh window), while the cumulative dump total never goes down.\n\nDifferent questions, different numbers: the dump total answers \"how many tokens did this whole session cost so far\"; the IDE meter answers \"how full is the window right now.\" Neither is a bug in the other.",
+    },
+  };
+  const TAG_RE = /^\[(USER|THINKING|TEXT|TOOL_USE|TOOL_RESULT|SKILL_LOAD|META|ATTACHMENT|SYSTEM|TITLE|MODE|QUEUE|FRAME_LINK|LAST_PROMPT|TOKENS)\]\s?/;
+
+  const el = (sel) => document.querySelector(sel);
+  const loadScreen = el("#load-screen");
+  const toolbar = el("#toolbar");
+  const timelineEl = el("#timeline");
+  const filterRow = el("#filter-row");
+  const topToolsEl = el("#top-tools");
+  const sourceTag = el("#source-tag");
+  const errorMsg = el("#error-msg");
+  const toggleAllInput = el("#toggle-all-types");
+  const tagRefDialog = el("#tag-reference-dialog");
+  const tagRefBody = el("#tag-reference-body");
+  const insightsDialog = el("#insights-dialog");
+  const totalTokensDialog = el("#total-tokens-dialog");
+  const contextWindowDialog = el("#context-window-dialog");
+
+  let blocks = [];
+  let activeFilters = new Set(CURATED_TYPES);
+  let searchTerm = "";
+
+  function parse(raw) {
+    const lines = raw.split("\n");
+    const out = [];
+    let current = null;
+    for (const line of lines) {
+      const m = line.match(TAG_RE);
+      if (m) {
+        if (current) out.push(current);
+        current = { type: m[1], text: line.slice(m[0].length) };
+      } else if (current) {
+        current.text += "\n" + line;
+      }
+      // lines before the first tag (e.g. "# composer_id=...") are ignored
+    }
+    if (current) out.push(current);
+    return out.map((b) => ({ ...b, text: b.text.replace(/\s+$/, "") })).filter((b) => b.text.length > 0);
+  }
+
+  function extractToolName(text) {
+    const m = text.match(/^([A-Za-z0-9_]+)\(/);
+    return m ? m[1] : null;
+  }
+
+  function approxTokens(charCount) {
+    return Math.round(charCount / 4);
+  }
+
+  const TOKENS_LINE_RE = /in=(\d+) out=(\d+)(?: cache_read=(\d+) cache_write=(\d+))? total=(\d+)/;
+
+  // Real per-turn usage from [TOKENS] blocks (straight from the API), summed
+  // across every assistant turn in the session. Returns null when the dump
+  // has no [TOKENS] blocks at all (older dump, or extractor without this
+  // feature) so the caller can fall back to the char-count approximation.
+  function realTokenTotal() {
+    let sum = 0, found = false;
+    for (const b of blocks) {
+      if (b.type !== "TOKENS") continue;
+      const m = b.text.match(TOKENS_LINE_RE);
+      if (m) { sum += parseInt(m[5], 10); found = true; }
+    }
+    return found ? sum : null;
+  }
+
+  function renderStats() {
+    const total = blocks.length;
+    const totalChars = blocks.reduce((s, b) => s + b.text.length, 0);
+    const toolCalls = blocks.filter((b) => b.type === "TOOL_USE").length;
+    el("#stat-total").textContent = total.toLocaleString();
+    el("#stat-tools").textContent = toolCalls.toLocaleString();
+
+    const realTokens = realTokenTotal();
+    const tokensWrap = el("#total-tokens-btn");
+    if (realTokens !== null) {
+      el("#stat-tokens-label").textContent = "Σ tokens";
+      el("#stat-tokens").textContent = realTokens.toLocaleString();
+      tokensWrap.title =
+        "CUMULATIVE, not a live snapshot: sum of (in + out + cache_read + cache_write) from every [TOKENS] block, " +
+        "i.e. every assistant API call this session made, added together. cache_read repeats on every turn " +
+        "(each call re-reads most of the prior context), so this keeps growing with turn count — it's the total " +
+        "volume of tokens processed across the whole session (what billing/cost tracks), NOT the same number as " +
+        "an IDE's \"context window used\" indicator (e.g. Claude Code's own context-window meter), which instead " +
+        "reports how much of the window is occupied RIGHT NOW, a point-in-time size that doesn't accumulate and " +
+        "isn't part of this transcript at all — see the [TOKENS] tag reference for the full explanation.";
+    } else {
+      el("#stat-tokens-label").textContent = "≈ tokens";
+      el("#stat-tokens").textContent = approxTokens(totalChars).toLocaleString();
+      tokensWrap.title = "Rough estimate (total chars / 4) — this dump has no [TOKENS] blocks to sum a real total from.";
+    }
+
+    const counts = {};
+    for (const t of Object.keys(TYPES)) counts[t] = 0;
+    for (const b of blocks) counts[b.type] = (counts[b.type] || 0) + 1;
+
+    toggleAllInput.checked = EXTRA_TYPES.every((t) => activeFilters.has(t));
+
+    filterRow.innerHTML = "";
+
+    const allTypeKeys = Object.keys(TYPES);
+    const allSelected = allTypeKeys.every((k) => activeFilters.has(k));
+    const allDeselectChip = document.createElement("button");
+    allDeselectChip.className = "chip reset";
+    allDeselectChip.textContent = allSelected ? "Deselect all" : "Select all";
+    allDeselectChip.title = allSelected
+      ? "Hide every tag (clear all filters)"
+      : "Show every tag, curated and bookkeeping alike";
+    allDeselectChip.onclick = () => {
+      activeFilters = allSelected ? new Set() : new Set(allTypeKeys);
+      renderStats();
+      renderTimeline();
+    };
+    filterRow.appendChild(allDeselectChip);
+
+    const resetChip = document.createElement("button");
+    resetChip.className = "chip reset";
+    resetChip.textContent = "Reset filters";
+    resetChip.title = "Back to the default view (curated tags, or curated + bookkeeping if \"Show all message types\" is on)";
+    resetChip.onclick = () => {
+      activeFilters = new Set(toggleAllInput.checked ? Object.keys(TYPES) : CURATED_TYPES);
+      renderStats();
+      renderTimeline();
+    };
+    filterRow.appendChild(resetChip);
+
+    for (const [key, meta] of Object.entries(TYPES)) {
+      const chip = document.createElement("button");
+      chip.className = "chip" + (activeFilters.has(key) ? "" : " off");
+      chip.title = meta.hint || "";
+      chip.innerHTML =
+        '<span class="dot" style="background:' + meta.color + '"></span>' +
+        meta.label + ' <span class="n">' + counts[key] + "</span>";
+      chip.onclick = () => {
+        if (activeFilters.has(key)) activeFilters.delete(key);
+        else activeFilters.add(key);
+        renderStats();
+        renderTimeline();
+      };
+      filterRow.appendChild(chip);
+    }
+
+    const toolFreq = {};
+    for (const b of blocks) {
+      if (b.type !== "TOOL_USE") continue;
+      const name = extractToolName(b.text);
+      if (!name) continue;
+      toolFreq[name] = (toolFreq[name] || 0) + 1;
+    }
+    const top = Object.entries(toolFreq).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    if (top.length) {
+      topToolsEl.innerHTML =
+        "<b>Top tools</b>" +
+        top.map(([name, n]) => '<span class="tool-name">' + esc(name) + " ×" + n + "</span>").join("");
+    } else {
+      topToolsEl.innerHTML = "";
+    }
+  }
+
+  function esc(s) {
+    return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  }
+
+  function highlight(text) {
+    const safe = esc(text);
+    if (!searchTerm) return safe;
+    const re = new RegExp("(" + searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "ig");
+    return safe.replace(re, "<mark>$1</mark>");
+  }
+
+  // Try to pretty-print a JSON string; returns null if it isn't valid JSON.
+  function tryPrettyJSON(str) {
+    try {
+      return JSON.stringify(JSON.parse(str), null, 2);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // For TOOL_USE ("toolName({...})") and TOOL_RESULT (raw JSON) blocks, return
+  // a pretty-printed version to display. Falls back to the original text when
+  // the content isn't valid JSON (e.g. plain stdout).
+  function getDisplayText(b) {
+    if (b.type === "TOOL_USE") {
+      const m = b.text.match(/^([A-Za-z0-9_]+)\((.*)\)$/s);
+      if (m) {
+        const pretty = tryPrettyJSON(m[2]);
+        if (pretty !== null) return m[1] + "(\n" + pretty + "\n)";
+      }
+      return b.text;
+    }
+    if (b.type === "TOOL_RESULT") {
+      const pretty = tryPrettyJSON(b.text);
+      if (pretty !== null) return pretty;
+      return b.text;
+    }
+    return b.text;
+  }
+
+  // Colorizes already HTML-escaped JSON text (keys/strings/numbers/booleans/null).
+  function syntaxHighlightJSON(escapedJson) {
+    return escapedJson.replace(
+      /("(?:\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(?:true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+      (match) => {
+        let cls = "json-number";
+        if (/^"/.test(match)) cls = /:$/.test(match) ? "json-key" : "json-string";
+        else if (/^(true|false)$/.test(match)) cls = "json-bool";
+        else if (match === "null") cls = "json-null";
+        return '<span class="' + cls + '">' + match + "</span>";
+      }
+    );
+  }
+
+  // Render a block's body: search matches get plain highlighting, otherwise
+  // JSON-shaped tool blocks get syntax coloring.
+  function renderContent(b, text) {
+    if (searchTerm) return highlight(text);
+    const safe = esc(text);
+    if (b.type === "TOOL_USE" || b.type === "TOOL_RESULT") return syntaxHighlightJSON(safe);
+    return safe;
+  }
+
+  function renderTimeline() {
+    timelineEl.innerHTML = "";
+    const q = searchTerm.toLowerCase();
+    const visible = blocks.filter((b) => {
+      if (!activeFilters.has(b.type)) return false;
+      if (q && !b.text.toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    if (!visible.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-filtered";
+      empty.textContent = blocks.length ? "No blocks match the current filter/search." : "No blocks parsed.";
+      timelineEl.appendChild(empty);
+      return;
+    }
+
+    visible.forEach((b, i) => {
+      const meta = TYPES[b.type];
+      const wrap = document.createElement("div");
+      const startCollapsed = (b.type === "TOOL_RESULT" && b.text.length > 400);
+      wrap.className = "block" + (startCollapsed ? " collapsed" : "");
+      wrap.style.borderLeftColor = meta.color;
+
+      const head = document.createElement("div");
+      head.className = "block-head";
+      const toolName = b.type === "TOOL_USE" ? extractToolName(b.text) : null;
+      head.innerHTML =
+        '<span class="idx">' + (blocks.indexOf(b) + 1) + '</span>' +
+        '<span class="tag" style="background:' + meta.bg + ';color:' + meta.color + '">' + meta.label + "</span>" +
+        (toolName ? '<span class="tool-name-inline">' + esc(toolName) + "</span>" : "") +
+        '<span class="head-spacer"></span>' +
+        '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const tagBadge = head.querySelector(".tag");
+      if (tagBadge && meta.hint) {
+        tagBadge.title = meta.hint;
+        tagBadge.onclick = (e) => {
+          e.stopPropagation();
+          openTagReference(b.type);
+        };
+      }
+      head.onclick = () => {
+        wrap.classList.toggle("collapsed");
+      };
+
+      const body = document.createElement("div");
+      body.className = "block-body";
+      const content = document.createElement("div");
+      const isProse = ["TEXT", "USER", "THINKING", "SKILL_LOAD", "META", "TITLE", "MODE", "QUEUE", "FRAME_LINK", "LAST_PROMPT"].includes(b.type);
+      content.className = "content" + (isProse ? " prose" : " mono");
+
+      const displayText = getDisplayText(b);
+      const isLongDisplay = displayText.length > 900;
+
+      if (isLongDisplay) {
+        const shown = displayText.slice(0, 900);
+        content.innerHTML = renderContent(b, shown);
+        const btn = document.createElement("button");
+        btn.className = "expand-btn";
+        btn.textContent = "Show full (" + displayText.length.toLocaleString() + " chars)";
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          content.innerHTML = renderContent(b, displayText);
+          btn.remove();
+        };
+        body.appendChild(content);
+        body.appendChild(btn);
+      } else {
+        content.innerHTML = renderContent(b, displayText);
+        body.appendChild(content);
+      }
+
+      wrap.appendChild(head);
+      wrap.appendChild(body);
+      timelineEl.appendChild(wrap);
+    });
+  }
+
+  function activate(raw, label) {
+    const parsed = parse(raw);
+    if (!parsed.length) {
+      errorMsg.textContent = "No [TAG] blocks found — expected lines like [USER], [THINKING], [TOOL_USE], [TOOL_RESULT], [TEXT].";
+      errorMsg.style.display = "block";
+      return;
+    }
+    errorMsg.style.display = "none";
+    blocks = parsed;
+    activeFilters = new Set(CURATED_TYPES);
+    searchTerm = "";
+    el("#search").value = "";
+    sourceTag.textContent = label;
+    loadScreen.style.display = "none";
+    toolbar.style.display = "flex";
+    timelineEl.style.display = "flex";
+    renderStats();
+    renderTimeline();
+  }
+
+  // File picking
+  const fileInput = el("#file-input");
+  el("#pick-file").onclick = () => fileInput.click();
+  fileInput.onchange = () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => activate(String(reader.result), f.name);
+    reader.readAsText(f);
+  };
+
+  // Drag & drop
+  const dz = el("#dropzone");
+  ["dragenter", "dragover"].forEach((ev) =>
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dz.classList.add("drag");
+    })
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dz.classList.remove("drag");
+    })
+  );
+  dz.addEventListener("drop", (e) => {
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => activate(String(reader.result), f.name);
+    reader.readAsText(f);
+  });
+
+  // Paste
+  el("#load-paste").onclick = () => {
+    const val = el("#paste-area").value;
+    if (!val.trim()) {
+      errorMsg.textContent = "Paste some text first.";
+      errorMsg.style.display = "block";
+      return;
+    }
+    activate(val, "pasted text");
+  };
+
+  // Reload
+  el("#reload-btn").onclick = () => {
+    blocks = [];
+    toolbar.style.display = "none";
+    timelineEl.style.display = "none";
+    loadScreen.style.display = "flex";
+    el("#paste-area").value = "";
+    sourceTag.textContent = "";
+  };
+
+  // Search
+  let searchDebounce;
+  el("#search").addEventListener("input", (e) => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      searchTerm = e.target.value.trim();
+      renderTimeline();
+    }, 120);
+  });
+
+  // Show all message types: a shortcut that bulk-adds/removes the "extra"
+  // (session-bookkeeping) types on top of whatever curated/per-type chip
+  // selection is already active.
+  toggleAllInput.addEventListener("change", (e) => {
+    if (e.target.checked) {
+      for (const t of EXTRA_TYPES) activeFilters.add(t);
+    } else {
+      for (const t of EXTRA_TYPES) activeFilters.delete(t);
+    }
+    renderStats();
+    renderTimeline();
+  });
+
+  // Tag reference dialog: one shared modal listing every tag's purpose,
+  // function, and format. Opened either generically (toolbar "?" button) or
+  // scoped to one tag (clicking its badge in the timeline), in which case
+  // that entry is scrolled into view and briefly highlighted.
+  let tagRefRendered = false;
+
+  const TAG_REF_INTRO =
+    "The [BRACKET] tags below are <b>not</b> something Claude Code or Cursor write to disk — neither tool has a concept of \"tags\". " +
+    "Each one is a display label this viewer's extractor script invented, assigned by reading the real underlying data structure " +
+    "(a JSONL entry's <code>type</code> field, a Cursor bubble's numeric <code>type</code>, an <code>isMeta</code> flag, a regex match on real text, " +
+    "an API response's <code>usage</code> object, ...). The content behind every tag is 100% real, taken verbatim from each tool's own session " +
+    "storage; only the bracketed label is a convention. Each entry's <b>Source</b> line names the exact field(s) and logic used.";
+
+  function renderTagReference() {
+    if (tagRefRendered) return;
+    tagRefRendered = true;
+    const intro = `<div class="tag-ref-intro">${TAG_REF_INTRO}</div>`;
+    const entries = Object.entries(TYPES).map(([key, meta]) => `
+      <div class="tag-ref-entry" id="tag-ref-${key}">
+        <div class="tag-ref-entry-head">
+          <span class="dot" style="background:${meta.color}"></span>
+          <span class="name">[${key}]</span>
+          <span class="label">${esc(meta.label)}</span>
+        </div>
+        <div class="tag-ref-row"><b>Purpose</b>${esc(meta.purpose || "")}</div>
+        <div class="tag-ref-row"><b>Function</b>${esc(meta.function || "")}</div>
+        <div class="tag-ref-row"><b>Format</b><span class="fmt">${esc(meta.format || "")}</span></div>
+        <div class="tag-ref-row"><b>Source</b><span class="fmt src">${esc(meta.source || "")}</span></div>
+        ${meta.note ? `<div class="tag-ref-row"><b>Note</b><span class="fmt">${esc(meta.note)}</span></div>` : ""}
+      </div>
+    `).join("");
+    tagRefBody.innerHTML = intro + entries;
+  }
+
+  function openTagReference(focusKey) {
+    renderTagReference();
+    if (typeof tagRefDialog.showModal === "function") {
+      tagRefDialog.showModal();
+    } else {
+      tagRefDialog.setAttribute("open", "");
+    }
+    tagRefBody.querySelectorAll(".tag-ref-entry.highlight").forEach((n) => n.classList.remove("highlight"));
+    if (focusKey) {
+      const target = el(`#tag-ref-${focusKey}`);
+      if (target) {
+        target.classList.add("highlight");
+        target.scrollIntoView({ block: "start", behavior: "instant" in document.body.style ? "instant" : "auto" });
+      }
+    } else {
+      tagRefBody.scrollTop = 0;
+    }
+  }
+
+  el("#tag-reference-btn").onclick = () => openTagReference(null);
+  el("#tag-reference-close").onclick = () => tagRefDialog.close();
+  // Click on the dialog's own backdrop area (native <dialog> reports the
+  // click target as the dialog element itself when it lands outside the
+  // content box) closes it, same as pressing Escape (handled natively).
+  tagRefDialog.addEventListener("click", (e) => {
+    if (e.target === tagRefDialog) tagRefDialog.close();
+  });
+
+  // ---- Session insights: effectiveness heuristics + token breakdown ----
+  // Everything here is best-effort inference from the tagged dump text, not
+  // a field either tool actually reports — labeled as heuristic/estimate in
+  // the UI so it isn't mistaken for ground truth.
+  const COMPOSER_SNAPSHOT_RE = /^\(composer snapshot\)\s*total=(\d+)(?:\s+max=(\d+))?(?:\s+context_used=([\d.]+)%)?/;
+  const CATEGORY_LINE_RE = /^ {2}- (.+): (\d+)$/gm;
+  const CORRECTION_PHRASES = [
+    "không đúng", "chưa đúng", "sai rồi", "vẫn sai", "sửa lại", "làm lại",
+    "không phải", "không được", "lỗi rồi", "revert", "undo", "redo",
+    "that's wrong", "that's not", "not what i", "please fix", "actually no",
+    "no, that's", "this is wrong", "do it again",
+  ];
+
+  function hasCorrectionSignal(text) {
+    const t = text.toLowerCase();
+    return CORRECTION_PHRASES.some((p) => t.includes(p));
+  }
+
+  function isErrorResult(text) {
+    return /\[(error|rejected|failed)\]/i.test(text.slice(0, 60));
+  }
+
+  // Claude Code prefixes TOOL_RESULT text with "(ToolName)"; Cursor doesn't,
+  // so for those we fall back to whichever TOOL_USE most recently preceded
+  // it — the two are always printed as a pair in Cursor's dump order.
+  function resolveToolNames() {
+    const names = new Array(blocks.length).fill(null);
+    let lastToolUse = null;
+    blocks.forEach((b, i) => {
+      if (b.type === "TOOL_USE") {
+        lastToolUse = extractToolName(b.text);
+        names[i] = lastToolUse;
+      } else if (b.type === "TOOL_RESULT") {
+        const m = b.text.match(/^\(([A-Za-z0-9_]+)\)/);
+        names[i] = m ? m[1] : lastToolUse;
+      }
+    });
+    return names;
+  }
+
+  function computeEffectiveness() {
+    const toolNames = resolveToolNames();
+    let toolTotal = 0, toolErrors = 0;
+    const toolCharsByName = {};
+    blocks.forEach((b, i) => {
+      if (b.type === "TOOL_USE") {
+        const name = toolNames[i] || "?";
+        toolCharsByName[name] = (toolCharsByName[name] || 0) + b.text.length;
+      } else if (b.type === "TOOL_RESULT") {
+        toolTotal++;
+        if (isErrorResult(b.text)) toolErrors++;
+        const name = toolNames[i] || "?";
+        toolCharsByName[name] = (toolCharsByName[name] || 0) + b.text.length;
+      }
+    });
+
+    let firstUserSeen = false;
+    const corrections = [];
+    const afterError = [];
+    blocks.forEach((b, i) => {
+      if (b.type !== "USER") return;
+      if (!firstUserSeen) { firstUserSeen = true; return; }
+      if (hasCorrectionSignal(b.text)) corrections.push({ index: i, text: b.text.slice(0, 160) });
+      for (let j = i - 1; j >= 0 && j >= i - 4; j--) {
+        if (blocks[j].type === "USER") break;
+        if (blocks[j].type === "TOOL_RESULT" && isErrorResult(blocks[j].text)) {
+          afterError.push({ index: i, text: b.text.slice(0, 160) });
+          break;
+        }
+      }
+    });
+
+    let thinkingChars = 0, toolUseChars = 0, textChars = 0;
+    blocks.forEach((b) => {
+      if (b.type === "THINKING") thinkingChars += b.text.length;
+      else if (b.type === "TOOL_USE") toolUseChars += b.text.length;
+      else if (b.type === "TEXT") textChars += b.text.length;
+    });
+
+    const topTools = Object.entries(toolCharsByName)
+      .map(([name, chars]) => ({ name, tokens: approxTokens(chars) }))
+      .sort((a, b) => b.tokens - a.tokens)
+      .slice(0, 6);
+
+    const realTurns = [];
+    blocks.forEach((b) => {
+      if (b.type !== "TOKENS") return;
+      const m = b.text.match(TOKENS_LINE_RE);
+      if (m) realTurns.push(parseInt(m[5], 10));
+    });
+    const topTurns = realTurns
+      .map((total, i) => ({ turn: i + 1, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+
+    return { toolTotal, toolErrors, corrections, afterError, thinkingChars, toolUseChars, textChars, topTools, topTurns };
+  }
+
+  function computeTokenBreakdown() {
+    const toolNames = resolveToolNames();
+    const byType = {};
+    const byTool = {};
+    blocks.forEach((b, i) => {
+      if (b.type === "TOKENS") return; // bookkeeping about tokens, not content that costs tokens
+      byType[b.type] = (byType[b.type] || 0) + approxTokens(b.text.length);
+      if (b.type === "TOOL_USE" || b.type === "TOOL_RESULT") {
+        const name = toolNames[i] || "?";
+        byTool[name] = (byTool[name] || 0) + approxTokens(b.text.length);
+      }
+    });
+
+    const turns = [];
+    let categories = null, snapshotTotal = null, snapshotMax = null, snapshotPct = null;
+    blocks.forEach((b) => {
+      if (b.type !== "TOKENS") return;
+      const real = b.text.match(TOKENS_LINE_RE);
+      if (real) {
+        turns.push({
+          in: parseInt(real[1], 10),
+          out: parseInt(real[2], 10),
+          cacheRead: real[3] ? parseInt(real[3], 10) : 0,
+          cacheWrite: real[4] ? parseInt(real[4], 10) : 0,
+          total: parseInt(real[5], 10),
+        });
+        return;
+      }
+      const snap = b.text.match(COMPOSER_SNAPSHOT_RE);
+      if (snap) {
+        snapshotTotal = parseInt(snap[1], 10);
+        snapshotMax = snap[2] ? parseInt(snap[2], 10) : null;
+        snapshotPct = snap[3] ? parseFloat(snap[3]) : null;
+        categories = [];
+        let m;
+        CATEGORY_LINE_RE.lastIndex = 0;
+        while ((m = CATEGORY_LINE_RE.exec(b.text)) !== null) {
+          categories.push({ label: m[1], tokens: parseInt(m[2], 10) });
+        }
+      }
+    });
+    const trend = turns.map((t) => t.total);
+
+    // "Context window" ≈ how much of the conversation would be resent on the
+    // NEXT API call — approximated differently per source, since neither tool
+    // stores a true point-in-time window size in the transcript itself:
+    //  - Claude Code: the API resends the *entire* prior conversation every
+    //    call, so the last turn's (in + cache_read + cache_write) already
+    //    covers everything before it; add that turn's own `out` because it
+    //    becomes part of history for the next call. This is a proxy for "size
+    //    of the conversation so far", not a number the API reports directly —
+    //    and the dump has no field for the model's actual window limit, so no
+    //    percentage can be computed.
+    //  - Cursor: real snapshot already reported by composerData itself
+    //    (contextUsagePercent / promptTokenBreakdown), not an approximation.
+    let contextEstimate = null;
+    if (turns.length) {
+      const last = turns[turns.length - 1];
+      contextEstimate = {
+        source: "last_turn",
+        total: last.in + last.cacheRead + last.cacheWrite + last.out,
+        in: last.in, out: last.out, cacheRead: last.cacheRead, cacheWrite: last.cacheWrite,
+      };
+    } else if (snapshotTotal !== null) {
+      contextEstimate = { source: "composer_snapshot", total: snapshotTotal, max: snapshotMax, pct: snapshotPct };
+    }
+
+    return { byType, byTool, trend, categories, snapshotTotal, snapshotMax, snapshotPct, contextEstimate };
+  }
+
+  function barListHTML(entries) {
+    if (!entries.length) return '<div class="empty-note">Không có dữ liệu.</div>';
+    const max = Math.max(...entries.map((e) => e.value), 1);
+    const sum = entries.reduce((s, e) => s + e.value, 0) || 1;
+    return entries.map((e) => {
+      const pct = (e.value / sum * 100).toFixed(1);
+      return `
+      <div class="bar-row">
+        <span class="bl" title="${esc(e.label)}">${esc(e.label)}</span>
+        <span class="bt"><span class="bf" style="width:${(e.value / max * 100).toFixed(1)}%;background:${e.color || "var(--accent)"}"></span></span>
+        <span class="bv">${e.display || e.value.toLocaleString()}<span class="pct">${pct}%</span></span>
+      </div>`;
+    }).join("");
+  }
+
+  function dedupeFlags(a, b) {
+    const map = new Map();
+    a.forEach((x) => map.set(x.index, { ...x, reasons: ["từ khóa sửa lỗi"] }));
+    b.forEach((x) => {
+      if (map.has(x.index)) map.get(x.index).reasons.push("sau tool lỗi");
+      else map.set(x.index, { ...x, reasons: ["sau tool lỗi"] });
+    });
+    return [...map.values()].sort((p, q) => p.index - q.index);
+  }
+
+  function renderFlagList(items) {
+    if (!items.length) return '<div class="empty-note">Không phát hiện dấu hiệu nào.</div>';
+    return '<div class="flag-list">' + items.map((it) => `
+      <div class="flag-item">
+        <div class="fi-head"><span>Block #${it.index + 1} · ${esc(it.reasons.join(", "))}</span></div>
+        <div class="fi-text">${esc(it.text)}</div>
+      </div>`).join("") + "</div>";
+  }
+
+  function renderEffectivenessPanel() {
+    const d = computeEffectiveness();
+    const successRate = d.toolTotal ? Math.round(((d.toolTotal - d.toolErrors) / d.toolTotal) * 100) : null;
+    const totalRatio = d.thinkingChars + d.toolUseChars + d.textChars || 1;
+    const pThink = (d.thinkingChars / totalRatio * 100).toFixed(1);
+    const pTool = (d.toolUseChars / totalRatio * 100).toFixed(1);
+    const pText = (d.textChars / totalRatio * 100).toFixed(1);
+
+    el("#panel-effectiveness").innerHTML = `
+      <div class="insight-disclaimer">
+        Đây là các <b>heuristic tham khảo</b> (dò tool-call lỗi, từ khóa sửa lỗi trong tin nhắn tiếp theo, tỷ lệ nội dung) —
+        không phải thước đo chính thức và không thay thế việc bạn tự đọc lại hội thoại để đánh giá có đáp ứng yêu cầu hay không.
+      </div>
+
+      <div class="insight-section">
+        <h3>Tool call success rate</h3>
+        <div class="stat-grid">
+          <div class="stat-tile"><div class="n">${d.toolTotal}</div><div class="l">tool calls</div></div>
+          <div class="stat-tile${d.toolErrors ? " warn" : ""}"><div class="n">${d.toolErrors}</div><div class="l">lỗi</div></div>
+          <div class="stat-tile"><div class="n">${successRate === null ? "—" : successRate + "%"}</div><div class="l">thành công</div></div>
+        </div>
+      </div>
+
+      <div class="insight-section">
+        <h3>Số lần user phải sửa/nhắc lại (heuristic)</h3>
+        <div class="sub">Dò từ khóa sửa lỗi trong tin nhắn user (bỏ qua tin đầu tiên) + tin nhắn user xuất hiện ngay sau một TOOL_RESULT lỗi.</div>
+        <div class="stat-grid">
+          <div class="stat-tile${d.corrections.length ? " warn" : ""}"><div class="n">${d.corrections.length}</div><div class="l">chứa từ khóa sửa lỗi</div></div>
+          <div class="stat-tile${d.afterError.length ? " warn" : ""}"><div class="n">${d.afterError.length}</div><div class="l">ngay sau tool lỗi</div></div>
+        </div>
+        ${renderFlagList(dedupeFlags(d.corrections, d.afterError))}
+      </div>
+
+      <div class="insight-section">
+        <h3>Thinking + tool-use vs. text trả lời</h3>
+        <div class="sub">Tỷ lệ theo số ký tự (proxy cho công sức bỏ ra), không phải số lượng block.</div>
+        <div class="stack-bar">
+          <div style="width:${pThink}%;background:var(--c-thinking)"></div>
+          <div style="width:${pTool}%;background:var(--c-tooluse)"></div>
+          <div style="width:${pText}%;background:var(--c-text)"></div>
+        </div>
+        <div class="stack-legend">
+          <span><span class="dot" style="background:var(--c-thinking)"></span>Thinking ${pThink}%</span>
+          <span><span class="dot" style="background:var(--c-tooluse)"></span>Tool use ${pTool}%</span>
+          <span><span class="dot" style="background:var(--c-text)"></span>Text trả lời ${pText}%</span>
+        </div>
+      </div>
+
+      <div class="insight-section">
+        <h3>Top tool tốn token nhất (ước tính)</h3>
+        <div class="sub">Ước tính từ số ký tự (÷4) của TOOL_USE + TOOL_RESULT, gộp theo tên tool.</div>
+        ${barListHTML(d.topTools.map((t) => ({ label: t.name, value: t.tokens, display: t.tokens.toLocaleString() })))}
+      </div>
+
+      <div class="insight-section">
+        <h3>Turn tốn token thật nhiều nhất</h3>
+        <div class="sub">Từ [TOKENS] thật của từng lượt assistant (Claude Code) — không có ở dump chỉ mang snapshot cấp composer (Cursor).</div>
+        ${d.topTurns.length ? barListHTML(d.topTurns.map((t) => ({ label: "Turn #" + t.turn, value: t.total, display: t.total.toLocaleString() }))) : '<div class="empty-note">Dump này không có [TOKENS] theo từng turn.</div>'}
+      </div>
+    `;
+  }
+
+  function trendSVG(values) {
+    const w = 640, h = 130, pad = 18;
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values, 0);
+    const range = max - min || 1;
+    const stepX = (w - pad * 2) / (values.length - 1);
+    const pts = values.map((v, i) => [pad + i * stepX, h - pad - ((v - min) / range) * (h - pad * 2)]);
+    const path = pts.map((p) => p.join(",")).join(" ");
+    const dots = pts.map(([x, y], i) =>
+      `<circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5"><title>Turn ${i + 1}: ${values[i].toLocaleString()}</title></circle>`
+    ).join("");
+    return `<svg class="trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <line class="axis" x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}"/>
+      <polyline class="line" points="${path}"/>
+      ${dots}
+    </svg>`;
+  }
+
+  function contextEstimateHTML(c) {
+    if (!c) {
+      return '<div class="empty-note">Dump này không có [TOKENS] theo turn lẫn snapshot cấp composer — không thể ước tính context window.</div>';
+    }
+    if (c.source === "composer_snapshot") {
+      return `
+        <div class="stat-grid">
+          <div class="stat-tile"><div class="n">${c.total.toLocaleString()}</div><div class="l">token đang dùng</div></div>
+          <div class="stat-tile"><div class="n">${c.max !== null ? c.max.toLocaleString() : "?"}</div><div class="l">giới hạn cửa sổ</div></div>
+          <div class="stat-tile${c.pct !== null && c.pct >= 80 ? " warn" : ""}"><div class="n">${c.pct !== null ? c.pct + "%" : "?"}</div><div class="l">đã dùng</div></div>
+        </div>
+        <div class="sub">Số thật từ Cursor (composerData.contextUsagePercent / promptTokenBreakdown) tại thời điểm dump — một snapshot, không cộng dồn qua các turn.</div>
+      `;
+    }
+    return `
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="n">${c.total.toLocaleString()}</div><div class="l">token ước tính đang chiếm</div></div>
+      </div>
+      <div class="sub">Ước tính từ lượt gọi API gần nhất: in (${c.in.toLocaleString()}) + cache_read (${c.cacheRead.toLocaleString()}) + cache_write (${c.cacheWrite.toLocaleString()}) + out (${c.out.toLocaleString()}).
+      Vì mỗi lượt gọi gửi lại toàn bộ hội thoại trước đó, ba thành phần in/cache_read/cache_write của turn cuối đã bao trùm gần hết
+      lịch sử tính đến lúc đó; cộng thêm out vì phần trả lời này sẽ thành một phần context cho lượt gọi kế tiếp. Đây là proxy gần đúng
+      cho "kích thước hội thoại hiện tại", KHÔNG phải số [TOKENS] cộng dồn cả session ở trên. Dump không biết giới hạn cửa sổ thật của
+      model nên không tính được %.</div>
+    `;
+  }
+
+  function renderTotalTokensPanel() {
+    const d = computeTokenBreakdown();
+
+    const typeEntries = Object.entries(d.byType)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, tokens]) => ({
+        label: TYPES[type] ? TYPES[type].label : type,
+        value: tokens,
+        color: TYPES[type] ? TYPES[type].color : "var(--accent)",
+        display: tokens.toLocaleString(),
+      }));
+
+    const toolEntries = Object.entries(d.byTool)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, tokens]) => ({ label: name, value: tokens, display: tokens.toLocaleString() }));
+
+    const trendHTML = d.trend.length >= 2
+      ? trendSVG(d.trend)
+      : '<div class="empty-note">Cần ít nhất 2 [TOKENS] theo từng turn để vẽ trend — dump này không đủ (hoặc chỉ có snapshot cấp composer, xem dialog "Context window").</div>';
+
+    el("#panel-total-tokens").innerHTML = `
+      <div class="insight-disclaimer">
+        Đây là <b>tổng cộng dồn (cumulative)</b> toàn session — cộng (in + out + cache_read + cache_write) của <i>mọi</i> turn
+        assistant lại với nhau. <code>cache_read</code> bị tính lại ở gần như mỗi turn (mỗi lần gọi API đều đọc lại phần lớn context
+        cũ từ cache), nên số này càng nhiều turn càng phình to — nó phản ánh <i>tổng khối lượng token đã xử lý/tính phí</i> của cả
+        session, KHÔNG phải kích thước context hiện tại (xem dialog riêng "Context window" cho con số đó).
+        <br/><br/>
+        "Theo loại block" và "theo tool" là <b>ước tính</b> (số ký tự ÷ 4) vì API chỉ trả token thật theo cả turn, không theo từng
+        phần nội dung. "Theo thời gian" dùng số <b>thật</b> khi dump có [TOKENS] theo từng turn.
+      </div>
+
+      <div class="insight-section">
+        <h3>Theo loại block (ước tính)</h3>
+        ${barListHTML(typeEntries)}
+      </div>
+
+      <div class="insight-section">
+        <h3>Theo tool cụ thể (ước tính)</h3>
+        ${toolEntries.length ? barListHTML(toolEntries) : '<div class="empty-note">Không có tool call nào.</div>'}
+      </div>
+
+      <div class="insight-section">
+        <h3>Theo thời gian — trend qua từng turn (thật)</h3>
+        ${trendHTML}
+      </div>
+    `;
+  }
+
+  function renderContextWindowPanel() {
+    const d = computeTokenBreakdown();
+
+    const categoryHTML = d.categories && d.categories.length
+      ? barListHTML(d.categories.map((c) => ({ label: c.label, value: c.tokens, display: c.tokens.toLocaleString() }))) +
+        `<div class="sub" style="margin-top:8px">Tổng: ${d.snapshotTotal !== null ? d.snapshotTotal.toLocaleString() : "?"} / ${d.snapshotMax !== null ? d.snapshotMax.toLocaleString() : "?"} token` +
+        (d.snapshotPct !== null ? ` (${d.snapshotPct}% context)` : "") + "</div>"
+      : '<div class="empty-note">Không có breakdown theo category — chỉ Cursor mới in snapshot này, và chỉ khi không bubble nào có tokenCount thật.</div>';
+
+    el("#panel-context-window").innerHTML = `
+      <div class="insight-disclaimer">
+        Đây là kích thước <b>hội thoại hiện tại</b> (những gì sẽ được gửi lại trong lượt gọi API tiếp theo) — khác hẳn với dialog
+        "Total tokens" (tổng cộng dồn qua toàn bộ session). Với Cursor, số này là <b>snapshot thật</b> Cursor tự báo cáo. Với Claude
+        Code, dump không lưu trực tiếp con số này nên phải <b>ước tính</b> từ turn cuối cùng.
+      </div>
+
+      <div class="insight-section">
+        <h3>Context window hiện tại (${d.contextEstimate && d.contextEstimate.source === "composer_snapshot" ? "snapshot thật" : "ước tính"})</h3>
+        ${contextEstimateHTML(d.contextEstimate)}
+      </div>
+
+      <div class="insight-section">
+        <h3>Theo category hệ thống (thật, snapshot Cursor)</h3>
+        ${categoryHTML}
+      </div>
+    `;
+  }
+
+  function openEffectiveness() {
+    renderEffectivenessPanel();
+    if (typeof insightsDialog.showModal === "function") insightsDialog.showModal();
+    else insightsDialog.setAttribute("open", "");
+  }
+
+  function openTotalTokens() {
+    renderTotalTokensPanel();
+    if (typeof totalTokensDialog.showModal === "function") totalTokensDialog.showModal();
+    else totalTokensDialog.setAttribute("open", "");
+  }
+
+  function openContextWindow() {
+    renderContextWindowPanel();
+    if (typeof contextWindowDialog.showModal === "function") contextWindowDialog.showModal();
+    else contextWindowDialog.setAttribute("open", "");
+  }
+
+  el("#effectiveness-btn").onclick = openEffectiveness;
+  el("#insights-close").onclick = () => insightsDialog.close();
+  insightsDialog.addEventListener("click", (e) => {
+    if (e.target === insightsDialog) insightsDialog.close();
+  });
+
+  el("#total-tokens-btn").onclick = openTotalTokens;
+  el("#total-tokens-close").onclick = () => totalTokensDialog.close();
+  totalTokensDialog.addEventListener("click", (e) => {
+    if (e.target === totalTokensDialog) totalTokensDialog.close();
+  });
+
+  el("#context-window-btn").onclick = openContextWindow;
+  el("#context-window-close").onclick = () => contextWindowDialog.close();
+  contextWindowDialog.addEventListener("click", (e) => {
+    if (e.target === contextWindowDialog) contextWindowDialog.close();
+  });
+
+  // Auto-load embedded data (baked in by preview-debug-llm's build script).
+  if (window.__EMBEDDED_DUMP_B64__) {
+    try {
+      const bytes = Uint8Array.from(atob(window.__EMBEDDED_DUMP_B64__), (c) => c.charCodeAt(0));
+      const text = new TextDecoder("utf-8").decode(bytes);
+      activate(text, window.__EMBEDDED_SOURCE__ || "embedded session");
+    } catch (e) {
+      errorMsg.textContent = "Failed to decode embedded session data: " + e.message;
+      errorMsg.style.display = "block";
+    }
+  }
+})();
+</script>
