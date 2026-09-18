@@ -749,6 +749,8 @@ export interface ProjectMediaEntry {
   url?: string;
   /** Creation time (epoch ms) when the listing record carries one. */
   createdAt?: number;
+  /** Flow asset-panel favourite (star) — `true` when the listing marks it. */
+  isFavourite?: boolean;
 }
 
 export interface ProjectMediaPage {
@@ -838,6 +840,37 @@ function mergeEntry(byId: Map<string, ProjectMediaEntry>, found: ProjectMediaEnt
     prev.url = found.url;
   }
   prev.createdAt ??= found.createdAt;
+  if (found.isFavourite) prev.isFavourite = true;
+}
+
+/**
+ * Clip / gallery card summary in live `Zzl0ze`:
+ * `[clipId, null, null, [label, timestamp, ?, favourite, mediaId, …], projectId]`
+ * Favourite / star is `meta[3] === true` (not `meta[2]` - that flag is common on scene clips).
+ * Media id to pick is `meta[4]`.
+ */
+function isClipSummary(node: unknown): node is unknown[] {
+  if (!Array.isArray(node) || typeof node[0] !== 'string' || !UUID_RE_STRICT.test(node[0])) return false;
+  if (node[1] != null) return false;
+  const meta = node[3];
+  if (!Array.isArray(meta)) return false;
+  const mediaId = meta[4];
+  return typeof mediaId === 'string' && UUID_RE_STRICT.test(mediaId);
+}
+
+function applyClipSummaryFavourites(payload: unknown, byId: Map<string, ProjectMediaEntry>) {
+  for (const list of walkLists(payload)) {
+    for (const node of list) {
+      if (!isClipSummary(node)) continue;
+      const meta = node[3] as unknown[];
+      if (meta[3] !== true) continue;
+      const mediaId = meta[4] as string;
+      let createdAt: number | undefined;
+      const ts = asEpochMs(Array.isArray(meta[1]) ? meta[1][0] : meta[1]);
+      if (ts != null) createdAt = ts;
+      mergeEntry(byId, { mediaId, createdAt, isFavourite: true });
+    }
+  }
 }
 
 /**
@@ -877,6 +910,8 @@ export function readProjectMediaPage(text: string): ProjectMediaPage {
     }
     mergeEntry(byId, { mediaId, kind, url, createdAt });
   }
+  // Clip cards carry the star flag + media id — merge onto listing entries.
+  applyClipSummaryFavourites(payload, byId);
   // Media referenced only by url elsewhere in the payload (older shapes).
   for (const str of walkStrings(payload)) {
     for (const found of mediaUrlsIn(str)) mergeEntry(byId, found);

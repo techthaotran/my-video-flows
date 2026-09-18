@@ -30,6 +30,7 @@ function toFlowMediaItem(m: ProjectMediaEntry): FlowMediaItem {
     thumbUrl: signed || undefined,
     mediaId: m.mediaId,
     createdAt: m.createdAt,
+    isFavourite: m.isFavourite,
   };
 }
 

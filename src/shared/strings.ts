@@ -246,6 +246,10 @@ export const strings = {
   flowPickerTitle: 'Chọn asset từ Google Flow',
   flowPickerHint:
     'Mở project trên tab Google Flow (flow.google.com). Danh sách tải theo trang — bấm số để xem thêm.',
+  flowPickerTabFavorites: 'Yêu thích',
+  flowPickerTabAll: 'Tất cả',
+  flowPickerEmptyFavorites:
+    'Chưa có asset yêu thích. Gắn sao trên Google Flow rồi bấm Làm mới, hoặc xem tab Tất cả.',
   flowPickerEmpty: 'Không thấy media nào. Hãy mở project có ảnh/video trên Flow rồi thử lại.',
   flowPickerLoading: 'Đang quét Google Flow…',
   flowPickerFetching: 'Đang tải asset…',

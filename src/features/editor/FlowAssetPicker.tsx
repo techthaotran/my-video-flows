@@ -39,6 +39,14 @@ interface FlowAssetPickerProps {
 type PageCache = Record<number, PickerItem[]>;
 /** `nextTokens[i]` = token to fetch page `i + 1` after page `i` loaded. */
 type NextTokens = Record<number, string | null>;
+type PickerTab = 'favorites' | 'all';
+type TabView = { page: number; selected: string | null };
+
+const DEFAULT_TAB: PickerTab = 'favorites';
+const EMPTY_TAB_VIEWS: Record<PickerTab, TabView> = {
+  favorites: { page: 0, selected: null },
+  all: { page: 0, selected: null },
+};
 
 /** How many media ids to sign per SW round-trip (only viewport tiles enqueue). */
 const SIGN_BATCH = 6;
@@ -49,6 +57,8 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
   const [nextTokens, setNextTokens] = useState<NextTokens>({});
   const pagesRef = useRef<PageCache>({});
   const nextTokensRef = useRef<NextTokens>({});
+  const [tab, setTab] = useState<PickerTab>(DEFAULT_TAB);
+  const tabViewsRef = useRef<Record<PickerTab, TabView>>({ ...EMPTY_TAB_VIEWS });
   const [page, setPage] = useState(0);
   const [signing, setSigning] = useState(false);
   /** Ids already sent for signing — never re-requested, so a failing id can't loop. */
@@ -70,8 +80,10 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
   const resetCache = useCallback(() => {
     pagesRef.current = {};
     nextTokensRef.current = {};
+    tabViewsRef.current = { ...EMPTY_TAB_VIEWS };
     setPages({});
     setNextTokens({});
+    setTab(DEFAULT_TAB);
     setPage(0);
     setSelected(null);
     signRequested.current = new Set();
@@ -82,6 +94,17 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
     setSigningIds(new Set());
   }, []);
 
+  const switchTab = useCallback(
+    (next: PickerTab) => {
+      if (next === tab) return;
+      tabViewsRef.current[tab] = { page, selected };
+      const cached = tabViewsRef.current[next];
+      setTab(next);
+      setPage(cached.page);
+      setSelected(cached.selected);
+    },
+    [tab, page, selected],
+  );
   const fetchPage = useCallback(
     async (pageIndex: number, pageToken: string | null): Promise<{ ok: boolean; error?: string }> => {
       const res = await sendToSw<{ items: FlowMediaItem[]; nextPageToken: string | null }>({
@@ -167,13 +190,27 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
   /** Pages we can show as number buttons: loaded + one more if Flow still has a token. */
   const pageButtonCount = Math.max(loadedPageCount > 0 ? loadedPageCount : 1, loadedPageCount + (hasMore ? 1 : 0));
   const currentPage = Math.min(page, Math.max(0, pageButtonCount - 1));
-  const rawPageItems = pages[currentPage] ?? [];
-  const pageItems = useMemo(
-    () =>
-      rawPageItems.filter((i) => listKind === 'any' || i.kindKnown === false || i.kind === listKind),
-    [rawPageItems, listKind],
+
+  const matchesKind = useCallback(
+    (i: PickerItem) => listKind === 'any' || i.kindKnown === false || i.kind === listKind,
+    [listKind],
   );
 
+  /** Favourites from every loaded listing page (Flow stars via `Zzl0ze` flag). */
+  const favouriteItems = useMemo(() => {
+    const out: PickerItem[] = [];
+    for (let p = 0; p < loadedPageCount; p++) {
+      for (const item of pages[p] ?? []) {
+        if (item.isFavourite && matchesKind(item)) out.push(item);
+      }
+    }
+    return out;
+  }, [pages, loadedPageCount, matchesKind]);
+
+  const pageItems = useMemo(() => {
+    if (tab === 'favorites') return favouriteItems;
+    return (pages[currentPage] ?? []).filter(matchesKind);
+  }, [tab, favouriteItems, pages, currentPage, matchesKind]);
   const patchSignedItems = useCallback((ids: string[], signed: Map<string, SignedFlowMedia>) => {
     const next: PageCache = { ...pagesRef.current };
     for (const [idx, list] of Object.entries(next)) {
@@ -259,30 +296,31 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
   );
 
   // Prefetch the next RPC page (ids only — previews still wait for viewport).
+  // Favourites tab keeps prefetching so starred items on later pages accumulate.
   useEffect(() => {
     if (!open || loading || loadingPage || prefetching.current) return;
-    const token = nextTokens[currentPage];
-    if (!token || pages[currentPage + 1]) return;
+    const prefetchFrom = tab === 'favorites' ? lastLoaded : currentPage;
+    const token = nextTokens[prefetchFrom];
+    if (!token || pages[prefetchFrom + 1]) return;
     prefetching.current = true;
-    void fetchPage(currentPage + 1, token)
+    void fetchPage(prefetchFrom + 1, token)
       .catch(() => undefined)
       .finally(() => {
         prefetching.current = false;
       });
-  }, [open, loading, loadingPage, currentPage, nextTokens, pages, fetchPage]);
+  }, [open, loading, loadingPage, tab, currentPage, lastLoaded, nextTokens, pages, fetchPage]);
 
-  // Drop queued signs when flipping pages — only the new viewport should load.
+  // Drop queued signs when flipping pages / tabs — only the new viewport should load.
   useEffect(() => {
     signQueue.current = [];
     setSigningIds(new Set());
     setSigning(false);
-  }, [currentPage]);
+  }, [currentPage, tab]);
 
   // Bind IntersectionObserver root to the grid scroller once mounted.
   useEffect(() => {
     setScrollRoot(gridScrollRef.current);
-  }, [open, loading, loadingPage, pageItems.length, currentPage]);
-
+  }, [open, loading, loadingPage, pageItems.length, currentPage, tab]);
   const ensurePage = useCallback(
     async (target: number) => {
       if (pagesRef.current[target]) {
@@ -372,8 +410,14 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
   };
 
   const busy = loading || loadingPage;
-  const showPager = !loading && authenticated !== false && (loadedPageCount > 1 || hasMore);
+  const showPager =
+    tab === 'all' && !loading && authenticated !== false && (loadedPageCount > 1 || hasMore);
   const pageNumbers = useMemo(() => buildPageNumbers(currentPage, pageButtonCount), [currentPage, pageButtonCount]);
+  const emptyLabel = tab === 'favorites' ? strings.flowPickerEmptyFavorites : strings.flowPickerEmpty;
+  const statusCount =
+    tab === 'favorites'
+      ? strings.flowPickerPageCount(pageItems.length)
+      : `${strings.flowPickerPageOf(currentPage + 1, Math.max(pageButtonCount, currentPage + 1))} · ${strings.flowPickerPageCount(pageItems.length)}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -382,6 +426,29 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
           <DialogTitle>{strings.flowPickerTitle}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">{strings.flowPickerHint}</p>
+
+        <div className="flex flex-wrap items-center gap-1 rounded-md border border-border p-0.5">
+          <Button
+            type="button"
+            size="sm"
+            variant={tab === 'favorites' ? 'default' : 'ghost'}
+            className="flex-1 sm:flex-none"
+            onClick={() => switchTab('favorites')}
+            disabled={openingLogin}
+          >
+            {strings.flowPickerTabFavorites}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={tab === 'all' ? 'default' : 'ghost'}
+            className="flex-1 sm:flex-none"
+            onClick={() => switchTab('all')}
+            disabled={openingLogin}
+          >
+            {strings.flowPickerTabAll}
+          </Button>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -400,8 +467,7 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
           )}
           {!busy && pageItems.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              {strings.flowPickerPageOf(currentPage + 1, Math.max(pageButtonCount, currentPage + 1))}
-              {` · ${strings.flowPickerPageCount(pageItems.length)}`}
+              {statusCount}
               {signing ? ` · ${strings.flowPickerSigning}` : ''}
             </span>
           )}
@@ -417,9 +483,14 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
           ref={gridScrollRef}
           className="max-h-[min(60vh,560px)] overflow-y-auto rounded border border-border"
         >
-          {loading || (loadingPage && !pages[currentPage]) ? (
+          {loading ||
+          (tab === 'all' && loadingPage && !pages[currentPage]) ||
+          (tab === 'favorites' && loadingPage && loadedPageCount === 0) ||
+          (tab === 'favorites' && pageItems.length === 0 && hasMore && !error) ? (
             <div className="p-6 text-center text-xs text-muted-foreground">
-              {loadingPage ? strings.flowPickerLoadingPage : strings.flowPickerLoading}
+              {loadingPage || (tab === 'favorites' && hasMore)
+                ? strings.flowPickerLoadingPage
+                : strings.flowPickerLoading}
             </div>
           ) : authenticated === false ? (
             <div className="space-y-3 p-6 text-center">
@@ -429,33 +500,18 @@ export function FlowAssetPicker({ open, onOpenChange, kind = 'any', onPicked }: 
               </Button>
             </div>
           ) : pageItems.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">{strings.flowPickerEmpty}</div>
+            <div className="p-6 text-center text-xs text-muted-foreground">{emptyLabel}</div>
           ) : (
-            <div className="grid grid-cols-3 gap-2 p-2 sm:grid-cols-4 md:grid-cols-5">
-              {pageItems.map((item) => {
-                const kindPending = listKind !== 'any' && item.kindKnown === false;
-                const kindLabel =
-                  item.kindKnown === false
-                    ? strings.flowPickerKindPending
-                    : item.kind === 'video'
-                      ? strings.kindVideo
-                      : strings.kindImage;
-                const awaitingSign = !!item.mediaId && signingIds.has(item.mediaId);
-                return (
-                  <PickerTile
-                    key={item.id}
-                    item={item}
-                    selected={selected === item.id}
-                    disabled={!item.mediaId || kindPending}
-                    kindLabel={kindLabel}
-                    awaitingSign={awaitingSign}
-                    scrollRoot={scrollRoot}
-                    onVisible={enqueueVisibleSign}
-                    onSelect={() => setSelected(item.id)}
-                  />
-                );
-              })}
-            </div>
+            <PickerGrid
+              key={tab}
+              items={pageItems}
+              listKind={listKind}
+              selected={selected}
+              signingIds={signingIds}
+              scrollRoot={scrollRoot}
+              onVisible={enqueueVisibleSign}
+              onSelect={setSelected}
+            />
           )}
         </div>
 
@@ -557,6 +613,52 @@ function buildPageNumbers(current: number, total: number): Array<number | '…'>
     out.push(n);
   }
   return out;
+}
+
+function PickerGrid({
+  items,
+  listKind,
+  selected,
+  signingIds,
+  scrollRoot,
+  onVisible,
+  onSelect,
+}: {
+  items: PickerItem[];
+  listKind: 'image' | 'video' | 'any';
+  selected: string | null;
+  signingIds: Set<string>;
+  scrollRoot: HTMLElement | null;
+  onVisible: (mediaId: string) => void;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2 p-2 sm:grid-cols-4 md:grid-cols-5">
+      {items.map((item) => {
+        const kindPending = listKind !== 'any' && item.kindKnown === false;
+        const kindLabel =
+          item.kindKnown === false
+            ? strings.flowPickerKindPending
+            : item.kind === 'video'
+              ? strings.kindVideo
+              : strings.kindImage;
+        const awaitingSign = !!item.mediaId && signingIds.has(item.mediaId);
+        return (
+          <PickerTile
+            key={item.id}
+            item={item}
+            selected={selected === item.id}
+            disabled={!item.mediaId || kindPending}
+            kindLabel={kindLabel}
+            awaitingSign={awaitingSign}
+            scrollRoot={scrollRoot}
+            onVisible={onVisible}
+            onSelect={() => onSelect(item.id)}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function PickerTile({

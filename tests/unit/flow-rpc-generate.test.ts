@@ -836,7 +836,37 @@ describe('readProjectMediaPage', () => {
     expect(page.items.map((i) => i.mediaId)).toEqual([id(2), id(3), id(1)]);
     expect(page.items[0]).toMatchObject({ kind: 'video', url: `https://flow-content.google/video/${id(2)}?sig=b`, createdAt: 1757900000_000 });
     expect(page.items[1]!.kind).toBeUndefined();
+    expect(page.items.every((i) => !i.isFavourite)).toBe(true);
     expect(page.nextPageToken).toBeNull();
+  });
+
+  it('marks favourite from clip-summary meta[3], keyed by meta[4] mediaId', async () => {
+    const { readProjectMediaPage } = await import('@/providers/flow/rpc/batch');
+    // Live shape: [label, ts, otherFlag, favourite, mediaId] — meta[2] is NOT the star.
+    const clip = (clipId: string, mediaId: string, other: boolean | null, favourite: boolean | null) => [
+      clipId,
+      null,
+      null,
+      ['Label', [1757000000, 0], other, favourite, mediaId],
+      project,
+    ];
+    const page = readProjectMediaPage(
+      wrap([
+        [
+          clip(wf(1), id(1), null, true),
+          clip(wf(2), id(2), true, null), // meta[2] true must not count as favourite
+          clip(wf(3), id(3), null, true),
+        ],
+        [
+          [id(1), project, wf(1), [1757000000, 0]],
+          [id(2), project, wf(2), [1757500000, 0]],
+          [id(3), project, wf(3), [1757900000, 0]],
+        ],
+      ]),
+    );
+    expect(page.items.find((i) => i.mediaId === id(1))?.isFavourite).toBe(true);
+    expect(page.items.find((i) => i.mediaId === id(2))?.isFavourite).toBeUndefined();
+    expect(page.items.find((i) => i.mediaId === id(3))?.isFavourite).toBe(true);
   });
 
   it('keeps listing order and picks up a trailing page token', async () => {

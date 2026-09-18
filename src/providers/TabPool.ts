@@ -437,7 +437,16 @@ export class ProviderRouter {
       ...domItems.filter((i) => !listed.has(i.mediaId)),
       ...rpcItems.map((i) => {
         const shown = domById.get(i.mediaId!);
-        return shown ? { ...i, kind: shown.kind, kindKnown: true, url: shown.url, thumbUrl: shown.thumbUrl } : i;
+        return shown
+          ? {
+              ...i,
+              kind: shown.kind,
+              kindKnown: true,
+              url: shown.url,
+              thumbUrl: shown.thumbUrl,
+              isFavourite: i.isFavourite,
+            }
+          : i;
       }),
     ];
     for (const item of merged) {

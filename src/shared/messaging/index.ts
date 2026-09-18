@@ -104,6 +104,8 @@ export interface FlowMediaItem {
   createdAt?: number;
   /** False when the listing had no url to tell image from video — settled on signing. */
   kindKnown?: boolean;
+  /** Flow asset-panel favourite (star) from `Zzl0ze` listing. */
+  isFavourite?: boolean;
 }
 
 export interface FlowGenerateRef {

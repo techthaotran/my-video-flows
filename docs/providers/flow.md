@@ -58,7 +58,7 @@ Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVX
 |---|---|
 | checkAuth | Sign-in / avatar / prompt bar |
 | diagnose | Selector health + project URL |
-| listFlowMedia | Picker: một trang `Zzl0ze` (`pageToken`); trang đầu merge DOM gallery |
+| listFlowMedia | Picker: một trang `Zzl0ze` (`pageToken`); trang đầu merge DOM gallery; favourite ở clip-summary `meta[3]`, mediaId `meta[4]` |
 | signFlowMedia | `as29s` theo trang đang xem (concurrency 8); video ưu tiên poster `/image/` làm thumb |
 | listMedia | Quét gallery DOM — chỉ bổ sung trang đầu picker |
 | fetchMedia | `fetch(url)` → base64 |
