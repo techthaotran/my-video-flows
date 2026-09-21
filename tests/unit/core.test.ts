@@ -13,6 +13,8 @@ import {
   extractSlugs,
   buildSlugIndex,
   annotateAssetLabels,
+  ensureCharacterAiOriginNote,
+  CHARACTER_AI_ORIGIN_NOTE,
   stripAssetLegend,
   stripFlowMediaUrls,
   composePrompt,
@@ -255,6 +257,20 @@ describe('resolver', () => {
         '[Character]: Cô gái Đông Á. · mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
         '[Outfit]: mediaId fcf16651-14f3-4335-9557-0a808bd11946',
     );
+  });
+
+  it('ensureCharacterAiOriginNote marks Character media as AI text-only on submit', () => {
+    const refs = [
+      { label: 'Character', kind: 'image' as const, flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
+      { label: 'Outfit', kind: 'image' as const, flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
+    ];
+    const annotated = annotateAssetLabels('[Character] walks', refs);
+    const forSubmit = ensureCharacterAiOriginNote(annotated, refs);
+    expect(forSubmit).toContain(
+      `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427`,
+    );
+    expect(ensureCharacterAiOriginNote(forSubmit, refs)).toBe(forSubmit);
+    expect(ensureCharacterAiOriginNote(annotated, [refs[1]!])).toBe(annotated);
   });
 
   it('leaves descriptive [Label]: text alone when stripping URL legends', () => {

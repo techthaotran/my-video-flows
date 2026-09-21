@@ -30,9 +30,10 @@
 | Debug | Editor → **Console**: trước mỗi submit có `payload → {rpcid}` với `wireMediaIds`, `anchoredMediaIds` (MZZa6b), `urlsInPrompt` (phải = 0), `missingRefs`. RPC lỗi kèm `freq` (còn `__CAPTCHA__`) |
 | Model video | UI Omni Flash không ảnh → `YhhmEf` / `abra_t2v_*`. Có ảnh → `MZZa6b` / `abra_r2v_*`. Veo labels → `eb1hJf` + fallback nếu `MODEL_ACCESS_DENIED` |
 | i2v lỗi `[13]` | Flow từ chối start frame / lỗi nội bộ — báo ngay, **không tự retry** |
+| r2v lỗi `[5]` | `MZZa6b` trả NOT_FOUND = tài khoản không có nhánh Veo r2v (khác `MODEL_ACCESS_DENIED` gate từng key): bỏ luôn các key `veo_3_1_r2v_*` còn lại, nhảy thẳng sang `abra_r2v_*` |
 | Retry node generate | Mặc định `retry: 0` cho Generate Image/Video |
 | Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio (Audio voice, Video reference); `entityId` ingredient; extend REST cũ |
-| Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi. continueFrom + Veo → chỉ frame cuối trên wire (`eb1hJf`), `[Label]` giữ trong prompt. continueFrom + Omni → frame cuối (`maseQ`) là ảnh đầu tiên `[Cảnh trước]` trong `MZZa6b`, kèm ảnh tham chiếu (tính vào `OMNI_MAX_REFS`); Veo i2v từ frame upload trả "Media not found." nên Omni không đi `eb1hJf`. Không dùng link làm dự phòng |
+| Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi (không continue). continueFrame (Omni hoặc Veo) → frame cuối `maseQ` rồi `MZZa6b` (Omni `abra_r2v_*` / Veo `veo_3_1_r2v_*` với fallback chuỗi r2v rồi `abra_r2v_*` nếu tài khoản không có Veo r2v); frame là ảnh đầu `[Cảnh trước]`; **không** `eb1hJf` vì maseQ frame trả "Media not found.". Không dùng link làm dự phòng |
 
 RPC ids: `ogiZ0b` (image), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload).
 `WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) — **không** tái tạo / không submit.
@@ -86,8 +87,7 @@ Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVX
 5. Character + Outfit (asset Flow) → Prompt → Omni: `MZZa6b`, `abra_r2v_*`, `item[1]` = 2 id, không `maseQ`, đúng mặt/outfit.
 6. Character + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`.
 7. Omni > `OMNI_MAX_REFS` ảnh / Veo + 2 ảnh / Omni + video asset: lỗi rõ, không submit.
-8. Scene tiếp Veo (+ Character/Outfit tùy chọn): `maseQ` frame cuối + `eb1hJf`; ảnh tham chiếu chỉ trong prompt.
-   Scene tiếp Omni: `maseQ` frame cuối + `MZZa6b` / `abra_r2v_*`, `item[1]` = frame cuối rồi Character/Outfit/Background.
+8. Scene tiếp (Veo hoặc Omni, + Character/Outfit tùy chọn): `maseQ` frame cuối + `MZZa6b` (`veo_3_1_r2v_*` / `abra_r2v_*`); `item[1]` = frame cuối rồi Character/Outfit/Background. Không `eb1hJf`.
 9. Workflow cũ có link trong prompt: link khớp asset → `[Label]`; link lạ → lỗi.
 
 ### Kiểm chứng live Omni refs (plan 7.2)

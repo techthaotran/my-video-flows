@@ -120,10 +120,7 @@ export const strings = {
     'Prompt chứa link Flow không gắn asset. Nối asset vào node để gửi bằng media id.',
   veoTooManyImageRefs: 'Veo chỉ nhận 1 ảnh start frame; bỏ bớt ảnh hoặc chọn Omni Flash',
   omniTooManyRefs: (max: number, n: number) =>
-    `Omni Flash chỉ nhận tối đa ${max} ảnh tham chiếu (đang có ${n}). Bỏ bớt ảnh rồi thử lại.`,
-  /** Progress / log when scene continue keeps [Label] text but drops media-id slots. */
-  continueIgnoresImageRefs: (labels: string) =>
-    `Nối cảnh: chỉ dùng frame cuối làm start frame; ${labels} giữ trong prompt (không gửi media id).`,
+    `Chỉ nhận tối đa ${max} ảnh tham chiếu khi nối cảnh / Omni (đang có ${n}). Bỏ bớt ảnh rồi thử lại.`,
   refKindUnsupported: (label: string, kind: string) =>
     `[${label}] là ${kind}, model này chưa nhận làm tham chiếu`,
   flowMediaIdNotInPayload: (labels: string) =>
@@ -158,6 +155,18 @@ export const strings = {
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni tham chiếu (${model}). Bỏ ảnh tham chiếu (Omni text-only) hoặc chọn model Veo.`,
   omniReferenceSubmitFailed: (model: string, detail: string) =>
     `Omni Flash tham chiếu bị từ chối (${model}): ${detail}`,
+  veoReferenceDenied: (model: string) =>
+    `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Veo tham chiếu (${model}).`,
+  veoReferenceSubmitFailed: (model: string, detail: string) =>
+    `Veo tham chiếu (nối cảnh) bị từ chối (${model}): ${detail}`,
+  veoContinueNoModel: (models: string) =>
+    `Không model nối cảnh nào chạy được (${models}). ` +
+    `Chọn Omni Flash để nối cảnh bằng ảnh tham chiếu, hoặc chạy Veo với đúng 1 ảnh start frame (không nối cảnh).`,
+  veoContinueFallbackOmni:
+    'Veo tham chiếu không dùng được - nối cảnh bằng Omni Flash (abra_r2v)…',
+  /** `[5]` NOT_FOUND: Flow không phục vụ nhánh Veo r2v cho tài khoản này. */
+  veoReferenceNotServed: (model: string) =>
+    `Flow trả NOT_FOUND cho model nối cảnh ${model} - tài khoản không có nhánh Veo tham chiếu.`,
   /** Map Flow workflow failure codes (jwpduf) to actionable Vietnamese. */
   flowRenderFailureMessage: (code: string | null, reasons: string[]): string => {
     if (code === 'PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED') {
@@ -169,10 +178,10 @@ export const strings = {
     const detail = code ?? (reasons.length ? reasons.join(', ') : null) ?? 'không rõ';
     return `Flow từ chối render video: ${detail}`;
   },
-  /** Veo i2v operation complained (often "Media not found"). */
+  /** Veo i2v operation complained (often "Media not found" on a bad start frame). */
   flowVideoOpFailed: (detail: string) =>
     `Flow không tạo được video (${detail}). ` +
-    `Nếu đang nối cảnh trước bằng Veo: thử chọn Omni Flash (nối cảnh qua ảnh tham chiếu) hoặc chạy lại cảnh trước.`,
+    `Thử ảnh start frame khác, hoặc nối cảnh bằng frame cuối (Veo/Omni qua ảnh tham chiếu).`,
   omniTextDenied: (model: string) =>
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni Flash (${model}). Thử chọn model Veo.`,
   omniTextSubmitFailed: (model: string, detail: string) =>

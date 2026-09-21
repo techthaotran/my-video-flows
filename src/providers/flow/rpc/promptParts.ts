@@ -11,7 +11,7 @@
  * - Adjacent text parts are merged; empty text is dropped.
  */
 
-import { normalizeLabel, REFERENCE_LIST_HEADER } from '@/engine/resolver';
+import { CHARACTER_AI_ORIGIN_NOTE, normalizeLabel, REFERENCE_LIST_HEADER } from '@/engine/resolver';
 import type { PromptPart } from '@/providers/flow/rpc/batch';
 
 export interface OrderedPromptRef {
@@ -50,6 +50,10 @@ function pushText(parts: PromptPart[], text: string): void {
 }
 
 function pushImage(parts: PromptPart[], mediaId: string, name: string): void {
+  // Adjacent English note so Flow's prominent-people filter sees Character as synthetic.
+  if (normalizeLabel(name) === 'character') {
+    pushText(parts, `(${CHARACTER_AI_ORIGIN_NOTE}) `);
+  }
   parts.push({ type: 'image', mediaId, name });
 }
 

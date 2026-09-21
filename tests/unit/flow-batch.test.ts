@@ -12,6 +12,8 @@ import {
   extractVideoMediaIdsFromText,
   videoRequest,
   resolveVideoModel,
+  resolveVeoReferenceVideoModel,
+  videoR2vFallbackChain,
   FlowBatchError,
   RpcError,
   omniReferenceVideoModel,
@@ -153,6 +155,21 @@ describe('flow batch videoRequest', () => {
     expect(resolveVideoModel('Veo 3.1 Lite Low Priority')).toBe('veo_3_1_i2v_lite_low_priority');
     expect(resolveVideoModel('Veo')).toBe('veo_3_1_i2v_lite');
     expect(resolveVideoModel(undefined)).toBe('veo_3_1_i2v_lite');
+  });
+
+  it('maps Veo i2v labels to r2v keys for scene continue (MZZa6b)', () => {
+    expect(resolveVeoReferenceVideoModel('Veo 3.1 Lite')).toBe('veo_3_1_r2v_lite_low_priority');
+    expect(resolveVeoReferenceVideoModel('Veo 3.1 Lite Low Priority')).toBe(
+      'veo_3_1_r2v_lite_low_priority',
+    );
+    expect(resolveVeoReferenceVideoModel('Veo 3.1 Fast (Ultra)')).toBe('veo_3_1_r2v_fast');
+  });
+
+  it('builds a Veo r2v fallback chain with preferred first', () => {
+    const chain = videoR2vFallbackChain('Veo 3.1 Fast (Ultra)');
+    expect(chain[0]).toBe('veo_3_1_r2v_fast');
+    expect(chain).toContain('veo_3_1_r2v_lite_low_priority');
+    expect(new Set(chain).size).toBe(chain.length);
   });
 });
 

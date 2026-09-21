@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { REFERENCE_LIST_HEADER } from '@/engine/resolver';
+import { CHARACTER_AI_ORIGIN_NOTE, REFERENCE_LIST_HEADER } from '@/engine/resolver';
 import { buildReferencePromptParts, formatPartsForLog } from '@/providers/flow/rpc/promptParts';
 
 const CHAR = '5ef8278f-a08d-4b30-a45c-bdd946b37427';
 const OUTFIT = 'fcf16651-14f3-4335-9557-0a808bd11946';
 const BG = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const CHAR_NOTE = `(${CHARACTER_AI_ORIGIN_NOTE}) `;
 
 describe('buildReferencePromptParts', () => {
   it('anchors first [Label] in narrative; later repeats stay as text', () => {
@@ -22,7 +23,7 @@ describe('buildReferencePromptParts', () => {
 
     expect(mediaIds).toEqual([CHAR, OUTFIT]);
     expect(parts).toEqual([
-      { type: 'text', text: 'Video dọc 9:16 dài 4 giây.\n' },
+      { type: 'text', text: `Video dọc 9:16 dài 4 giây.\n${CHAR_NOTE}` },
       { type: 'image', mediaId: CHAR, name: 'Character' },
       { type: 'text', text: ' mặc ' },
       { type: 'image', mediaId: OUTFIT, name: 'Outfit' },
@@ -47,7 +48,7 @@ describe('buildReferencePromptParts', () => {
     expect(mediaIds).toEqual([CHAR, OUTFIT]);
     expect(parts[0]).toEqual({
       type: 'text',
-      text: `A quiet street.\n\n${REFERENCE_LIST_HEADER}\n`,
+      text: `A quiet street.\n\n${REFERENCE_LIST_HEADER}\n${CHAR_NOTE}`,
     });
     expect(parts[1]).toEqual({ type: 'image', mediaId: CHAR, name: 'Character' });
     expect(parts[2]).toEqual({ type: 'text', text: ': portrait.\n\n' });
@@ -61,7 +62,7 @@ describe('buildReferencePromptParts', () => {
     ]);
     expect(mediaIds).toEqual([CHAR]);
     expect(parts).toEqual([
-      { type: 'text', text: 'Just a walk.\n' },
+      { type: 'text', text: `Just a walk.\n${CHAR_NOTE}` },
       { type: 'image', mediaId: CHAR, name: 'Character' },
     ]);
   });
@@ -70,15 +71,17 @@ describe('buildReferencePromptParts', () => {
     const { parts } = buildReferencePromptParts('[ character ] walks', [
       { label: 'Character', mediaId: CHAR },
     ]);
-    expect(parts[0]).toEqual({ type: 'image', mediaId: CHAR, name: 'Character' });
-    expect(parts[1]).toEqual({ type: 'text', text: ' walks' });
+    expect(parts[0]).toEqual({ type: 'text', text: CHAR_NOTE });
+    expect(parts[1]).toEqual({ type: 'image', mediaId: CHAR, name: 'Character' });
+    expect(parts[2]).toEqual({ type: 'text', text: ' walks' });
   });
 
-  it('starts with an image part when the prompt begins with [Label]', () => {
+  it('starts with Character AI-origin note then image when prompt begins with [Character]', () => {
     const { parts } = buildReferencePromptParts('[Character] walks', [
       { label: 'Character', mediaId: CHAR },
     ]);
-    expect(parts[0]?.type).toBe('image');
+    expect(parts[0]).toEqual({ type: 'text', text: CHAR_NOTE });
+    expect(parts[1]?.type).toBe('image');
     expect(parts.every((p) => p.type !== 'text' || p.text.length > 0)).toBe(true);
   });
 
@@ -102,6 +105,7 @@ describe('buildReferencePromptParts', () => {
     expect(unknownLabels).toEqual([]);
     expect(mediaIds).toEqual([CHAR, BG]);
     expect(parts).toEqual([
+      { type: 'text', text: CHAR_NOTE },
       { type: 'image', mediaId: CHAR, name: 'Character' },
       { type: 'text', text: ' walks in ' },
       { type: 'image', mediaId: BG, name: 'Background' },

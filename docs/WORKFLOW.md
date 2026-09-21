@@ -291,7 +291,7 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 | Omni, > `OMNI_MAX_REFS` ảnh | Lỗi rõ ràng, không cắt bớt |
 | Veo, 1 ảnh | Start frame → `eb1hJf` + model fallback |
 | Veo, ≥ 2 ảnh | Lỗi rõ ràng |
-| continueFrame, Veo | Frame cuối → `maseQ` → Veo i2v; `[Label]` giữ trong prompt; không upload / không wire media id của Character/Outfit |
+| continueFrame, Veo | Frame cuối → `maseQ` → `MZZa6b` / `veo_3_1_r2v_*` (cùng Omni continue; không `eb1hJf`) |
 | continueFrame, Omni | Frame cuối → `maseQ` → `MZZa6b` (frame cuối trước, rồi ảnh tham chiếu) |
 | Không frame + không Omni | Lỗi: chọn Omni hoặc cung cấp 1 ảnh / scene trước |
 

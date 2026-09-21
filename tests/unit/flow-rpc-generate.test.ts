@@ -13,6 +13,7 @@ import {
 } from '@/providers/flow/rpc/batch';
 import { clearLogs, getLogs } from '@/shared/log';
 import { strings } from '@/shared/strings';
+import { CHARACTER_AI_ORIGIN_NOTE } from '@/engine/resolver';
 
 const rpc = vi.fn<(tabId: number, cmd: BatchRpcCmd) => Promise<BatchRpcResult>>();
 
@@ -66,6 +67,8 @@ function mediaIdFor(op: string) {
 /** Fake Flow: denies `deniedModels`, fails `flakyMediaRounds` as29s calls, then serves a video. */
 function fakeFlow(opts: {
   deniedModels?: string[];
+  /** MZZa6b models that answer `[5]` (NOT_FOUND — wire key not served). */
+  notServedModels?: string[];
   flakyMediaRounds?: number;
   /** as29s calls that answer `[5]` (media not ready) before returning a url. */
   as29sNotReadyRounds?: number;
@@ -102,7 +105,14 @@ function fakeFlow(opts: {
         return { status: 200, text: envelope('YhhmEf', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
       }
       case 'MZZa6b': {
-        submitted.push(videoModelOf(cmd));
+        const model = videoModelOf(cmd);
+        submitted.push(model);
+        if (opts.deniedModels?.includes(model)) {
+          return { status: 200, text: errorEnvelope('MZZa6b', DENIED) };
+        }
+        if (opts.notServedModels?.includes(model)) {
+          return { status: 200, text: errorEnvelope('MZZa6b', [5]) };
+        }
         const mediaId = `dddddddd-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
         return { status: 200, text: envelope('MZZa6b', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
       }
@@ -576,7 +586,7 @@ describe('generateViaRpc references', () => {
     expect(prompt).toBe(
       '[Outfit] on [Character]\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: mediaId 33333333-3333-3333-3333-333333333333\n\n' +
+        `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId 33333333-3333-3333-3333-333333333333\n\n` +
         `[Outfit]: mediaId ${IMAGE_ID}`,
     );
     expect(prompt).not.toContain('flow-content.google');
@@ -627,7 +637,7 @@ describe('generateViaRpc references', () => {
     expect(prompts[0]).toBe(
       '[Character] walks\n\n' +
         'Danh sách tham chiếu\n' +
-        `[Character]: mediaId ${IMAGE_ID}`,
+        `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId ${IMAGE_ID}`,
     );
     expect(calls).toContain('eb1hJf');
   });
@@ -711,67 +721,112 @@ describe('generateViaRpc references', () => {
     });
     const promise = run({
       model: 'Veo 3.1 Lite',
-      mode: 'continue-video',
-      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] walks in [Background]',
-      refs: [
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
-        { kind: 'image', label: 'Background', mediaId: '33333333-3333-3333-3333-333333333333' },
-      ],
+      prompt: '[Character] walks',
+      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
       timeoutSec: 600,
     });
     promise.catch(() => undefined);
     await vi.runAllTimersAsync();
     await expect(promise).rejects.toMatchObject({ code: 'FLOW_RENDER_FAILED' });
     await expect(promise).rejects.toThrow(/Media not found/i);
-    await expect(promise).rejects.toThrow(/chọn Omni Flash/i);
     // Must not sit on the full timeout — one complaint poll is enough after submit.
     const jwp = rpc.mock.calls.filter((c) => c[1].rpcid === 'jwpduf');
     expect(jwp.length).toBeLessThan(5);
   });
 
-  it('continues from last frame and keeps Character/Outfit in prompt only (no media-id slots)', async () => {
-    const { calls } = fakeFlow({});
-    const sources: string[] = [];
-    const prompts: string[] = [];
+  it('continues Veo from last frame through MZZa6b (r2v), not eb1hJf', async () => {
+    const { calls, submitted } = fakeFlow({});
+    const freqs: BatchRpcCmd[] = [];
     const base = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (tab, cmd) => {
-      if (cmd.rpcid === 'eb1hJf') {
-        sources.push(sourceOf(cmd));
-        const item = (inner(cmd)[0] as unknown[][])[0]!;
-        prompts.push((((item[0] as unknown[])[2] as string[][][])[0]![0]![0] as string));
-      }
+      if (cmd.rpcid === 'MZZa6b') freqs.push(cmd);
       return base(tab, cmd);
     });
+    const outfit = '33333333-3333-3333-3333-333333333333';
     await run({
       model: 'Veo 3.1 Lite',
       mode: 'continue-video',
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
       prompt: '[Character] mặc [Outfit] bước tiếp.\n\nDanh sách tham chiếu\n[Character]: cô gái\n\n[Outfit]: áo nâu',
       refs: [
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
-        { kind: 'image', label: 'Outfit', mediaId: '33333333-3333-3333-3333-333333333333' },
+        { kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' },
+        { kind: 'image', label: 'Outfit', mediaId: outfit },
       ],
     });
     expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
-    expect(calls).toContain('eb1hJf');
+    expect(calls).toContain('MZZa6b');
+    expect(calls).not.toContain('eb1hJf');
     expect(calls).not.toContain('YhhmEf');
-    expect(calls).not.toContain('MZZa6b');
     expect(calls).not.toContain('ogiZ0b');
-    expect(sources).toEqual([IMAGE_ID]);
-    expect(prompts[0]).toContain('[Character]');
-    expect(prompts[0]).toContain('[Outfit]');
-    const refs = payloadLogRefs('eb1hJf');
-    expect(refs).toHaveLength(1);
+    expect(submitted).toEqual(['veo_3_1_r2v_lite_low_priority']);
+    expect(refMediaIdsOf(freqs[0]!)).toEqual([
+      IMAGE_ID,
+      '44444444-4444-4444-4444-444444444444',
+      outfit,
+    ]);
+    const refs = payloadLogRefs('MZZa6b');
     expect(refs[0]).toMatchObject({
-      label: strings.continueStartFrameLabel,
+      label: strings.continueFrameRefLabel,
       mediaId: IMAGE_ID,
-      role: 'startFrame',
       source: 'upload',
     });
+    expect(refs.map((r) => r.label)).toEqual([
+      strings.continueFrameRefLabel,
+      'Character',
+      'Outfit',
+    ]);
   });
 
-  it('continues without uploading local Character when last frame owns the start slot', async () => {
+  it('falls back to Omni abra_r2v when Veo r2v keys are MODEL_ACCESS_DENIED', async () => {
+    const { VIDEO_R2V_MODELS } = await import('@/providers/flow/rpc/batch');
+    const { calls, submitted } = fakeFlow({
+      deniedModels: [...VIDEO_R2V_MODELS],
+    });
+    await run({
+      model: 'Veo 3.1 Lite',
+      mode: 'continue-video',
+      durationSec: 4,
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+      prompt: '[Character] bước tiếp',
+      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+    });
+    expect(calls).toContain('MZZa6b');
+    expect(calls).not.toContain('eb1hJf');
+    expect(submitted.some((m) => m.startsWith('veo_3_1_r2v_'))).toBe(true);
+    expect(submitted.at(-1)).toBe('abra_r2v_4s');
+  });
+
+  it('jumps straight to Omni abra_r2v when a Veo r2v key answers [5] NOT_FOUND', async () => {
+    const { VIDEO_R2V_MODELS } = await import('@/providers/flow/rpc/batch');
+    const { calls, submitted } = fakeFlow({ notServedModels: [...VIDEO_R2V_MODELS] });
+    await run({
+      model: 'Veo 3.1 Fast (Ultra)',
+      mode: 'continue-video',
+      durationSec: 4,
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+      prompt: '[Character] bước tiếp',
+      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+    });
+    expect(calls).toContain('MZZa6b');
+    // One Veo r2v probe is enough — NOT_FOUND rules out the whole branch.
+    expect(submitted).toEqual(['veo_3_1_r2v_fast', 'abra_r2v_4s']);
+  });
+
+  it('fails with a clear message when Omni r2v also answers [5] NOT_FOUND', async () => {
+    const { VIDEO_R2V_MODELS } = await import('@/providers/flow/rpc/batch');
+    fakeFlow({ notServedModels: [...VIDEO_R2V_MODELS, 'abra_r2v_4s'] });
+    const promise = run({
+      model: 'Veo 3.1 Fast (Ultra)',
+      mode: 'continue-video',
+      durationSec: 4,
+      continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
+      prompt: '[Character] bước tiếp',
+      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+    });
+    await expect(promise).rejects.toThrow(/abra_r2v_4s/);
+  });
+
+  it('uploads local Character with Veo continue (MZZa6b; not eb1hJf)', async () => {
     const { calls } = fakeFlow({});
     await run({
       model: 'Veo 3.1 Lite',
@@ -786,11 +841,12 @@ describe('generateViaRpc references', () => {
         },
       ],
     });
-    // Only previous-scene last frame is uploaded — not Character.
-    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(1);
-    expect(calls).toContain('eb1hJf');
+    // Frame + Character both go through maseQ; submit is MZZa6b (mock reuses one media id).
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(2);
+    expect(calls).toContain('MZZa6b');
+    expect(calls).not.toContain('eb1hJf');
     expect(calls).not.toContain('ogiZ0b');
-    expect(payloadLogRefs('eb1hJf')).toHaveLength(1);
+    expect(payloadLogRefs('MZZa6b')[0]?.label).toBe(strings.continueFrameRefLabel);
   });
 });
 

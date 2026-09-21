@@ -86,6 +86,41 @@ export const VIDEO_MODEL_BY_NICKNAME: Record<string, string> = {
 };
 
 /**
+ * Veo i2v → r2v (MZZa6b) for scene continue. maseQ frames fail eb1hJf with
+ * "Media not found."; r2v accepts the same upload (fixture + Omni continue path).
+ */
+const VEO_R2V_BY_I2V: Record<string, string> = {
+  veo_3_1_i2v_lite: 'veo_3_1_r2v_lite_low_priority',
+  veo_3_1_i2v_lite_low_priority: 'veo_3_1_r2v_lite_low_priority',
+  veo_3_1_i2v_s_fast_ultra: 'veo_3_1_r2v_fast',
+};
+
+/** Known Veo r2v (MZZa6b) wire ids — plan-gated; denied keys cost a captcha only. */
+export const VIDEO_R2V_MODELS = [
+  'veo_3_1_r2v_lite_low_priority',
+  'veo_3_1_r2v_fast',
+  'veo_3_1_r2v_fast_portrait',
+  'veo_3_1_r2v_fast_landscape_ultra_relaxed',
+] as const;
+
+/** Default Veo reference-to-video wire id when the i2v label has no mapping. */
+export const VIDEO_R2V_MODEL = 'veo_3_1_r2v_lite_low_priority';
+
+/** Map a Veo UI/i2v label to the preferred MZZa6b r2v key for scene continue. */
+export function resolveVeoReferenceVideoModel(key?: string | null): string {
+  const i2v = resolveVideoModel(key);
+  return VEO_R2V_BY_I2V[i2v] ?? VIDEO_R2V_MODEL;
+}
+
+/**
+ * Veo r2v candidates for scene continue: preferred mapping first, then the rest.
+ * A refused key is MODEL_ACCESS_DENIED (no credits), same idea as {@link videoModelFallbackChain}.
+ */
+export function videoR2vFallbackChain(key?: string | null): string[] {
+  return [...new Set([resolveVeoReferenceVideoModel(key), ...VIDEO_R2V_MODELS])];
+}
+
+/**
  * Omni Flash text-to-video (`YhhmEf` / `abra_t2v_*`).
  * Prompt keeps `[Label]` tags and text descriptions only — no CDN URLs.
  * Image ingredients use {@link RPC_GEN_VIDEO_REFS} instead.

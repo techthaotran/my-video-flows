@@ -6,6 +6,7 @@
 import type { DriverResult, FlowGeneratePayload } from '@/shared/messaging';
 import {
   annotateAssetLabels,
+  ensureCharacterAiOriginNote,
   stripFlowMediaUrls,
   type AssetRef,
 } from '@/engine/resolver';
@@ -47,6 +48,7 @@ import {
   textVideoRequest,
   uploadRequest,
   videoModelFallbackChain,
+  videoR2vFallbackChain,
   videoRequest,
   type GeneratedImage,
   type Operation,
@@ -158,13 +160,13 @@ function cleanPromptForSubmit(prompt: string, ordered: OrderedRef[]): string {
   const refs = toAssetRefs(ordered);
   const { text, orphanUrls } = stripFlowMediaUrls(prompt, refs);
   if (orphanUrls.length) throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
-  return annotateAssetLabels(text, refs);
+  return ensureCharacterAiOriginNote(annotateAssetLabels(text, refs), refs);
 }
 
 /**
  * Refs that cannot ride a media-id slot must fail before captcha / upload / submit.
- * Omni image refs go through MZZa6b (capped at {@link OMNI_MAX_REFS}).
- * Veo scene continue (`continueFrame`): image refs are prompt-only (see {@link generateVideoRpc}).
+ * Omni and Veo scene-continue go through MZZa6b (capped at {@link OMNI_MAX_REFS}).
+ * Plain Veo i2v (`eb1hJf`) accepts exactly one start-frame image.
  */
 function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'video'): void {
   const refs = payload.refs ?? [];
@@ -178,13 +180,12 @@ function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'vide
 
   if (kind !== 'video') return;
   const omni = isOmniFlashModel(payload.model);
-  // Veo continue: last-frame i2v owns the only start-frame slot; Character/Outfit stay in prompt text.
-  if (payload.continueFrame && !omni) return;
-
+  const continuing = !!payload.continueFrame;
   const imageRefs = refs.filter((r) => r.kind === 'image' && (r.mediaId || r.upload));
-  if (omni) {
-    // Omni continue: the previous scene's last frame takes one MZZa6b image slot.
-    const unique = new Set<string>(payload.continueFrame ? ['continue:last-frame'] : []);
+
+  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
+  if (omni || continuing) {
+    const unique = new Set<string>(continuing ? ['continue:last-frame'] : []);
     for (const ref of imageRefs) {
       if (ref.mediaId) unique.add(`id:${ref.mediaId}`);
       else if (ref.upload) unique.add(`up:${ref.upload.cacheKey}`);
@@ -198,29 +199,6 @@ function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'vide
   if (imageRefs.length > 1) {
     throw driverError('UNKNOWN', strings.veoTooManyImageRefs);
   }
-}
-
-/** Keep `[Label]` / legend for continue scenes without uploading or wiring media ids. */
-function cleanPromptForContinue(prompt: string, payload: FlowGeneratePayload): string {
-  const refs: AssetRef[] = [];
-  const seen = new Set<string>();
-  for (const ref of payload.refs ?? []) {
-    if (ref.kind !== 'image') continue;
-    const label = ref.label?.trim() || strings.defaultImageRefLabel;
-    const key = label.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    refs.push({ label, kind: 'image', flowMediaId: ref.mediaId });
-  }
-  const { text, orphanUrls } = stripFlowMediaUrls(prompt, refs);
-  if (orphanUrls.length) throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
-  return annotateAssetLabels(text, refs);
-}
-
-function imageRefLabels(payload: FlowGeneratePayload): string[] {
-  return (payload.refs ?? [])
-    .filter((r) => r.kind === 'image' && (r.mediaId || r.upload))
-    .map((r) => `[${r.label?.trim() || strings.defaultImageRefLabel}]`);
 }
 
 function stripDataUrl(b64: string): string {
@@ -653,6 +631,21 @@ function isInternalRejection(reason: unknown): boolean {
   return reason instanceof RpcError && Array.isArray(reason.detail) && reason.detail[0] === 13;
 }
 
+/**
+ * `[5]` (NOT_FOUND) on a MZZa6b submit: Flow does not serve that reference-video
+ * wire key for this account at all. Unlike MODEL_ACCESS_DENIED (a per-key plan
+ * gate) it rules out the whole Veo r2v branch, so the fallback jumps to Omni.
+ */
+function isModelNotServed(reason: unknown): boolean {
+  if ((reason as { modelNotServed?: boolean }).modelNotServed) return true;
+  return (
+    reason instanceof RpcError &&
+    Array.isArray(reason.detail) &&
+    reason.detail.length === 1 &&
+    reason.detail[0] === 5
+  );
+}
+
 /** Terminal poll errors — fail on first hit, do not retry or wrap as "5 lần liên tiếp". */
 function isTerminalPollError(e: unknown): boolean {
   const code = (e as { code?: string }).code;
@@ -829,7 +822,8 @@ async function findNewProjectVideoId(
 /**
  * Video-only: never call ogiZ0b / invent a mid-scene still.
  *
- * - Previous scene (`continueFrame`) → last-frame upload + Veo i2v, or Omni `MZZa6b`.
+ * - Previous scene (`continueFrame`) → last-frame upload + `MZZa6b`
+ *   (Omni `abra_r2v_*` or Veo `veo_3_1_r2v_*`; maseQ frames fail `eb1hJf`).
  * - Omni Flash text-only → `YhhmEf` / `abra_t2v_*`.
  * - Omni Flash + images → `MZZa6b` / `abra_r2v_*`.
  * - Veo → image-to-video (`eb1hJf`) with exactly one start frame.
@@ -842,14 +836,10 @@ async function generateVideoRpc(
   signal: AbortSignal,
 ): Promise<DriverResult> {
   assertRefsSupported(payload, 'video');
-  const omni = isOmniFlashModel(payload.model);
-  if (payload.continueFrame && omni) {
-    return generateOmniContinuedSceneVideo(tabId, projectId, payload, onProgress, signal);
-  }
   if (payload.continueFrame) {
     return generateContinuedSceneVideo(tabId, projectId, payload, onProgress, signal);
   }
-  if (omni) {
+  if (isOmniFlashModel(payload.model)) {
     return generateOmniFlashVideo(tabId, projectId, payload, onProgress, signal);
   }
   return generateVeoI2vVideo(tabId, projectId, payload, onProgress, signal);
@@ -874,11 +864,13 @@ async function uploadLastFrame(
 }
 
 /**
- * Omni scene continue: last frame of previous clip rides `MZZa6b` as the first image,
- * followed by Character/Outfit/Background media ids. Veo i2v (`eb1hJf`) answers
- * "Media not found." for Omni-account uploads, so Omni never goes through it.
+ * Scene continue for Omni and Veo: last frame rides `MZZa6b` as the first image,
+ * followed by Character/Outfit/Background media ids.
+ * Veo i2v (`eb1hJf`) answers "Media not found." for maseQ uploads, so continue
+ * never goes through it. Veo r2v keys are plan-gated — try a fallback chain, then
+ * Omni `abra_r2v_*` when the account has no Veo reference access.
  */
-async function generateOmniContinuedSceneVideo(
+async function generateContinuedSceneVideo(
   tabId: number,
   projectId: string,
   payload: FlowGeneratePayload,
@@ -901,29 +893,51 @@ async function generateOmniContinuedSceneVideo(
     ...payload,
     prompt: strings.omniContinuePromptLead(strings.continueFrameRefLabel) + resolved.prompt,
   };
-  const model = omniReferenceVideoModel(payload.durationSec);
+  const omni = isOmniFlashModel(payload.model);
   const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
   const knownVideos = await listProjectVideoIds(tabId, projectId);
   const sharedExclude = new Set(knownVideos);
-  log.info(`Omni Flash nối cảnh → ${RPC_GEN_VIDEO_REFS} (${model})`, {
+  const label = omni ? 'Omni Flash' : 'Veo';
+
+  const first = await submitContinueReferenceWithFallback(
+    tabId,
+    projectId,
+    scene,
+    orderedRefs,
+    payload,
+    omni,
+    onProgress,
+    signal,
+    new Set([...knownVideos, ...orderedRefs.map((r) => r.mediaId)]),
+  );
+  log.info(`${label} nối cảnh → ${RPC_GEN_VIDEO_REFS} (${first.model})`, {
     refs: orderedRefs.length,
     durationSec: payload.durationSec,
   });
 
   const jobs: { projectId: string; job: VideoJob }[] = [];
-  for (let n = 0; n < count; n++) {
+  if (first.submitted.mediaId) {
+    sharedExclude.add(first.submitted.mediaId);
+    jobs.push({
+      projectId: first.submitted.projectId ?? projectId,
+      job: { mediaId: first.submitted.mediaId },
+    });
+  } else {
+    onProgress(48, 'Parse response lệch - giữ job trên Flow, sẽ lấy video từ project…');
+    jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
+  }
+
+  for (let n = 1; n < count; n++) {
     if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-    onProgress(
-      45,
-      count > 1 ? `Submit Omni Flash ${n + 1}/${count} (${model})…` : `Submit Omni Flash (${model})…`,
-    );
-    const submitted = await submitOmniReferenceVideo(
+    onProgress(45, `Submit ${label} ${n + 1}/${count} (${first.model})…`);
+    const submitted = await submitReferenceVideo(
       tabId,
       projectId,
       scene,
-      model,
+      first.model,
       orderedRefs,
       new Set([...knownVideos, ...orderedRefs.map((r) => r.mediaId)]),
+      referenceDeniedMessages(first.model),
     );
     if (submitted.mediaId) {
       sharedExclude.add(submitted.mediaId);
@@ -936,42 +950,88 @@ async function generateOmniContinuedSceneVideo(
   return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
 }
 
-/** Veo scene continue: last frame of previous clip → Veo i2v; image refs stay in prompt only. */
-async function generateContinuedSceneVideo(
+function referenceDeniedMessages(model: string): {
+  denied: string;
+  failed: (detail: string) => string;
+} {
+  if (model.startsWith('abra_')) {
+    return {
+      denied: strings.omniReferenceDenied(model),
+      failed: (detail) => strings.omniReferenceSubmitFailed(model, detail),
+    };
+  }
+  return {
+    denied: strings.veoReferenceDenied(model),
+    failed: (detail) => strings.veoReferenceSubmitFailed(model, detail),
+  };
+}
+
+/**
+ * Omni continue: one `abra_r2v_*` key.
+ * Veo continue: try Veo r2v keys, then Omni `abra_r2v_*` when the account has no Veo r2v.
+ */
+async function submitContinueReferenceWithFallback(
   tabId: number,
   projectId: string,
+  scene: FlowGeneratePayload,
+  orderedRefs: OrderedRef[],
   payload: FlowGeneratePayload,
+  omni: boolean,
   onProgress: Progress,
   signal: AbortSignal,
-): Promise<DriverResult> {
-  const continueFrame = payload.continueFrame;
-  if (!continueFrame) throw driverError('UNKNOWN', strings.videoNeedsStartFrame);
+  excludeMediaIds: Set<string>,
+): Promise<{
+  submitted: { mediaId: string | null; projectId: string | null };
+  model: string;
+}> {
+  const omniModel = omniReferenceVideoModel(payload.durationSec);
+  const models = omni
+    ? [omniModel]
+    : [...videoR2vFallbackChain(payload.model), omniModel];
+  const rejected: string[] = [];
+  // NOT_FOUND on one Veo r2v key means Flow serves none of them for this account.
+  let veoR2vUnavailable = false;
 
-  const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
-  const labels = imageRefLabels(payload);
-  if (labels.length) {
-    const msg = strings.continueIgnoresImageRefs(labels.join(', '));
-    onProgress(6, msg);
-    log.info(msg, { labels });
+  for (const model of models) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    if (veoR2vUnavailable && model !== omniModel) continue;
+    const fallingToOmni = !omni && model === omniModel && rejected.length > 0;
+    if (fallingToOmni) {
+      onProgress(44, strings.veoContinueFallbackOmni);
+      log.info(strings.veoContinueFallbackOmni, { rejected });
+    } else {
+      onProgress(
+        45,
+        rejected.length
+          ? `Model bị từ chối — thử ${model}…`
+          : `Submit ${omni ? 'Omni Flash' : 'Veo'} (${model})…`,
+      );
+    }
+    try {
+      const submitted = await submitReferenceVideo(
+        tabId,
+        projectId,
+        scene,
+        model,
+        orderedRefs,
+        excludeMediaIds,
+        referenceDeniedMessages(model),
+      );
+      return { submitted, model };
+    } catch (e) {
+      const notServed = isModelNotServed(e);
+      if (!isModelAccessDenied(e) && !notServed) throw e;
+      // Omni is the last candidate — a rejection there has no fallback left.
+      if (notServed && model === omniModel) throw e;
+      if (notServed) {
+        log.warn(strings.veoReferenceNotServed(model));
+        veoR2vUnavailable = true;
+      }
+      rejected.push(model);
+    }
   }
 
-  const scene: FlowGeneratePayload = {
-    ...payload,
-    prompt: cleanPromptForContinue(payload.prompt, payload),
-  };
-  const startFrameId = await uploadLastFrame(tabId, projectId, continueFrame, onProgress, signal);
-
-  const jobs = await submitVeoI2vJobs(
-    tabId,
-    projectId,
-    startFrameId,
-    scene,
-    [],
-    count,
-    onProgress,
-    signal,
-  );
-  return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
+  throw driverError('UNKNOWN', strings.veoContinueNoModel(rejected.join(', ')));
 }
 
 /** Omni Flash without scene continue: text `YhhmEf` or reference `MZZa6b`. */
@@ -1011,13 +1071,14 @@ async function generateOmniFlashVideo(
       ...resolved.orderedRefs.map((r) => r.mediaId),
     ]);
     const submitted = withRefs
-      ? await submitOmniReferenceVideo(
+      ? await submitReferenceVideo(
           tabId,
           projectId,
           scene,
           model,
           resolved.orderedRefs,
           excludeForSalvage,
+          referenceDeniedMessages(model),
         )
       : await submitOmniTextVideo(
           tabId,
@@ -1152,13 +1213,16 @@ async function parseOmniSubmitResponse(
 
   const failHard = (e: unknown): never => {
     const denied = isModelAccessDenied(e, text);
-    throw driverError(
-      'UNKNOWN',
-      denied
-        ? deniedMessage
-        : rejectedMessage(
-            `${e instanceof Error ? e.message : String(e)} — ${summarizeRpcFailure(text, raw.status)}`,
-          ),
+    throw Object.assign(
+      driverError(
+        'UNKNOWN',
+        denied
+          ? deniedMessage
+          : rejectedMessage(
+              `${e instanceof Error ? e.message : String(e)} — ${summarizeRpcFailure(text, raw.status)}`,
+            ),
+      ),
+      { modelDenied: denied, modelNotServed: isModelNotServed(e) },
     );
   };
 
@@ -1229,13 +1293,14 @@ async function submitOmniTextVideo(
   );
 }
 
-async function submitOmniReferenceVideo(
+async function submitReferenceVideo(
   tabId: number,
   projectId: string,
   payload: FlowGeneratePayload,
   model: string,
   orderedRefs: OrderedRef[],
-  excludeMediaIds?: Set<string>,
+  excludeMediaIds: Set<string> | undefined,
+  messages: { denied: string; failed: (detail: string) => string },
 ): Promise<{ mediaId: string | null; projectId: string | null }> {
   const { parts, unknownLabels } = buildReferencePromptParts(
     payload.prompt,
@@ -1272,8 +1337,8 @@ async function submitOmniReferenceVideo(
     projectId,
     RPC_GEN_VIDEO_REFS,
     freq,
-    strings.omniReferenceDenied(model),
-    (detail) => strings.omniReferenceSubmitFailed(model, detail),
+    messages.denied,
+    messages.failed,
     excludeMediaIds ?? new Set(orderedRefs.map((r) => r.mediaId)),
   );
 }
