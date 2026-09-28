@@ -1,0 +1,10 @@
+tests/unit/fashion-compose.test.ts:72:  it('strips markdown fences (and prose) before parsing', () => {
+tests/unit/fashion-compose.test.ts:73:    const fenced =
+tests/unit/fashion-compose.test.ts:74:      'Here is the model JSON:\n```json\n' + model + '\n```\nThanks!';
+tests/unit/fashion-compose.test.ts:75:    const prompt = composeFashionPrompt([fenced, `\`\`\`\n${outfit}\n\`\`\``]);
+src/shared/utils/index.ts:70: * Peel markdown fences / surrounding prose so Gemini JSON can be JSON.parse'd.
+src/shared/utils/index.ts:71: * Prefers a fenced ```json block, else the outermost `{…}` span, else trimmed text.
+src/shared/utils/index.ts:73:export function extractJsonPayload(raw: string): string {
+src/engine/presets/fashion.ts:7:import { extractJsonPayload } from '@/shared/utils';
+src/engine/presets/fashion.ts:18:  ' Respond with a single JSON object only - no markdown fences, no commentary.';
+src/engine/presets/fashion.ts:58:  const trimmed = extractJsonPayload(raw);

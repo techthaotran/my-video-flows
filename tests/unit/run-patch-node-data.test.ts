@@ -47,4 +47,41 @@ describe('RunManager - patchNodeData không ghi đè field khác', () => {
     expect(data.prompt).toBe('sửa giữa chừng');
     expect(data.previewOutputId).toBeTruthy();
   });
+
+  it('outputEdited:true + formattedOutput rỗng → chạy không force xoá cờ', async () => {
+    const wf = createEmptyWorkflow('ws');
+    wf.nodes = [
+      node('p1', 'prompt', {
+        preset: 'custom',
+        instruction: 'mô tả cảnh',
+        outputEdited: true,
+        formattedOutput: '',
+        reusePrompt: true,
+        forwardRefs: true,
+      }),
+    ];
+    await workflowRepo.save(wf);
+
+    const router = {
+      execute: async () => {
+        throw new Error('prompt custom không gọi driver');
+      },
+    } as unknown as ProviderRouter;
+
+    let finish!: () => void;
+    const done = new Promise<void>((r) => (finish = r));
+    const manager = new RunManager(router, (ev: SwToUiEvent) => {
+      if (ev.type === 'run.done') finish();
+    });
+    await manager.runWorkflow(wf.id, { mode: 'node', fromNodeId: 'p1' });
+    await done;
+
+    const saved = await workflowRepo.get(wf.id);
+    const data = saved!.nodes.find((n) => n.id === 'p1')!.data as {
+      outputEdited?: boolean;
+      formattedOutput?: string;
+    };
+    expect(data.outputEdited).toBe(false);
+    expect(data.formattedOutput?.trim()).toBeTruthy();
+  });
 });

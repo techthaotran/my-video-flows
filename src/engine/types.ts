@@ -1,3 +1,4 @@
+import type { FashionRefRole } from '@/engine/presets/fashion';
 import type { Workflow, WorkflowNode } from '@/shared/schema';
 import type { DriverResult } from '@/shared/messaging';
 
@@ -28,6 +29,14 @@ export interface NodeOutputValue {
    * the generator, `continuation` = previous clip the next scene continues from.
    */
   role?: 'prompt' | 'ref' | 'continuation';
+  /** Prompt reuse fingerprint - RunManager patches it onto the node with formattedOutput. */
+  reuseHash?: string;
+  /** SHA-256 of blob content (filled once per run so reuseHash can reuse it). */
+  contentHash?: string;
+  /** Ảnh đi qua node phân tích thời trang nào (scene/model/outfit) - để Ghép prompt gán vai trò. Chỉ runtime. */
+  fashionRole?: FashionRefRole;
+  /** Prompt text is the hand-edited `formattedOutput` (RunManager keeps `outputEdited`). */
+  outputEdited?: boolean;
 }
 
 export interface ExecutorContext {
@@ -36,6 +45,16 @@ export interface ExecutorContext {
   node: WorkflowNode;
   inputs: Record<string, NodeOutputValue[]>; // handle -> values
   signal: AbortSignal;
+  /**
+   * Mode `node` + `force`: bỏ qua dùng lại prompt / kết quả sửa tay (Phân tích lại).
+   * Chỉ bật trên đúng node đích.
+   */
+  force?: boolean;
+  /**
+   * Chạy "Chỉ node này": node Prompt phía trước trả lại prompt đã lưu (`formattedOutput`),
+   * không gọi lại Gemini. Chưa có prompt đã lưu thì chạy bình thường.
+   */
+  reuseSavedPrompt?: boolean;
   onProgress: (progress: number, message?: string) => void;
   resolveSlug: (slug: string) => NodeOutputValue | undefined;
   getAsset: (assetId: string) => Promise<Blob | undefined>;
@@ -44,12 +63,19 @@ export interface ExecutorContext {
   putAsset: (blob: Blob, name: string) => Promise<string>;
   /** Merge into this node's saved data and push the change to the open editor. */
   patchNodeData: (data: Record<string, unknown>) => Promise<void>;
+  /** Merge into another node's data (vd. Asset `uploaded*` sau generate). */
+  patchNodeById: (nodeId: string, data: Record<string, unknown>) => Promise<void>;
   /** JPEG of a clip's final frame (decoded in the offscreen document). */
   extractLastFrame: (video: Blob) => Promise<Blob>;
   /** Ghép clip + audio + logo thành một mp4 (encode trong offscreen document). */
   composeVideo: (
     job: Omit<import('@/media/composeClient').ComposeVideoJob, 'workflowId'>,
   ) => Promise<Blob>;
+  /**
+   * Run-scoped downloads of Flow media (by `flowMediaId`) for Gemini, so each
+   * media is fetched at most once per run. Download only - never re-uploaded.
+   */
+  flowMediaCache: Map<string, Promise<Blob>>;
   callDriver: (
     provider: 'flow' | 'gemini',
     action: import('@/shared/messaging').DriverAction,

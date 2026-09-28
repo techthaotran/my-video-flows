@@ -7,6 +7,8 @@ export const BATCH_PATH = '/_/AiSandboxAngularFrontend/data/batchexecute';
 export const MEDIA_HOST = 'flow-content.google';
 
 export const RPC_GEN_IMAGE = 'ogiZ0b';
+/** Upscale/download 2K JPEG after a successful ogiZ0b (Phase 0 capture 2026-09-26). */
+export const RPC_GEN_IMAGE_2K = 'SPrCad';
 export const RPC_GEN_VIDEO = 'eb1hJf';
 export const RPC_OPERATION = 'jwpduf';
 export const RPC_PROJECT_MEDIA = 'Zzl0ze';
@@ -452,6 +454,15 @@ export function imageRequest(opts: {
   ]);
 }
 
+/** 2K upscale/download (`SPrCad`) - mode slot `1` = 2K; context uses SURFACE_ID 22. */
+export function image2kRequest(opts: { sourceMediaId: string; projectId: string }): string {
+  return buildEnvelope(RPC_GEN_IMAGE_2K, [
+    opts.sourceMediaId,
+    1,
+    context(opts.projectId),
+  ]);
+}
+
 export function videoRequest(opts: {
   prompt: string;
   projectId: string;
@@ -774,6 +785,20 @@ export function readImages(payload: unknown): GeneratedImage[] {
   // Signed result urls (`?sig=…`) before bare addresses echoed from the prompt.
   images.sort((a, b) => Number(b.url.includes('?')) - Number(a.url.includes('?')));
   return images;
+}
+
+/**
+ * JPEG base64 inline in an SPrCad wrb.fr payload (no data: prefix required).
+ * Prefers the longest `/9j/` candidate so tiny echoed fragments are ignored.
+ */
+export function readImageBase64(payload: unknown): string | null {
+  let best: string | null = null;
+  for (const text of walkStrings(payload)) {
+    const raw = text.includes('base64,') ? text.slice(text.indexOf('base64,') + 7) : text;
+    if (!raw.startsWith('/9j/') || raw.length < 500) continue;
+    if (!best || raw.length > best.length) best = raw;
+  }
+  return best;
 }
 
 export interface ProjectMediaEntry {

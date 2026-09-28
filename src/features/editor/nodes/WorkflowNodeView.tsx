@@ -4,6 +4,7 @@ import type { FlowNode } from '@/features/editor/store';
 import { getNodePorts } from '@/nodes/registry';
 import { PORT_COLORS, PORT_ICONS } from '@/nodes/ports';
 import { strings } from '@/shared/strings';
+import { defaultPromptSystem } from '@/engine/presets/system';
 import { cn } from '@/shared/utils';
 import { useEditorStore } from '@/features/editor/store';
 import {
@@ -15,7 +16,7 @@ import {
 import { assetRepo } from '@/storage/repos/assetRepo';
 import { MEDIA_ACCEPT, localAssetPatch, mediaKindOf } from '@/shared/media';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
-import { ImagePlus, Clapperboard, Square } from 'lucide-react';
+import { ImagePlus, Clapperboard, Square, Copy, Check } from 'lucide-react';
 import { FlowAssetPicker } from '@/features/editor/FlowAssetPicker';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,7 +50,11 @@ function useIncomingItems(nodeId: string): IncomingItem[] {
   return useMemo(() => resolveIncomingItems(nodeId, nodes, edges), [edges, nodes, nodeId]);
 }
 
-async function runWorkflowNode(nodeId: string, mode: 'node' | 'only' | 'full' = 'node') {
+export async function runWorkflowNode(
+  nodeId: string,
+  mode: 'node' | 'only' | 'full' = 'node',
+  opts?: { force?: boolean },
+) {
   const state = useEditorStore.getState();
   const wfId = state.workflowId;
   if (!wfId) return;
@@ -80,6 +85,7 @@ async function runWorkflowNode(nodeId: string, mode: 'node' | 'only' | 'full' = 
     workflowId: wfId,
     mode,
     fromNodeId: mode === 'full' ? undefined : nodeId,
+    force: opts?.force || undefined,
   });
   if (res.ok && res.data?.runId) state.setActiveRun(res.data.runId, true);
 }
@@ -154,7 +160,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
         ))}
 
         {data.nodeType === 'asset' && (
-          <AssetBody data={data.data} onChange={(d) => updateNodeData(id, d)} />
+          <AssetBody nodeId={id} data={data.data} onChange={(d) => updateNodeData(id, d)} />
         )}
         {data.nodeType === 'text' && (
           <textarea
@@ -169,6 +175,10 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             nodeId={id}
             instruction={(data.data.instruction as string) ?? ''}
             onChange={(instruction) => updateNodeData(id, { instruction })}
+            outputEditable={!!defaultPromptSystem((data.data.preset as string) ?? 'custom')}
+            onOutputChange={(formattedOutput) =>
+              updateNodeData(id, { formattedOutput, outputEdited: true })
+            }
             items={incoming}
             hasInputs={hasInputs}
           />
@@ -185,6 +195,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             hasInputs={hasInputs}
             onPromptChange={(prompt) => updateNodeData(id, { prompt })}
             onGenerate={() => void runWorkflowNode(id, 'node')}
+            onGenerateOnly={() => void runWorkflowNode(id, 'only')}
             onStop={() => void stopWorkflow()}
           />
         )}
@@ -256,7 +267,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
         {data.nodeType === 'generateImage' && (
           <span className="truncate">
             {(data.data.model as string) || 'image'} · {(data.data.aspectRatio as string) || '9:16'} ·{' '}
-            {String(data.data.resolution ?? 720)}p
+            {String(data.data.resolution ?? '1K')}
           </span>
         )}
         {data.nodeType === 'generateVideo' && (
@@ -272,11 +283,27 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
         )}
         {data.nodeType === 'prompt' && (
           <span className="truncate">
-            Output · {((data.data.formattedOutput as string) ?? (data.data.instruction as string) ?? '').length}{' '}
-            ký tự
+            {strings.promptOutputChars(
+              ((data.data.formattedOutput as string) ?? (data.data.instruction as string) ?? '').length,
+            )}
+            {data.data.outputEdited === true && (
+              <span className="ml-1.5 text-amber-600">{strings.promptEdited}</span>
+            )}
+            {!data.data.outputEdited &&
+              (data.statusMessage === strings.promptReused ||
+                data.statusMessage === strings.promptFresh ||
+                data.statusMessage === strings.promptEdited) && (
+                <span className="ml-1.5 text-primary">{data.statusMessage}</span>
+              )}
           </span>
         )}
-        {data.status && <span className="ml-2 shrink-0">{data.status}</span>}
+        {data.status === 'running' && data.statusMessage ? (
+          <span className="ml-2 text-amber-600" title={data.statusMessage}>
+            {data.statusMessage}
+          </span>
+        ) : (
+          data.status && <span className="ml-2 shrink-0">{data.status}</span>
+        )}
       </div>
     </div>
   );
@@ -348,10 +375,15 @@ function PromptBody({
   onChange,
   items,
   hasInputs,
+  outputEditable,
+  onOutputChange,
 }: {
   nodeId: string;
   instruction: string;
   onChange: (v: string) => void;
+  /** Preset gọi Gemini: Output là kết quả phân tích, sửa tay được. */
+  outputEditable: boolean;
+  onOutputChange: (v: string) => void;
   items: IncomingItem[];
   hasInputs: boolean;
 }) {
@@ -399,10 +431,11 @@ function PromptBody({
       <div className="space-y-1">
         <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Output</div>
         <textarea
-          readOnly
+          readOnly={!outputEditable}
           className={cn(NODE_TEXTAREA_CLASS, 'border-primary/25 bg-primary/5 font-mono text-[11px]')}
           value={output}
-          placeholder="Instruction + prompt phía trước; [Label] + mô tả · mediaId {uuid}"
+          onChange={(e) => onOutputChange(e.target.value)}
+          placeholder={outputEditable ? strings.promptOutputNotAnalyzed : strings.promptOutputPreviewHint}
         />
       </div>
     </div>
@@ -410,9 +443,11 @@ function PromptBody({
 }
 
 function AssetBody({
+  nodeId,
   data,
   onChange,
 }: {
+  nodeId: string;
   data: Record<string, unknown>;
   onChange: (d: Record<string, unknown>) => void;
 }) {
@@ -422,6 +457,8 @@ function AssetBody({
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [previewBroken, setPreviewBroken] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     let revoked: string | null = null;
@@ -444,6 +481,11 @@ function AssetBody({
 
   useEffect(() => setPreviewBroken(false), [data.flowPreviewUrl]);
 
+  // Runtime / SW có thể gắn uploaded* sau khi local state đã ở 'error' - ưu tiên data.
+  useEffect(() => {
+    if (data.uploadedMediaId) setUploadStatus('idle');
+  }, [data.uploadedMediaId]);
+
   const previewUrl = flowMediaId
     ? previewBroken
       ? null
@@ -451,6 +493,32 @@ function AssetBody({
     : localUrl;
   const flowWithoutId = !flowMediaId && data.source === 'flow';
   const hasAsset = !!flowMediaId || (!flowWithoutId && !!data.assetId && !data.missing);
+  const uploadedOnFlow = !!(data.uploadedMediaId as string | undefined);
+
+  const uploadLocalToFlow = async () => {
+    const wfId = useEditorStore.getState().workflowId;
+    if (!wfId) return;
+    setUploadStatus('uploading');
+    setUploadError(null);
+    // SW đọc node từ IndexedDB - lưu bản đang sửa trước, nếu không nó thấy ảnh cũ/không có ảnh.
+    await saveEditorIfDirty();
+    const res = await sendToSw<{
+      uploadedMediaId: string;
+      uploadedProjectId: string;
+      uploadedSha256: string;
+    }>({
+      type: 'asset.uploadToFlow',
+      workflowId: wfId,
+      nodeId,
+    });
+    if (res.ok && res.data) {
+      onChange({ ...res.data });
+      setUploadStatus('idle');
+      return;
+    }
+    setUploadError(res.ok ? null : res.error);
+    setUploadStatus('error');
+  };
 
   const applyLocalFile = async (file: File) => {
     // `file.type` rỗng hoặc lạ (hay gặp với .mp3) thì đuôi file quyết định —
@@ -469,6 +537,11 @@ function AssetBody({
         ? { assetLabel: AUDIO_ASSET_LABEL }
         : {}),
     });
+    if (nextKind === 'image') {
+      await uploadLocalToFlow();
+    } else {
+      setUploadStatus('idle');
+    }
   };
 
   const localPicker = (className: string, text: string) => (
@@ -533,6 +606,32 @@ function AssetBody({
           url={localUrl}
         />
       )}
+      {hasAsset && !flowMediaId && kind === 'image' && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {uploadStatus === 'uploading' && (
+            <span className="text-muted-foreground">{strings.assetUploading}</span>
+          )}
+          {uploadStatus !== 'uploading' && uploadedOnFlow && (
+            <span className="text-emerald-600">{strings.assetUploaded}</span>
+          )}
+          {uploadStatus === 'error' && !uploadedOnFlow && (
+            <>
+              <span className="w-full text-destructive">
+                {strings.assetUploadError(uploadError)}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => void uploadLocalToFlow()}
+              >
+                {strings.assetUploadRetry}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       {!hasAsset && (
         <div className="rounded border border-dashed border-border py-2 text-center text-[11px] text-muted-foreground">
           {flowWithoutId
@@ -577,7 +676,11 @@ function AssetBody({
             missing: false,
             assetId: undefined,
             mime: undefined,
+            uploadedMediaId: undefined,
+            uploadedProjectId: undefined,
+            uploadedSha256: undefined,
           });
+          setUploadStatus('idle');
         }}
       />
     </div>
@@ -650,6 +753,8 @@ function LocalAssetInfo({
   );
 }
 
+const COPY_FEEDBACK_MS = 1500;
+
 function GeneratePreview({
   nodeId,
   kind,
@@ -686,6 +791,17 @@ function GeneratePreview({
   const storedPrompt = String(data.prompt ?? '');
   const incomingPrompt = summary.texts.join('\n\n');
   const promptValue = storedPrompt || incomingPrompt;
+  const [copied, setCopied] = useState(false);
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(promptValue);
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    } catch {
+      setCopied(false);
+    }
+  };
 
 
   return (
@@ -714,7 +830,9 @@ function GeneratePreview({
       />
       <div className="truncate text-[10px] text-muted-foreground">
         {(data.aspectRatio as string) ?? '9:16'} · {String(data.count ?? 1)} ·{' '}
-        {String(data.resolution ?? 720)}p
+        {kind === 'image'
+          ? String(data.resolution ?? '1K')
+          : `${String(data.resolution ?? 720)}p`}
         {kind === 'video' ? ` · ${String(data.durationSec ?? 4)}s` : ''}
       </div>
       <div className="flex gap-1.5">
@@ -745,6 +863,23 @@ function GeneratePreview({
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{strings.generateOnlyThisNode}</span>
+          </Button>
+        )}
+        {!running && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1.5"
+            title={strings.copyPromptHint}
+            disabled={!promptValue.trim()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void copyPrompt();
+            }}
+          >
+            {copied ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate">{copied ? strings.copyPromptDone : strings.copyPrompt}</span>
           </Button>
         )}
         {running && (
@@ -786,3 +921,18 @@ export const NoteNodeView = memo(function NoteNodeView({ id, data, selected }: N
     </div>
   );
 });
+
+/** Lưu workflow đang sửa vào IndexedDB để SW đọc đúng node. */
+async function saveEditorIfDirty(): Promise<void> {
+  const state = useEditorStore.getState();
+  if (!state.dirty || !state.workflowId) return;
+  const partial = state.toWorkflow();
+  if (!partial) return;
+  const existing = await workflowRepo.get(state.workflowId);
+  await workflowRepo.save({
+    ...partial,
+    workspaceId: existing?.workspaceId ?? partial.workspaceId,
+    createdAt: existing?.createdAt ?? partial.createdAt,
+  });
+  state.markSaved();
+}

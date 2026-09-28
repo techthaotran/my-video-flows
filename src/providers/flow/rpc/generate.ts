@@ -3,7 +3,7 @@
  * Runs in the service worker — uses chrome.scripting + captcha bridge.
  */
 
-import type { DriverResult, FlowGeneratePayload } from '@/shared/messaging';
+import type { DriverResult, FlowGeneratePayload, FlowUploadRef } from '@/shared/messaging';
 import {
   annotateAssetLabels,
   ensureCharacterAiOriginNote,
@@ -16,6 +16,7 @@ import {
   FLOW_VIDEO_WIRE_MODEL_STORAGE_KEY,
   OMNI_MAX_REFS,
   RPC_GEN_IMAGE,
+  RPC_GEN_IMAGE_2K,
   RPC_GEN_VIDEO,
   RPC_GEN_VIDEO_REFS,
   RPC_GEN_VIDEO_TEXT,
@@ -29,6 +30,7 @@ import {
   firstPayload,
   findMediaId,
   findMediaIdInText,
+  image2kRequest,
   imageRequest,
   isOmniFlashModel,
   mediaRequest,
@@ -36,6 +38,7 @@ import {
   omniTextVideoModel,
   operationRequest,
   projectMediaRequest,
+  readImageBase64,
   readImages,
   readMediaUrls,
   readOperation,
@@ -188,7 +191,7 @@ function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'vide
     const unique = new Set<string>(continuing ? ['continue:last-frame'] : []);
     for (const ref of imageRefs) {
       if (ref.mediaId) unique.add(`id:${ref.mediaId}`);
-      else if (ref.upload) unique.add(`up:${ref.upload.cacheKey}`);
+      else if (ref.upload) unique.add(`up:${ref.upload.nodeId ?? ref.upload.sha256 ?? ref.upload.name}`);
     }
     if (unique.size > OMNI_MAX_REFS) {
       throw driverError('OMNI_TOO_MANY_REFS', strings.omniTooManyRefs(OMNI_MAX_REFS, unique.size));
@@ -276,6 +279,15 @@ function summarizeRpcFailure(text: string, status?: number): string {
     return `${http}: hết quota Flow`;
   }
   return `${http}: ${preview}`;
+}
+
+/**
+ * Flow chặn vì nghi hoạt động bất thường (reCAPTCHA điểm thấp / gửi dồn dập).
+ * Không tự retry: gửi tiếp chỉ làm tài khoản bị chặn lâu hơn.
+ */
+function isUnusualActivity(err: unknown): boolean {
+  const detail = err instanceof RpcError ? JSON.stringify(err.detail) : String(err ?? '');
+  return /PUBLIC_ERROR_UNUSUAL_ACTIVITY/.test(detail);
 }
 
 function isModelAccessDenied(err: unknown, text?: string): boolean {
@@ -422,13 +434,33 @@ async function fetchUrlAsMedia(
   return { kind, mime, dataBase64: bytesToB64(bytes), url };
 }
 
-/** Local uploads already on Flow, keyed by `${projectId}:${cacheKey}` (cacheKey carries the run id). */
-const uploadedMediaIds = new Map<string, string>();
-const MAX_UPLOAD_CACHE = 200;
+/** Id upload đã lưu còn dùng được: cùng project và cùng nội dung file. */
+function storedUploadId(upload: FlowUploadRef, projectId: string): string | undefined {
+  const saved = upload.uploaded;
+  if (!saved || !upload.sha256) return undefined;
+  if (saved.projectId !== projectId || saved.sha256 !== upload.sha256) return undefined;
+  return saved.mediaId;
+}
+
+/** Local file → Flow media id: the stored upload when still valid, else `maseQ` once and remember it. */
+async function localRefMediaId(
+  tabId: number,
+  projectId: string,
+  upload: FlowUploadRef,
+  onProgress: Progress,
+): Promise<string> {
+  const stored = storedUploadId(upload, projectId);
+  if (stored) return stored;
+  const mediaId = await uploadImage(tabId, projectId, upload, onProgress);
+  // Written back on the ref so generateViaRpc can hand the new id to the engine.
+  if (upload.sha256) upload.uploaded = { mediaId, projectId, sha256: upload.sha256 };
+  return mediaId;
+}
 
 /**
  * Turn the node's references into Flow image media ids (ordered, deduped).
- * Assets already on Flow are used by id and never uploaded; local files upload once per run.
+ * Assets already on Flow are used by id and never uploaded; local files reuse the id
+ * stored on their Asset node (same project + sha256) or upload once.
  * Prompt is cleaned of Flow CDN URLs — media ids go only in RPC slots.
  */
 async function resolveRefs(
@@ -448,15 +480,7 @@ async function resolveRefs(
     let source: OrderedRef['source'] = 'flow';
     if (!mediaId && ref.upload) {
       source = 'upload';
-      const key = `${projectId}:${ref.upload.cacheKey}`;
-      mediaId = uploadedMediaIds.get(key);
-      if (!mediaId) {
-        mediaId = await uploadImage(tabId, projectId, ref.upload, onProgress);
-        uploadedMediaIds.set(key, mediaId);
-        if (uploadedMediaIds.size > MAX_UPLOAD_CACHE) {
-          uploadedMediaIds.delete(uploadedMediaIds.keys().next().value!);
-        }
-      }
+      mediaId = await localRefMediaId(tabId, projectId, ref.upload, onProgress);
     }
     if (!mediaId) continue;
     if (seen.has(mediaId)) continue;
@@ -516,6 +540,7 @@ async function generateImageRpc(
       model,
       aspect: payload.aspectRatio,
       count: 1,
+      resolution: payload.resolution ?? '1K',
       prompt,
       refs: toSubmitRefs(orderedRefs),
     });
@@ -555,13 +580,29 @@ async function generateImageRpc(
     return r.status === 'fulfilled' ? [r.value] : [];
   });
   if (!images.length) {
-    throw (results.get(0) as PromiseRejectedResult).reason;
+    const reason = (results.get(0) as PromiseRejectedResult).reason;
+    if (isUnusualActivity(reason)) throw driverError('CAPTCHA_FAILED', strings.flowUnusualActivity);
+    throw reason;
   }
 
-  onProgress(85, 'Tải ảnh…');
+  onProgress(85, payload.resolution === '2K' ? strings.flowFetchingImage2k : strings.flowFetchingImage);
   const medias: DriverResult['medias'] = [];
   for (const img of images) {
     if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    if (payload.resolution === '2K') {
+      try {
+        medias.push({
+          kind: 'image',
+          mime: 'image/jpeg',
+          dataBase64: await fetchImage2k(tabId, projectId, img.mediaId, signal),
+          mediaId: img.mediaId,
+        });
+        continue;
+      } catch (err) {
+        log.warn('SPrCad 2K thất bại', { mediaId: img.mediaId, err });
+        throw err;
+      }
+    }
     try {
       medias.push({ ...(await fetchUrlAsMedia(img.url, 'image')), mediaId: img.mediaId });
     } catch {
@@ -570,6 +611,28 @@ async function generateImageRpc(
   }
   onProgress(100, 'Xong');
   return { medias };
+}
+
+/** After ogiZ0b: SPrCad returns inline JPEG base64 (2K). Captcha action = IMAGE_GENERATION. */
+async function fetchImage2k(
+  tabId: number,
+  projectId: string,
+  sourceMediaId: string,
+  signal: AbortSignal,
+): Promise<string> {
+  if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+  const freq = image2kRequest({ sourceMediaId, projectId });
+  logPayload({
+    rpcid: RPC_GEN_IMAGE_2K,
+    freq,
+    resolution: '2K',
+    prompt: '',
+    refs: [{ kind: 'image', source: 'flow', mediaId: sourceMediaId }],
+  });
+  const { text } = await rpcPayload(tabId, RPC_GEN_IMAGE_2K, freq, CAPTCHA_IMAGE);
+  const b64 = readImageBase64(firstPayload(text, RPC_GEN_IMAGE_2K));
+  if (!b64) throw driverError('UNKNOWN', strings.flowImage2kEmpty);
+  return b64;
 }
 
 async function resolveMediaIdForOperation(
@@ -1478,17 +1541,82 @@ export async function generateViaRpc(
   // Keep SW alive during long polls via content-script port
   chrome.tabs.sendMessage(alive, { type: 'driver.rpcKeepalive', start: true }).catch(() => undefined);
 
+  const uploadRefs = (payload.refs ?? []).flatMap((r) => (r.upload ? [r.upload] : []));
+  const storedBefore = uploadRefs.map((u) => u.uploaded?.mediaId);
+  const imageMode = isImageMode(payload.mode);
+  const generate = () =>
+    imageMode
+      ? generateImageRpc(alive, projectId, payload, onProgress, signal)
+      : generateVideoRpc(alive, projectId, payload, onProgress, signal);
+
   try {
-    if (isImageMode(payload.mode)) {
-      return await generateImageRpc(alive, projectId, payload, onProgress, signal);
-    }
-    return await generateVideoRpc(alive, projectId, payload, onProgress, signal);
+    // Chỉ ảnh: "Media not found" trên id upload đã lưu → upload lại 1 lần.
+    // Video (poll / frame / render) cũng có thể báo Media not found - không gói thành flowUploadedMediaGone.
+    const result = imageMode
+      ? await generateWithStaleUploadRetry(generate, uploadRefs, projectId)
+      : await generate();
+    const uploads = freshUploads(uploadRefs, storedBefore);
+    return uploads.length ? { ...result, uploads } : result;
   } finally {
     log = baseLog;
     chrome.tabs
       .sendMessage(alive, { type: 'driver.rpcKeepalive', start: false })
       .catch(() => undefined);
   }
+}
+
+/**
+ * A stored upload id Flow no longer knows ("Media not found"): upload again once from
+ * the local file and generate again. A second miss is reported, never retried.
+ */
+async function generateWithStaleUploadRetry(
+  generate: () => Promise<DriverResult>,
+  uploadRefs: FlowUploadRef[],
+  projectId: string,
+): Promise<DriverResult> {
+  const stale = uploadRefs.filter((u) => storedUploadId(u, projectId));
+  try {
+    return await generate();
+  } catch (e) {
+    if (!stale.length || !isMediaNotFoundError(e)) throw e;
+    log.warn('Id upload đã lưu không còn trên Flow - upload lại từ file gốc', {
+      count: stale.length,
+    });
+    for (const u of stale) u.uploaded = undefined;
+    try {
+      return await generate();
+    } catch (again) {
+      if (!isMediaNotFoundError(again)) throw again;
+      throw driverError('UPLOAD_FAILED', strings.flowUploadedMediaGone(mediaNotFoundDetail(again)));
+    }
+  }
+}
+
+/** Uploads made during this generate that belong to an Asset node (engine persists them). */
+function freshUploads(
+  uploadRefs: FlowUploadRef[],
+  storedBefore: (string | undefined)[],
+): NonNullable<DriverResult['uploads']> {
+  return uploadRefs.flatMap((u, i) =>
+    u.nodeId && u.uploaded && u.uploaded.mediaId !== storedBefore[i]
+      ? [{ nodeId: u.nodeId, ...u.uploaded }]
+      : [],
+  );
+}
+
+/**
+ * Upload one local image to the open Flow project (`maseQ`) - used when the user picks
+ * a file, so runs reuse the id instead of uploading again.
+ */
+export async function uploadImageViaRpc(
+  tabId: number,
+  img: { name: string; mime: string; dataBase64: string },
+): Promise<{ mediaId: string; projectId: string }> {
+  const alive = await reviveTabIfNeeded(tabId);
+  if (alive == null) throw driverError('TAB_LOST', strings.flowUploadNoTab);
+  const projectId = await resolveFlowProjectId(alive);
+  const mediaId = await uploadImage(alive, projectId, img, () => undefined);
+  return { mediaId, projectId };
 }
 
 function sleep(ms: number, signal?: AbortSignal) {

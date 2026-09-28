@@ -30,15 +30,15 @@ import {
   TerminalSquare,
 } from 'lucide-react';
 import { useEditorStore, type FlowNode } from '@/features/editor/store';
-import { WorkflowNodeView, NoteNodeView } from '@/features/editor/nodes/WorkflowNodeView';
+import { WorkflowNodeView, NoteNodeView, runWorkflowNode } from '@/features/editor/nodes/WorkflowNodeView';
 import { WorkflowEdge } from '@/features/editor/edges/WorkflowEdge';
 import { NodePicker } from '@/features/editor/NodePicker';
 import { listToolbarNodes, getNodePorts } from '@/nodes/registry';
 import { resolveDropConnection } from '@/nodes/ports';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
-import { exportWorkflows, parseImportFile, remapInsertNodes } from '@/storage/transfer';
+import { exportWorkflows, parseImportFile, remapInsertNodes, ingestPreviewAssets, remapMediaAssets } from '@/storage/transfer';
 import { chromeDownload, debounce, cn } from '@/shared/utils';
-import { strings } from '@/shared/strings';
+import { strings, promptPresetLabel } from '@/shared/strings';
 import { connectRunEvents, sendToSw } from '@/shared/messaging';
 import { ingestLog, clearLogs, getLogs, subscribeLogs } from '@/shared/log';
 import { DebugConsole } from '@/features/editor/DebugConsole';
@@ -55,6 +55,8 @@ import {
   ASSET_LABELS,
   ASPECT_RATIOS,
   IMAGE_MODELS,
+  IMAGE_RESOLUTIONS,
+  PROMPT_PRESETS,
   VIDEO_MODELS,
   VIDEO_DURATIONS,
   DEFAULT_IMAGE_MODEL,
@@ -62,6 +64,7 @@ import {
   normalizeModelLabel,
   RESOLUTIONS,
   defaultKindForLabel,
+  migrateWorkflow,
 } from '@/shared/schema';
 import {
   computePromptPreview,
@@ -69,6 +72,7 @@ import {
   isMediaCapableNode,
 } from '@/features/editor/incomingInputs';
 import { IncomingInputsDetail } from '@/features/editor/IncomingAssets';
+import { defaultPromptSystem } from '@/engine/presets/system';
 
 const nodeTypes = {
   workflow: WorkflowNodeView,
@@ -764,7 +768,8 @@ function EditorInner() {
               onClick={() => {
                 const draft = (window as unknown as { __draft?: { workflow: import('@/shared/schema').Workflow } })
                   .__draft;
-                if (draft) store.loadWorkflow(draft.workflow);
+                // Draft cũ có thể còn resolution số / thiếu reusePrompt - migrate trước load.
+                if (draft) store.loadWorkflow(migrateWorkflow(draft.workflow));
                 setDraftOpen(false);
               }}
             >
@@ -811,10 +816,12 @@ function EditorInner() {
                 const preview = await parseImportFile(dropChoice.file);
                 const item = preview.items[0];
                 if (!item) return;
+                const hashToAssetId = await ingestPreviewAssets(preview);
+                const withLocalAssets = remapMediaAssets(item.workflow, hashToAssetId);
                 const existingSlugs = new Set(
                   store.nodes.map((n) => n.data.slug).filter(Boolean) as string[],
                 );
-                const { nodes, edges } = remapInsertNodes(item.workflow, existingSlugs);
+                const { nodes, edges } = remapInsertNodes(withLocalAssets, existingSlugs);
                 const offset = dropChoice.position;
                 for (const n of nodes) {
                   useEditorStore.setState((s) => ({
@@ -940,17 +947,69 @@ function Inspector({ node }: { node: FlowNode }) {
           <SelectField
             label="Preset"
             value={(d.preset as string) ?? 'custom'}
-            options={[
-              'custom',
-              'enhance',
-              'analyzeImage',
-              'script',
-              'summarize',
-              'translate',
-              'brainstorm',
-            ]}
-            onChange={(v) => update(node.id, { preset: v })}
+            options={[...PROMPT_PRESETS]}
+            optionLabel={promptPresetLabel}
+            onChange={(v) =>
+              update(node.id, {
+                preset: v,
+                // Đổi preset → skill trở lại mặc định (xoá ghi đè).
+                systemPrompt: undefined,
+              })
+            }
           />
+          {(d.preset as string) !== 'fashionCompose' && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch
+                checked={d.reusePrompt !== false}
+                onCheckedChange={(v) => update(node.id, { reusePrompt: v })}
+              />
+              {strings.reusePrompt}
+            </label>
+          )}
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch
+              checked={d.forwardRefs !== false}
+              onCheckedChange={(v) => update(node.id, { forwardRefs: v })}
+            />
+            {strings.forwardRefs}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const hasResult = !!(d.formattedOutput as string | undefined)?.trim();
+                void runWorkflowNode(node.id, 'node', { force: hasResult });
+              }}
+            >
+              {(d.formattedOutput as string | undefined)?.trim()
+                ? strings.promptReanalyze
+                : strings.promptAnalyze}
+            </Button>
+          </div>
+          {(d.preset as string) !== 'custom' && (d.preset as string) !== 'fashionCompose' && (
+            <label className="block space-y-1">
+              <span className="flex items-center justify-between gap-2 text-muted-foreground">
+                <span>{strings.promptSkill}</span>
+                <button
+                  type="button"
+                  className="text-[11px] text-primary hover:underline"
+                  onClick={() => update(node.id, { systemPrompt: undefined })}
+                >
+                  {strings.promptSkillReset}
+                </button>
+              </span>
+              <textarea
+                className="h-[160px] w-full max-w-[500px] resize-y rounded border border-input bg-background px-2 py-1 text-sm"
+                value={
+                  (d.systemPrompt as string | undefined) ??
+                  defaultPromptSystem((d.preset as string) ?? 'custom')
+                }
+                onChange={(e) => update(node.id, { systemPrompt: e.target.value })}
+              />
+            </label>
+          )}
           <label className="block space-y-1">
             <span className="text-muted-foreground">Instruction</span>
             <textarea
@@ -961,12 +1020,19 @@ function Inspector({ node }: { node: FlowNode }) {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-muted-foreground">Output</span>
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <span>{strings.promptResult}</span>
+              {d.outputEdited === true && (
+                <span className="text-[11px] text-amber-600">{strings.promptEdited}</span>
+              )}
+            </span>
             <textarea
-              readOnly
-              className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-muted/40 px-2 py-1 font-mono text-xs leading-relaxed"
-              value={promptOutput}
-              placeholder="Instruction + prompt nối từ các node Prompt phía trước; [Label] giữ nguyên, chú thích URL ở cuối"
+              className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-background px-2 py-1 font-mono text-xs leading-relaxed"
+              value={(d.formattedOutput as string) ?? ''}
+              onChange={(e) =>
+                update(node.id, { formattedOutput: e.target.value, outputEdited: true })
+              }
+              placeholder={promptOutput || strings.promptResultEmpty}
             />
           </label>
         </>
@@ -1002,10 +1068,10 @@ function Inspector({ node }: { node: FlowNode }) {
             onChange={(v) => update(node.id, { count: Number(v) })}
           />
           <SelectField
-            label={strings.resolution}
-            value={String(d.resolution ?? 720)}
-            options={RESOLUTIONS.map(String)}
-            onChange={(v) => update(node.id, { resolution: Number(v) })}
+            label={strings.imageResolution}
+            value={String(d.resolution ?? '1K')}
+            options={[...IMAGE_RESOLUTIONS]}
+            onChange={(v) => update(node.id, { resolution: v })}
           />
         </>
       )}
@@ -1082,6 +1148,7 @@ function SelectField(props: {
   label: string;
   value: string;
   options: string[];
+  optionLabel?: (value: string) => string;
   onChange: (v: string) => void;
 }) {
   return (
@@ -1094,7 +1161,7 @@ function SelectField(props: {
       >
         {props.options.map((o) => (
           <option key={o} value={o}>
-            {o}
+            {props.optionLabel?.(o) ?? o}
           </option>
         ))}
       </select>

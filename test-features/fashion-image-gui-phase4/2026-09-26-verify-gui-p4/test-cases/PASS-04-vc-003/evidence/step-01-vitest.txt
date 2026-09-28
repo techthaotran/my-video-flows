@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/workflow-output-stats-label.test.ts (3 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  13:08:50
+   Duration  921ms (transform 50ms, setup 33ms, collect 48ms, tests 2ms, environment 360ms, prepare 170ms)
+

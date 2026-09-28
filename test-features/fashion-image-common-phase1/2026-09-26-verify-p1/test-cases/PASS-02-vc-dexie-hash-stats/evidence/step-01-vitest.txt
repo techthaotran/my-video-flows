@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/output-stats.test.ts (4 tests) 22ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  12:14:02
+   Duration  896ms (transform 55ms, setup 27ms, collect 73ms, tests 22ms, environment 335ms, prepare 198ms)
+

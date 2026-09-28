@@ -5,10 +5,20 @@ import { db } from '@/storage/db';
 import { assetRepo } from '@/storage/repos/assetRepo';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
 import { formatBytes, nanoid, slugifyFilename } from '@/shared/utils';
+import { strings } from '@/shared/strings';
 
-/** Asset nodes backed by a local file. Flow assets are a media id only — nothing to pack or rematch. */
+/** Asset nodes backed by a local file. Flow assets are a media id only - nothing to pack or rematch. */
 function isLocalAssetNode(n: { type: string; data: unknown }): boolean {
   return isAssetNodeType(n.type) && !(n.data as { flowMediaId?: string }).flowMediaId;
+}
+
+function isFlowAssetNode(n: { type: string; data: unknown }): boolean {
+  return isAssetNodeType(n.type) && !!(n.data as { flowMediaId?: string }).flowMediaId;
+}
+
+function nodeSha256(data: unknown): string | undefined {
+  const sha = (data as { sha256?: unknown }).sha256;
+  return typeof sha === 'string' && sha.length > 0 ? sha : undefined;
 }
 
 const APP_VERSION = '0.1.0';
@@ -29,10 +39,18 @@ export interface ExportResult {
   summary: { workflows: number; nodes: number; assets: number; sizeLabel: string };
 }
 
+/** Id upload Flow gắn với tài khoản người xuất - không đi kèm file. */
+const UPLOADED_FIELDS = ['uploadedMediaId', 'uploadedProjectId', 'uploadedSha256'] as const;
+
 function stripRuntime(wf: Workflow): Workflow {
   const clone = structuredClone(wf);
   // Remove deletedAt and ensure stable key order via JSON roundtrip later
   delete clone.deletedAt;
+  for (const n of clone.nodes) {
+    if (!isAssetNodeType(n.type)) continue;
+    const data = n.data as Record<string, unknown>;
+    for (const key of UPLOADED_FIELDS) delete data[key];
+  }
   return clone;
 }
 
@@ -63,21 +81,21 @@ export async function exportWorkflows(opts: ExportOptions): Promise<ExportResult
   }
 
   const assetHashes = new Map<string, { mime: string; size: number; originalName: string; blob: Blob }>();
-  if (includeAssets) {
-    for (const wf of workflows) {
-      for (const n of wf.nodes) {
-        if (isAssetNodeType(n.type)) {
-          const assetId = (n.data as { assetId?: string }).assetId;
-          if (!assetId) continue;
-          const asset = await assetRepo.get(assetId);
-          if (!asset) continue;
-          assetHashes.set(asset.sha256, {
-            mime: asset.mime,
-            size: asset.size,
-            originalName: asset.originalName,
-            blob: asset.blob,
-          });
-        }
+  for (const wf of workflows) {
+    for (const n of wf.nodes) {
+      if (!isLocalAssetNode(n)) continue;
+      const assetId = (n.data as { assetId?: string }).assetId;
+      if (!assetId) continue;
+      const asset = await assetRepo.get(assetId);
+      if (!asset) continue;
+      (n.data as Record<string, unknown>).sha256 = asset.sha256;
+      if (includeAssets) {
+        assetHashes.set(asset.sha256, {
+          mime: asset.mime,
+          size: asset.size,
+          originalName: asset.originalName,
+          blob: asset.blob,
+        });
       }
     }
   }
@@ -154,7 +172,7 @@ export async function exportWorkflows(opts: ExportOptions): Promise<ExportResult
     files[`workflows/${wf.id}.json`] = strToU8(stableStringify(wf));
   }
   for (const [sha, a] of assetHashes) {
-    const buf = new Uint8Array(await a.blob.arrayBuffer());
+    const buf = new Uint8Array(await readAsArrayBuffer(a.blob));
     files[`assets/${sha}${extFromMime(a.mime)}`] = buf;
   }
 
@@ -185,6 +203,19 @@ export async function exportBackup(): Promise<ExportResult> {
     includeOutputs: false,
     format: 'zip',
     kind: 'backup',
+  });
+}
+
+/** Export mọi workflow chưa xoá của một workspace. */
+export async function exportWorkspace(workspaceId: string): Promise<ExportResult> {
+  const workflows = await workflowRepo.list(workspaceId);
+  return exportWorkflows({
+    kind: 'workspace',
+    workspaceIds: [workspaceId],
+    workflowIds: workflows.map((w) => w.id),
+    includeAssets: true,
+    includeOutputs: false,
+    format: 'zip',
   });
 }
 
@@ -260,6 +291,38 @@ async function readAsArrayBuffer(file: Blob): Promise<ArrayBuffer> {
   });
 }
 
+function previewAssetNodes(
+  migrated: Workflow,
+  assetBlobs: Map<string, Blob>,
+  opts?: { jsonNoMedia?: boolean },
+): { nodes: Workflow['nodes']; assetCount: number; warnings: string[] } {
+  const warnings: string[] = [];
+  let assetCount = 0;
+  let jsonLocalMissing = false;
+  const nodes = migrated.nodes.map((n) => {
+    if (isFlowAssetNode(n)) {
+      warnings.push(strings.importFlowAssetMissing(n.label ?? n.id));
+      return n;
+    }
+    if (!isLocalAssetNode(n)) return n;
+
+    if (opts?.jsonNoMedia) {
+      jsonLocalMissing = true;
+      return { ...n, data: { ...n.data, missing: true, assetId: undefined } };
+    }
+
+    const sha = nodeSha256(n.data);
+    if (sha && assetBlobs.has(sha)) {
+      assetCount++;
+      return { ...n, data: { ...n.data, missing: false } };
+    }
+    warnings.push(strings.importAssetMissing(n.label ?? n.id));
+    return { ...n, data: { ...n.data, missing: true, assetId: undefined } };
+  });
+  if (jsonLocalMissing) warnings.push(strings.importAssetMissingJson);
+  return { nodes, assetCount, warnings };
+}
+
 export async function parseImportFile(file: File, limits?: { maxZipMb?: number; maxJsonMb?: number }): Promise<ImportPreview> {
   const maxZip = (limits?.maxZipMb ?? 2048) * 1024 * 1024;
   const maxJson = (limits?.maxJsonMb ?? 20) * 1024 * 1024;
@@ -295,22 +358,16 @@ export async function parseImportFile(file: File, limits?: { maxZipMb?: number; 
     const workflowsData = (raw.workflowsData as unknown[]) ?? [];
     const items: ImportPreviewItem[] = workflowsData.map((w) => {
       const migrated = migrateWorkflow(w);
+      const { nodes, assetCount, warnings } = previewAssetNodes(migrated, new Map(), {
+        jsonNoMedia: true,
+      });
       return {
         id: migrated.id,
         name: migrated.name,
         nodeCount: migrated.nodes.length,
-        assetCount: 0,
-        warnings: migrated.nodes.some((n) => isLocalAssetNode(n))
-          ? ['Thiếu file media (json)']
-          : [],
-        workflow: {
-          ...migrated,
-          nodes: migrated.nodes.map((n) =>
-            isLocalAssetNode(n)
-              ? { ...n, data: { ...n.data, missing: true, assetId: undefined } }
-              : n,
-          ),
-        },
+        assetCount,
+        warnings,
+        workflow: { ...migrated, nodes },
       };
     });
 
@@ -367,32 +424,13 @@ export async function parseImportFile(file: File, limits?: { maxZipMb?: number; 
     const data = unzipped[entry.path];
     if (!data) throw new Error(`Thiếu workflow: ${entry.path}`);
     const migrated = migrateWorkflow(JSON.parse(strFromU8(data)));
-    const warnings: string[] = [];
-    let assetCount = 0;
-    const nodes = migrated.nodes.map((n) => {
-      if (!isLocalAssetNode(n)) return n;
-      const d = n.data as { assetId?: string; sha256?: string };
-      // look up by referencing assets in file via original asset linkage — use sha from companion if present
-      const sha =
-        (n.data as { sha256?: string }).sha256 ??
-        [...assetBlobs.keys()].find(() => false);
-      void d;
-      void sha;
-      // Assets are rematched on commit by scanning; mark missing if no assets at all
-      if (assetBlobs.size === 0 && (n.data as { assetId?: string }).assetId) {
-        warnings.push(`Thiếu media cho node ${n.label ?? n.id}`);
-        return { ...n, data: { ...n.data, missing: true } };
-      }
-      assetCount++;
-      return n;
-    });
-    if (migrated.schemaVersion !== migrated.schemaVersion) warnings.push('Đã migrate schema');
+    const { nodes, assetCount, warnings } = previewAssetNodes(migrated, assetBlobs);
     items.push({
       id: migrated.id,
       name: migrated.name,
       nodeCount: migrated.nodes.length,
       assetCount,
-      warnings: [...new Set(warnings)],
+      warnings,
       workflow: { ...migrated, nodes },
     });
   }
@@ -407,117 +445,118 @@ export async function parseImportFile(file: File, limits?: { maxZipMb?: number; 
 
 export async function commitImport(opts: ImportCommitOptions): Promise<Workflow[]> {
   const { preview, targetWorkspaceId, dupStrategy } = opts;
+  const createWorkspaceFromFile =
+    opts.createWorkspaceFromFile ?? preview.manifest.kind === 'workspace';
   const created: Workflow[] = [];
 
-  await db.transaction('rw', db.workflows, db.workspaces, db.assets, db.workflowRevisions, async () => {
-    let workspaceId = targetWorkspaceId;
+  // Assets trước, ngoài transaction: putFromHash gọi crypto.subtle (await phá Dexie tx).
+  const hashToAssetId = await ingestPreviewAssets(preview);
 
-    if (opts.createWorkspaceFromFile && preview.workspaces[0]) {
-      const now = Date.now();
-      const ws: Workspace = {
-        id: nanoid(),
-        name: preview.workspaces[0].name,
-        isCurrent: false,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await db.workspaces.add(ws);
-      workspaceId = ws.id;
-    }
+  try {
+    await db.transaction('rw', db.workflows, db.workspaces, db.workflowRevisions, async () => {
+      let workspaceId = targetWorkspaceId;
 
-    // Import assets first
-    const hashToAssetId = new Map<string, string>();
-    for (const [sha, blob] of preview.assetBlobs) {
-      const meta = preview.manifest.assets.find((a) => a.sha256 === sha);
-      const rec = await assetRepo.putFromHash(sha, blob, {
-        mime: meta?.mime ?? blob.type,
-        originalName: meta?.originalName ?? sha,
-        workflowId: undefined,
-      });
-      hashToAssetId.set(sha, rec.id);
-    }
-
-    for (const item of preview.items) {
-      const existing = await db.workflows.get(item.id);
-      const nameClash = await db.workflows
-        .where('workspaceId')
-        .equals(workspaceId)
-        .filter((w) => w.name === item.name && !w.deletedAt)
-        .first();
-
-      if (existing || nameClash) {
-        if (dupStrategy === 'skip') continue;
-        if (dupStrategy === 'overwrite' && existing) {
-          // save revision of old
-          await db.workflowRevisions.add({
-            id: nanoid(),
-            workflowId: existing.id,
-            workflow: existing,
-            createdAt: Date.now(),
-          });
-          const updated = remapMediaAssets(
-            { ...item.workflow, id: existing.id, workspaceId, enabled: false, updatedAt: Date.now() },
-            hashToAssetId,
-            preview,
-          );
-          await db.workflows.put(updated);
-          created.push(updated);
-          continue;
-        }
+      if (createWorkspaceFromFile && preview.workspaces[0]) {
+        const now = Date.now();
+        const ws: Workspace = {
+          id: nanoid(),
+          name: preview.workspaces[0].name,
+          isCurrent: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await db.workspaces.add(ws);
+        workspaceId = ws.id;
       }
 
-      // copy (default)
-      const newId = nanoid();
-      let name = item.name;
-      if (nameClash || existing) name = `${item.name} (nhập)`;
-      const wf = remapMediaAssets(
-        {
-          ...item.workflow,
-          id: newId,
-          workspaceId,
-          name,
-          enabled: false,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          deletedAt: undefined,
-        },
-        hashToAssetId,
-        preview,
-      );
-      await db.workflows.add(wf);
-      created.push(wf);
+      for (const item of preview.items) {
+        const existing = await db.workflows.get(item.id);
+        const nameClash = await db.workflows
+          .where('workspaceId')
+          .equals(workspaceId)
+          .filter((w) => w.name === item.name && !w.deletedAt)
+          .first();
+
+        if (existing || nameClash) {
+          if (dupStrategy === 'skip') continue;
+          if (dupStrategy === 'overwrite' && existing) {
+            // save revision of old
+            await db.workflowRevisions.add({
+              id: nanoid(),
+              workflowId: existing.id,
+              workflow: existing,
+              createdAt: Date.now(),
+            });
+            const updated = remapMediaAssets(
+              { ...item.workflow, id: existing.id, workspaceId, enabled: false, updatedAt: Date.now() },
+              hashToAssetId,
+            );
+            await db.workflows.put(updated);
+            created.push(updated);
+            continue;
+          }
+        }
+
+        // copy (default)
+        const newId = nanoid();
+        let name = item.name;
+        if (nameClash || existing) name = `${item.name} ${strings.importSuffix}`;
+        const wf = remapMediaAssets(
+          {
+            ...item.workflow,
+            id: newId,
+            workspaceId,
+            name,
+            enabled: false,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deletedAt: undefined,
+          },
+          hashToAssetId,
+        );
+        await db.workflows.add(wf);
+        created.push(wf);
+      }
+    });
+  } catch (err) {
+    // Best-effort: drop assets ingested above that no workflow references yet.
+    try {
+      await assetRepo.orphanCleanup();
+    } catch {
+      /* ignore cleanup failure */
     }
-  });
+    throw err;
+  }
 
   return created;
 }
 
-function remapMediaAssets(
-  wf: Workflow,
-  hashToAssetId: Map<string, string>,
-  preview: ImportPreview,
-): Workflow {
-  // Match assets: if node has sha256 in data use it; else try single-asset heuristic via manifest order
-  const hashes = [...hashToAssetId.keys()];
-  let hashIdx = 0;
+/** Ghi blob từ preview vào IndexedDB; trả map sha256 → assetId local. */
+export async function ingestPreviewAssets(preview: ImportPreview): Promise<Map<string, string>> {
+  const hashToAssetId = new Map<string, string>();
+  for (const [sha, blob] of preview.assetBlobs) {
+    const meta = preview.manifest.assets.find((a) => a.sha256 === sha);
+    const rec = await assetRepo.putFromHash(sha, blob, {
+      mime: meta?.mime ?? blob.type,
+      originalName: meta?.originalName ?? sha,
+      workflowId: undefined,
+    });
+    hashToAssetId.set(sha, rec.id);
+  }
+  return hashToAssetId;
+}
+
+export function remapMediaAssets(wf: Workflow, hashToAssetId: Map<string, string>): Workflow {
   return {
     ...wf,
     nodes: wf.nodes.map((n) => {
       if (!isLocalAssetNode(n)) return n;
       const data = { ...n.data } as Record<string, unknown>;
-      const sha = typeof data.sha256 === 'string' ? data.sha256 : undefined;
+      const sha = nodeSha256(data);
       if (sha && hashToAssetId.has(sha)) {
         data.assetId = hashToAssetId.get(sha);
         data.missing = false;
-      } else if (hashes[hashIdx] && preview.assetBlobs.size > 0) {
-        // Best-effort: assign next available asset for media nodes that had assets
-        if (data.assetId || data.missing) {
-          data.assetId = hashToAssetId.get(hashes[hashIdx]!);
-          data.sha256 = hashes[hashIdx];
-          data.missing = false;
-          hashIdx++;
-        }
-      } else if (!hashToAssetId.size) {
+      } else {
         data.missing = true;
         data.assetId = undefined;
       }

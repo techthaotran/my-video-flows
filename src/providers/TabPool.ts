@@ -6,9 +6,10 @@ import type {
   DriverError,
   FlowMediaItem,
 } from '@/shared/messaging';
-import { generateViaRpc } from '@/providers/flow/rpc/generate';
+import { generateViaRpc, uploadImageViaRpc } from '@/providers/flow/rpc/generate';
 import { listProjectMediaPage, signFlowMedia, type SignedFlowMedia } from '@/providers/flow/rpc/listing';
 import { createLogger } from '@/shared/log';
+import { strings } from '@/shared/strings';
 
 const log = createLogger('driver');
 
@@ -51,6 +52,22 @@ export class TabPool {
   }
 
   async acquire(provider: 'flow' | 'gemini', opts?: { active?: boolean }): Promise<number> {
+    const open = await this.findOpen(provider, opts);
+    if (open != null) return open;
+
+    // 3) Create new tab
+    const url = provider === 'flow' ? FLOW_URL : GEMINI_URL;
+    const tab = await chrome.tabs.create({ url, active: opts?.active ?? false });
+    if (tab.id == null) throw new Error('Không tạo được tab');
+    this.remember(provider, tab.id);
+    await waitTabComplete(tab.id);
+    // SPA: đợi content script kịp inject
+    await sleep(800);
+    return tab.id;
+  }
+
+  /** Tab provider đang mở (đã theo dõi hoặc của user); không tạo tab mới. */
+  async findOpen(provider: 'flow' | 'gemini', opts?: { active?: boolean }): Promise<number | undefined> {
     const tracked = this.tabs.get(provider) ?? [];
 
     // 1) Tracked tabs still alive
@@ -73,16 +90,7 @@ export class TabPool {
       if (opts?.active) await focusTab(existing[0]);
       return existing[0].id;
     }
-
-    // 3) Create new tab
-    const url = provider === 'flow' ? FLOW_URL : GEMINI_URL;
-    const tab = await chrome.tabs.create({ url, active: opts?.active ?? false });
-    if (tab.id == null) throw new Error('Không tạo được tab');
-    this.remember(provider, tab.id);
-    await waitTabComplete(tab.id);
-    // SPA: đợi content script kịp inject
-    await sleep(800);
-    return tab.id;
+    return undefined;
   }
 
   /** Mở / focus tab provider để user đăng nhập */
@@ -296,6 +304,41 @@ export class ProviderRouter {
     }
   }
 
+  /** Email tài khoản Google của tab provider (không log email). */
+  private async accountEmail(provider: 'flow' | 'gemini', signal: AbortSignal): Promise<string | undefined> {
+    const res = await this.executeInner(provider, { name: 'account' }, signal, () => undefined);
+    const email = (res.raw as { email?: string } | undefined)?.email;
+    return email?.toLowerCase();
+  }
+
+  /**
+   * Gemini phải chạy bằng đúng tài khoản Google đang dùng trên Flow. Khác tài khoản thì
+   * mở lại Gemini với `?authuser=<email Flow>`; vẫn khác thì báo lỗi rõ ràng.
+   * Không có tab Flow hoặc không đọc được email thì giữ nguyên tab Gemini.
+   */
+  private async ensureGeminiAccount(
+    tabId: number,
+    signal: AbortSignal,
+    onProgress: (p: number, message?: string) => void,
+  ): Promise<void> {
+    if (!(await this.pool.findOpen('flow'))) return;
+    const flowEmail = await this.accountEmail('flow', signal);
+    if (!flowEmail) return;
+    const geminiEmail = await this.accountEmail('gemini', signal);
+    if (!geminiEmail || geminiEmail === flowEmail) return;
+
+    onProgress(5, strings.geminiSwitchingAccount);
+    const url = `${GEMINI_URL}?authuser=${encodeURIComponent(flowEmail)}`;
+    await waitTabComplete(tabId, { navigate: () => chrome.tabs.update(tabId, { url }) });
+    await sleep(800);
+    const switched = await this.accountEmail('gemini', signal);
+    if (switched && switched !== flowEmail) {
+      throw Object.assign(new Error(strings.geminiAccountMismatch(switched, flowEmail)), {
+        code: 'AUTH_REQUIRED',
+      });
+    }
+  }
+
   private async executeInner(
     provider: 'flow' | 'gemini',
     action: DriverAction,
@@ -303,6 +346,9 @@ export class ProviderRouter {
     onProgress: (p: number, message?: string) => void,
   ): Promise<DriverResult> {
     const tabId = await this.pool.acquire(provider);
+    if (provider === 'gemini' && action.name !== 'account') {
+      await this.ensureGeminiAccount(tabId, signal, onProgress);
+    }
     log.debug(`${provider}.${action.name} → tab ${tabId}`, 'payload' in action ? redactPayload(action.payload) : undefined);
 
     // Flow generate is batchexecute RPC in the SW (MAIN-world POST + captcha).
@@ -313,6 +359,16 @@ export class ProviderRouter {
         onProgress,
         signal,
       );
+    }
+
+    // Flow media by id: sign the CDN url here (RPC), then let the tab download it.
+    if (provider === 'flow' && action.name === 'fetchMediaById') {
+      const { mediaId } = action.payload;
+      const [signed] = await signFlowMedia(tabId, [mediaId]);
+      if (!signed?.url) {
+        throw Object.assign(new Error(strings.flowMediaSignFailed), { code: 'FLOW_MEDIA_FETCH_FAILED' });
+      }
+      return this.executeInner('flow', { name: 'fetchMedia', payload: { url: signed.url } }, signal, onProgress);
     }
 
     const requestId = crypto.randomUUID();
@@ -457,6 +513,19 @@ export class ProviderRouter {
     }
     log.info(`listFlowMedia trang đầu: ${items.length} asset (listing ${rpcItems.length}, tab ${domItems.length})`);
     return { items, nextPageToken: rpcPage.nextPageToken };
+  }
+
+  /** Upload một ảnh local lên project Flow đang mở; không mở tab mới khi chưa có. */
+  async uploadFlowImage(img: {
+    name: string;
+    mime: string;
+    dataBase64: string;
+  }): Promise<{ mediaId: string; projectId: string }> {
+    const tabId = await this.pool.findOpen('flow');
+    if (tabId == null) {
+      throw Object.assign(new Error(strings.flowUploadNoTab), { code: 'TAB_LOST' });
+    }
+    return uploadImageViaRpc(tabId, img);
   }
 
   /** Signed urls (and settled kind) for one picker page of media ids. */

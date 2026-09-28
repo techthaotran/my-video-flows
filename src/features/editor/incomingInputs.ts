@@ -9,6 +9,8 @@ import {
   type AssetRef,
 } from '@/engine/resolver';
 import { strings } from '@/shared/strings';
+import { composeFashionPrompt, FASHION_REF_ROLE, type FashionRefLabels } from '@/engine/presets/fashion';
+import { defaultPromptSystem } from '@/engine/presets/system';
 
 export type IncomingKind = 'text' | 'image' | 'video' | 'audio' | 'genImage' | 'genVideo' | 'unknown';
 
@@ -173,6 +175,7 @@ export function computePromptPreview(
   const upstream: string[] = [];
   const refs: IncomingItem[] = [];
   let continuation: IncomingItem | undefined;
+  const fashionLabels: FashionRefLabels = {};
   const addRef = (item: IncomingItem) => {
     const key = item.flowMediaId ?? item.assetId ?? item.sourceNodeId;
     if (!refs.some((r) => (r.flowMediaId ?? r.assetId ?? r.sourceNodeId) === key)) refs.push(item);
@@ -187,7 +190,10 @@ export function computePromptPreview(
           ? { text: String(src.data.data.content ?? ''), refs: [], continuation: undefined }
           : computePromptPreview(src.id, nodes, edges, visiting);
       if (up.text.trim()) upstream.push(up.text);
-      up.refs.forEach((r) => addRef({ ...r, origin: 'prompt', id: `via:${src.id}:${r.id}` }));
+      if (src.data.data.forwardRefs !== false) {
+        up.refs.forEach((r) => addRef({ ...r, origin: 'prompt', id: `via:${src.id}:${r.id}` }));
+        collectFashionLabels(fashionLabels, String(src.data.data.preset ?? ''), up.refs);
+      }
       if (up.continuation) continuation = { ...up.continuation, origin: 'prompt' };
       continue;
     }
@@ -205,7 +211,7 @@ export function computePromptPreview(
     node.data.nodeType === 'text'
       ? String(node.data.data.content ?? '')
       : String(node.data.data.instruction ?? '');
-  const text = annotateAssetLabels(composePrompt(upstream, instruction), assetRefs);
+  const text = previewText(node, upstream, instruction, assetRefs, fashionLabels);
   const linked = new Set(
     assetRefs
       .filter((r) => r.flowMediaId)
@@ -215,6 +221,44 @@ export function computePromptPreview(
     (label) => !linked.has(label.trim().toLowerCase().replace(/\s+/g, ' ')),
   );
   return { text, refs, continuation, unresolved };
+}
+
+/** Mirror của executor: ảnh đi qua node phân tích thời trang mang vai trò của preset đó. */
+function collectFashionLabels(labels: FashionRefLabels, preset: string, refs: IncomingItem[]): void {
+  const role = FASHION_REF_ROLE[preset];
+  if (!role) return;
+  for (const ref of refs) {
+    if (!ref.assetLabel) continue;
+    const list = (labels[role] ??= []);
+    if (!list.includes(ref.assetLabel)) list.push(ref.assetLabel);
+  }
+}
+
+/**
+ * Text một node Prompt đưa xuống node sau:
+ * - preset gọi Gemini: kết quả lần chạy gần nhất (`formattedOutput`), chưa chạy thì rỗng;
+ * - `fashionCompose`: ghép ngay từ kết quả phía trước, JSON chưa hợp lệ thì lấy kết quả đã lưu;
+ * - còn lại: instruction + prompt phía trước như executor.
+ */
+function previewText(
+  node: FlowNode,
+  upstream: string[],
+  instruction: string,
+  assetRefs: AssetRef[],
+  fashionLabels: FashionRefLabels,
+): string {
+  const data = node.data.data as { preset?: string; formattedOutput?: string };
+  if (node.data.nodeType === 'prompt' && data.preset === 'fashionCompose') {
+    try {
+      return composeFashionPrompt(upstream, fashionLabels);
+    } catch {
+      return data.formattedOutput ?? '';
+    }
+  }
+  if (node.data.nodeType === 'prompt' && defaultPromptSystem(data.preset ?? 'custom')) {
+    return data.formattedOutput ?? '';
+  }
+  return annotateAssetLabels(composePrompt(upstream, instruction), assetRefs);
 }
 
 /** What a node receives: its own edges, plus what a connected Prompt forwards to a generator. */

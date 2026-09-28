@@ -1,0 +1,28 @@
+{
+  "feature": "fashion-image-gui-phase4",
+  "runId": "2026-09-26-verify-gui-p4",
+  "workflow": "COMPLETE",
+  "overallGate": "PASS",
+  "counts": { "PASS": 9, "NG": 0, "BLOCKED": 0 },
+  "contracts": {
+    "VC-BUILD": "PASS",
+    "VC-001": "PASS",
+    "VC-002": "PASS",
+    "VC-003": "PASS",
+    "VC-004": "PASS",
+    "VC-005": "PASS",
+    "VC-006": "PASS",
+    "VC-007": "PASS",
+    "VC-GUI": "PASS_WITH_LIMITATION_THUMBS_SAMPLE"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "test": "PASS",
+    "testCount": 249,
+    "build": "PASS"
+  },
+  "screenshotPermission": "GRANTED",
+  "playwrightCliGate": "PASSED",
+  "browserContract": "USED",
+  "remediationRequired": false
+}

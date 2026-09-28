@@ -8,21 +8,12 @@ import type { RunnerNodeStatus } from '@/features/runner/store';
 import {
   ASPECT_RATIOS,
   IMAGE_MODELS,
+  PROMPT_PRESETS,
   VIDEO_DURATIONS,
   VIDEO_MODELS,
 } from '@/shared/schema';
-import { strings } from '@/shared/strings';
+import { strings, promptPresetLabel } from '@/shared/strings';
 import { cn } from '@/shared/utils';
-
-const PROMPT_PRESETS = [
-  'custom',
-  'enhance',
-  'analyzeImage',
-  'script',
-  'summarize',
-  'translate',
-  'brainstorm',
-] as const;
 
 interface GenerateItemListProps {
   items: RunnerGenerateItem[];
@@ -255,11 +246,14 @@ function GenerateItemCard({
                   className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm disabled:opacity-60"
                   value={p.preset}
                   disabled={!canEdit}
-                  onChange={(e) => onUpdateField(p.nodeId, { preset: e.target.value })}
+                  onChange={(e) => {
+                    const preset = e.target.value;
+                    onUpdateField(p.nodeId, { preset });
+                  }}
                 >
                   {PROMPT_PRESETS.map((opt) => (
                     <option key={opt} value={opt}>
-                      {opt}
+                      {promptPresetLabel(opt)}
                     </option>
                   ))}
                 </select>

@@ -1,0 +1,14 @@
+2:import { composeFashionPrompt } from '@/engine/presets/fashion';
+42:describe('composeFashionPrompt', () => {
+43:  it('orders model > outfit > palette > scene and keeps identity priority', () => {
+45:    const prompt = composeFashionPrompt([scene, palette, outfit, model]);
+60:  it('still composes when some blocks are missing', () => {
+61:    const prompt = composeFashionPrompt([model, outfit]);
+68:  it('throws Vietnamese error on invalid JSON', () => {
+69:    expect(() => composeFashionPrompt(['{not-json', model])).toThrow(strings.fashionJsonInvalid);
+72:  it('strips markdown fences (and prose) before parsing', () => {
+73:    const fenced =
+75:    const prompt = composeFashionPrompt([fenced, `\`\`\`\n${outfit}\n\`\`\``]);
+81:  it('throws when nothing usable remains', () => {
+82:    expect(() => composeFashionPrompt([])).toThrow(strings.fashionComposeEmpty);
+83:    expect(() => composeFashionPrompt([JSON.stringify({ type: 'other', summary: 'x' })])).toThrow(

@@ -1,0 +1,138 @@
+=== WorkflowNodeView promptReused / promptFresh ===
+177-          <GeneratePreview
+178-            nodeId={id}
+179-            kind="image"
+180-            data={data.data}
+181-            status={data.status}
+182-            progress={data.progress}
+183:            statusMessage={data.statusMessage}
+184-            items={incoming}
+185-            hasInputs={hasInputs}
+186-            onPromptChange={(prompt) => updateNodeData(id, { prompt })}
+187-            onGenerate={() => void runWorkflowNode(id, 'node')}
+188-            onStop={() => void stopWorkflow()}
+189-          />
+--
+192-          <GeneratePreview
+193-            nodeId={id}
+194-            kind="video"
+195-            data={data.data}
+196-            status={data.status}
+197-            progress={data.progress}
+198:            statusMessage={data.statusMessage}
+199-            items={incoming}
+200-            hasInputs={hasInputs}
+201-            onPromptChange={(prompt) => updateNodeData(id, { prompt })}
+202-            onGenerate={() => void runWorkflowNode(id, 'node')}
+203-            onGenerateOnly={() => void runWorkflowNode(id, 'only')}
+204-            onStop={() => void stopWorkflow()}
+--
+208-          <MergeVideoNode
+209-            nodeId={id}
+210-            data={data.data}
+211-            items={incoming}
+212-            status={data.status}
+213-            progress={data.progress}
+214:            statusMessage={data.statusMessage}
+215-            onChange={(patch) => updateNodeData(id, patch)}
+216-          />
+217-        )}
+218-        {data.nodeType === 'autoDownload' && (
+219-          <div className="space-y-1.5">
+220-            {hasInputs ? (
+--
+271-          </span>
+272-        )}
+273-        {data.nodeType === 'prompt' && (
+274-          <span className="truncate">
+275-            Output · {((data.data.formattedOutput as string) ?? (data.data.instruction as string) ?? '').length}{' '}
+276-            ký tự
+277:            {(data.statusMessage === strings.promptReused ||
+278:              data.statusMessage === strings.promptFresh) && (
+279:              <span className="ml-1.5 text-primary">{data.statusMessage}</span>
+280-            )}
+281-          </span>
+282-        )}
+283-        {data.status && <span className="ml-2 shrink-0">{data.status}</span>}
+284-      </div>
+285-    </div>
+--
+591-function MergeVideoNode({
+592-  nodeId,
+593-  data,
+594-  items,
+595-  status,
+596-  progress,
+597:  statusMessage,
+598-  onChange,
+599-}: {
+600-  nodeId: string;
+601-  data: Record<string, unknown>;
+602-  items: IncomingItem[];
+603-  status?: string;
+604-  progress?: number;
+605:  statusMessage?: string;
+606-  onChange: (patch: Record<string, unknown>) => void;
+607-}) {
+608-  const previewUrl = useNodeOutputUrl(nodeId);
+609-  // Chạy ở mode `only`: node generate phía trước dùng lại kết quả gần nhất thay
+610-  // vì tạo lại — bấm Ghép video không được âm thầm đốt quota Flow.
+611-  return (
+612-    <MergeVideoBody
+613-      nodeId={nodeId}
+614-      data={data}
+615-      items={items}
+616-      status={status}
+617-      progress={progress}
+618:      statusMessage={statusMessage}
+619-      previewUrl={previewUrl}
+620-      onChange={onChange}
+621-      onRun={() => void runWorkflowNode(nodeId, 'only')}
+622-      onStop={() => void stopWorkflow()}
+623-    />
+624-  );
+--
+657-function GeneratePreview({
+658-  nodeId,
+659-  kind,
+660-  data,
+661-  status,
+662-  progress,
+663:  statusMessage,
+664-  items,
+665-  hasInputs,
+666-  onPromptChange,
+667-  onGenerate,
+668-  onGenerateOnly,
+669-  onStop,
+670-}: {
+671-  nodeId: string;
+672-  kind: 'image' | 'video';
+673-  data: Record<string, unknown>;
+674-  status?: string;
+675-  progress?: number;
+676:  statusMessage?: string;
+677-  items: IncomingItem[];
+678-  hasInputs: boolean;
+679-  onPromptChange: (prompt: string) => void;
+680-  onGenerate: () => void;
+681-  /** Generate this node only; upstream generators reuse their last result. */
+682-  onGenerateOnly?: () => void;
+--
+710-      <GenerateMediaStage
+711-        kind={kind}
+712-        url={previewUrl}
+713-        aspectRatio={(data.aspectRatio as string | undefined) ?? '9:16'}
+714-        running={running}
+715-        progress={progress}
+716:        statusMessage={statusMessage}
+717-        ready={hasInputs || !!promptValue.trim()}
+718-      />
+719-      <div className="truncate text-[10px] text-muted-foreground">
+720-        {(data.aspectRatio as string) ?? '9:16'} · {String(data.count ?? 1)} ·{' '}
+721-        {kind === 'image'
+722-          ? String(data.resolution ?? '1K')
+
+=== strings ===
+312:  promptReused: 'Dùng lại',
+313:  promptFresh: 'Mới phân tích',

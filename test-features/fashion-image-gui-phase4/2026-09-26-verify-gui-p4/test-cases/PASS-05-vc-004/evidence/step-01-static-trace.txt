@@ -1,0 +1,105 @@
+=== EditorApp preset / reusePrompt / forwardRefs / fashionCompose ===
+                assetLabel: v,
+                kind: defaultKindForLabel(v as import('@/shared/schema').AssetLabel),
+              })
+            }
+          />
+          <SelectField
+            label="Kind"
+            value={(d.kind as string) ?? 'image'}
+            options={['image', 'video', 'audio']}
+            onChange={(v) => update(node.id, { kind: v })}
+          />
+        </>
+      )}
+
+      {node.data.nodeType === 'prompt' && (
+        <>
+          <SelectField
+            label="Preset"
+            value={(d.preset as string) ?? 'custom'}
+            options={[...PROMPT_PRESETS]}
+            optionLabel={promptPresetLabel}
+            onChange={(v) =>
+              update(node.id, {
+                preset: v,
+                ...(v === 'fashionScene' ? { forwardRefs: false } : {}),
+              })
+            }
+          />
+          {(d.preset as string) !== 'fashionCompose' && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch
+                checked={d.reusePrompt !== false}
+                onCheckedChange={(v) => update(node.id, { reusePrompt: v })}
+              />
+              {strings.reusePrompt}
+            </label>
+          )}
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Switch
+              checked={d.forwardRefs !== false}
+              onCheckedChange={(v) => update(node.id, { forwardRefs: v })}
+            />
+            {strings.forwardRefs}
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground">Instruction</span>
+            <textarea
+              className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-background px-2 py-1 text-sm"
+              value={(d.instruction as string) ?? ''}
+              onChange={(e) => update(node.id, { instruction: e.target.value })}
+              placeholder="nhân vật [Character] đang mặc một [Outfit]"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground">Output</span>
+            <textarea
+              readOnly
+              className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-muted/40 px-2 py-1 font-mono text-xs leading-relaxed"
+              value={promptOutput}
+              placeholder="Instruction + prompt nối từ các node Prompt phía trước; [Label] giữ nguyên, chú thích URL ở cuối"
+            />
+
+=== grep fashionCompose reuse ===
+765-          <div className="flex gap-2">
+766-            <Button
+767-              onClick={() => {
+768-                const draft = (window as unknown as { __draft?: { workflow: import('@/shared/schema').Workflow } })
+769-                  .__draft;
+770:                // Draft cũ có thể còn resolution số / thiếu reusePrompt - migrate trước load.
+771-                if (draft) store.loadWorkflow(migrateWorkflow(draft.workflow));
+772-                setDraftOpen(false);
+773-              }}
+774-            >
+775-              {strings.restoreDraftYes}
+--
+949-            options={[...PROMPT_PRESETS]}
+950-            optionLabel={promptPresetLabel}
+951-            onChange={(v) =>
+952-              update(node.id, {
+953-                preset: v,
+954:                ...(v === 'fashionScene' ? { forwardRefs: false } : {}),
+955-              })
+956-            }
+957-          />
+958:          {(d.preset as string) !== 'fashionCompose' && (
+959-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+960-              <Switch
+961:                checked={d.reusePrompt !== false}
+962:                onCheckedChange={(v) => update(node.id, { reusePrompt: v })}
+963-              />
+964:              {strings.reusePrompt}
+965-            </label>
+966-          )}
+967-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+968-            <Switch
+969:              checked={d.forwardRefs !== false}
+970:              onCheckedChange={(v) => update(node.id, { forwardRefs: v })}
+971-            />
+972:            {strings.forwardRefs}
+973-          </label>
+974-          <label className="block space-y-1">
+975-            <span className="text-muted-foreground">Instruction</span>
+976-            <textarea
+977-              className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-background px-2 py-1 text-sm"

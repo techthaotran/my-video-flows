@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/video-regression.test.ts (2 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  12:36:08
+   Duration  1.16s (transform 135ms, setup 33ms, collect 188ms, tests 15ms, environment 334ms, prepare 215ms)
+

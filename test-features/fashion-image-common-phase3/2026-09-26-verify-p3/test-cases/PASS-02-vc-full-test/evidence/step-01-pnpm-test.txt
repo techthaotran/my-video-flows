@@ -1,0 +1,40 @@
+ ✓ tests/unit/flow-payload-log.test.ts (8 tests) 6ms
+ ✓ tests/unit/run-events-channel.test.ts (4 tests) 7ms
+ ✓ tests/unit/merge-video.test.ts (19 tests) 18ms
+ ✓ tests/unit/runner-selectors.test.ts (6 tests) 6ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Tab flow không có content script — inject lại 
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas
+[run] Lỗi: chrome.runtime.onMessage.removeListener is not a function TypeError: chrome.runtime.onMessage.removeListener is not a function
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:98:30)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processImmediate (node:internal/timers:473:9)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:511:16)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:485:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:325:11)
+
+ ✓ tests/unit/run-only-node.test.ts (5 tests) 2095ms
+   ✓ chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào  800ms
+   ✓ chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas  1219ms
+ ✓ tests/unit/fashion-compose.test.ts (5 tests) 5ms
+ ✓ tests/unit/flow-prompt-parts.test.ts (9 tests) 3ms
+ ✓ tests/unit/merge-ready.test.ts (6 tests) 9ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Inject lại không ăn thua — reload tab flow 
+
+ ✓ tests/unit/schema-v6-migrate.test.ts (4 tests) 5ms
+ ✓ tests/unit/incoming-inputs.test.ts (2 tests) 3ms
+ ✓ tests/unit/runner-store.test.ts (4 tests) 3ms
+ ✓ tests/unit/editor-external-sync.test.ts (4 tests) 2ms
+ ✓ tests/unit/content-script-recovery.test.ts (6 tests) 3623ms
+   ✓ phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user  303ms
+   ✓ phục hồi khi tab mất content script > chỉ inject content script của đúng provider  303ms
+   ✓ phục hồi khi tab mất content script > inject không cứu được thì mới reload tab  1506ms
+   ✓ phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome  1504ms
+
+ Test Files  29 passed (29)
+      Tests  244 passed (244)
+   Start at  12:50:29
+   Duration  4.95s (transform 897ms, setup 718ms, collect 3.14s, tests 6.88s, environment 10.05s, prepare 2.37s)
+

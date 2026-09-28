@@ -1,0 +1,20 @@
+
+> my-x-flows@0.1.0 test /Users/ggj/MyWork/my-video-flows
+> vitest run --config vitest.config.ts
+
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user
+[driver] Tab flow không có content script — inject lại 
+
+ ✓ tests/unit/flow-rpc-generate.test.ts (43 tests) 70ms
+ ✓ tests/unit/prompt-reuse.test.ts (5 tests) 78ms
+stderr | tests/unit/run-only-node.test.ts > generate only this node > stops with a clear error when an upstream generator has no result to reuse
+[run] Lỗi: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước. Error: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước.
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:405:27)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:325:11) {
+  code: 'UNKNOWN'
+}
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào

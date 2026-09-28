@@ -1,0 +1,47 @@
+=== UPLOADED_FIELDS strip in transfer ===
+43:const UPLOADED_FIELDS = ['uploadedMediaId', 'uploadedProjectId', 'uploadedSha256'] as const;
+52:    for (const key of UPLOADED_FIELDS) delete data[key];
+
+=== test strip ===
+505:  it('export strips uploaded* from Asset nodes but keeps local image files', async () => {
+506-    const ws = await workspaceRepo.ensureDefault();
+507-    const hash = await hashOf(9);
+508-    const asset = await assetRepo.put(pngBlob(9), 'keep.png', 'wf-up');
+509-    expect(asset.sha256).toBe(hash);
+510-
+511-    const wf = createEmptyWorkflow(ws.id, 'upload-strip');
+512-    wf.id = 'wf-up';
+513-    wf.schemaVersion = SCHEMA_VERSION;
+514-    wf.nodes = [
+515-      {
+516-        id: 'a1',
+517-        type: 'asset',
+518-        position: { x: 0, y: 0 },
+519-        data: {
+520-          assetId: asset.id,
+521-          kind: 'image',
+522-          assetLabel: 'Character',
+523-          source: 'local',
+524:          uploadedMediaId: 'media-should-strip',
+525-          uploadedProjectId: 'project-should-strip',
+526-          uploadedSha256: hash,
+527-        },
+528-      },
+529-    ];
+530-    await workflowRepo.save(wf);
+531-
+532-    // json + không kèm blob: fake-indexeddb mất bytes Blob dưới jsdom
+533-    const result = await exportWorkflows({
+534-      workflowIds: [wf.id],
+535-      includeAssets: false,
+536-      format: 'json',
+537-    });
+538-    const raw = JSON.parse(await result.blob.text()) as { workflowsData: Workflow[] };
+539-    const data = raw.workflowsData[0]!.nodes[0]!.data as Record<string, unknown>;
+540:    expect(data.uploadedMediaId).toBeUndefined();
+541-    expect(data.uploadedProjectId).toBeUndefined();
+542-    expect(data.uploadedSha256).toBeUndefined();
+543-    expect(data.sha256).toBe(hash);
+544-    expect(data.assetId).toBe(asset.id);
+545-  });
+546-});

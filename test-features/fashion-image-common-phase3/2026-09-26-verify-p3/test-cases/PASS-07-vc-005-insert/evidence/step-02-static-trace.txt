@@ -1,0 +1,16 @@
+src/storage/transfer/index.ts:444:  // Assets trước, ngoài transaction: putFromHash gọi crypto.subtle (await phá Dexie tx).
+src/storage/transfer/index.ts:445:  const hashToAssetId = await ingestPreviewAssets(preview);
+src/storage/transfer/index.ts:482:            const updated = remapMediaAssets(
+src/storage/transfer/index.ts:496:        const wf = remapMediaAssets(
+src/storage/transfer/index.ts:527:export async function ingestPreviewAssets(preview: ImportPreview): Promise<Map<string, string>> {
+src/storage/transfer/index.ts:531:    const rec = await assetRepo.putFromHash(sha, blob, {
+src/storage/transfer/index.ts:541:export function remapMediaAssets(wf: Workflow, hashToAssetId: Map<string, string>): Workflow {
+src/storage/transfer/index.ts:561:export function remapInsertNodes(
+src/features/editor/EditorApp.tsx:39:import { exportWorkflows, parseImportFile, remapInsertNodes, ingestPreviewAssets, remapMediaAssets } from '@/storage/transfer';
+src/features/editor/EditorApp.tsx:817:                const hashToAssetId = await ingestPreviewAssets(preview);
+src/features/editor/EditorApp.tsx:818:                const withLocalAssets = remapMediaAssets(item.workflow, hashToAssetId);
+src/features/editor/EditorApp.tsx:822:                const { nodes, edges } = remapInsertNodes(withLocalAssets, existingSlugs);
+817:                const hashToAssetId = await ingestPreviewAssets(preview);
+818:                const withLocalAssets = remapMediaAssets(item.workflow, hashToAssetId);
+822:                const { nodes, edges } = remapInsertNodes(withLocalAssets, existingSlugs);
+46:  async putFromHash(

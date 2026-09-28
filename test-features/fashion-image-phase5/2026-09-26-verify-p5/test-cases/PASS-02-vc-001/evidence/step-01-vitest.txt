@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/prompt-reuse.test.ts (9 tests) 69ms
+ ✓ tests/unit/run-patch-node-data.test.ts (2 tests) 32ms
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+   Start at  16:53:38
+   Duration  1.18s (transform 204ms, setup 69ms, collect 327ms, tests 101ms, environment 829ms, prepare 354ms)
+

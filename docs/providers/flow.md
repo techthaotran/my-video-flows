@@ -35,9 +35,32 @@
 | Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio (Audio voice, Video reference); `entityId` ingredient; extend REST cũ |
 | Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi (không continue). continueFrame (Omni hoặc Veo) → frame cuối `maseQ` rồi `MZZa6b` (Omni `abra_r2v_*` / Veo `veo_3_1_r2v_*` với fallback chuỗi r2v rồi `abra_r2v_*` nếu tài khoản không có Veo r2v); frame là ảnh đầu `[Cảnh trước]`; **không** `eb1hJf` vì maseQ frame trả "Media not found.". Không dùng link làm dự phòng |
 
-RPC ids: `ogiZ0b` (image), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload).
-`WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) — **không** tái tạo / không submit.
+RPC ids: `ogiZ0b` (image), `SPrCad` (image 2K upscale/download), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload), `mYWVGd` (metadata `primary_media_id`).
+`WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) - **không** tái tạo / không submit.
 Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV`.
+
+### 2K upscale (`SPrCad`) - capture 2026-09-26
+
+Spike Phase 0 (fashion-image): trên tab Flow đã đăng nhập, gen ảnh rồi bấm Download **2K**.
+
+| Bước | RPC | Ghi chú |
+|---|---|---|
+| Gen ảnh | `ogiZ0b` | Vẫn 1K; response có dims ví dụ `[896, 1200]` + URL CDN |
+| Tải 2K | `SPrCad` | Upscale/download riêng; **không** phải tham số trong `ogiZ0b` |
+| Metadata | `mYWVGd` | `[["<editOrSessionId>",null,null,[null,null,null,null,"<mediaId>"],"<projectId>"],[["metadata.primary_media_id"]]]` - không generate |
+
+Wire `SPrCad` (đã thay captcha):
+
+```json
+["<sourceMediaId>", 1, [null, 22, null, null, null, "<projectId>", null, null, null, null, ["__CAPTCHA__", 1]]]
+```
+
+- `sourceMediaId` = media id ảnh vừa gen (`ogiZ0b`).
+- Slot `1` = mode 2K (file tải về tên `…_2K_…`).
+- Context slot `22` = `SURFACE_ID` (giống generate khác), không phải độ phân giải.
+- Response: JPEG base64 inline trong `wrb.fr`; sample **1792×2400** (= 2× `[896, 1200]`), ~662 KB.
+- Watermark: C2PA ghi SynthID **không nhìn thấy**; **không** logo Flow/Google trên ảnh.
+  Watermark brand sẵn trên ảnh nguồn (nếu có) vẫn giữ.
 
 ### Nguồn capture MZZa6b
 
@@ -63,6 +86,7 @@ Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVX
 | signFlowMedia | `as29s` theo trang đang xem (concurrency 8); video ưu tiên poster `/image/` làm thumb |
 | listMedia | Quét gallery DOM — chỉ bổ sung trang đầu picker |
 | fetchMedia | `fetch(url)` → base64 |
+| fetchMediaById | SW ký url qua `as29s` rồi tab Flow `fetchMedia` → base64; Prompt dùng để gửi ảnh Flow cho Gemini (tải 1 lần/run, không bao giờ `maseQ`) |
 
 ## Modules
 

@@ -1,0 +1,22 @@
+118:  it('3 ảnh export → import đúng từng node dù đảo thứ tự asset trong manifest', async () => {
+120:    const sceneSha = await hashOf(1);
+121:    const modelSha = await hashOf(2);
+122:    const outfitSha = await hashOf(3);
+145:            sha256: sceneSha,
+160:            sha256: modelSha,
+175:            sha256: outfitSha,
+186:    // Manifest assets intentionally reversed vs node order
+191:        { sha256: outfitSha, bytes: pngBytes(3), originalName: 'outfit.png' },
+192:        { sha256: modelSha, bytes: pngBytes(2), originalName: 'model.png' },
+193:        { sha256: sceneSha, bytes: pngBytes(1), originalName: 'scene.png' },
+218:      ['scene', sceneSha],
+219:      ['model', modelSha],
+220:      ['outfit', outfitSha],
+329:    const sceneSha = await hashOf(11);
+351:            sha256: sceneSha,
+368:          assets: [{ sha256: sceneSha, bytes: pngBytes(11), originalName: 'scene.png' }],
+381:    const sceneSha = await hashOf(21);
+405:            sha256: sceneSha,
+422:          assets: [{ sha256: sceneSha, bytes: pngBytes(21), originalName: 'scene.png' }],
+439:    expect(data.sha256).toBe(sceneSha);
+441:    expect(rec?.sha256).toBe(sceneSha);

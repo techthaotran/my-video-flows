@@ -147,7 +147,10 @@ export const strings = {
   generateReusedPreviousClip: 'Không có prompt - dùng video đã tạo trước đó cho node phía sau',
   generateOnlyThisNode: 'Chỉ node này',
   generateOnlyThisNodeHint:
-    'Chỉ tạo video cho node này; các node Generate phía trước dùng lại kết quả đã có, không tạo lại',
+    'Chỉ chạy node này: node Generate phía trước dùng lại kết quả đã có, node Prompt dùng lại prompt đã phân tích (không gọi lại Gemini)',
+  copyPrompt: 'Copy prompt',
+  copyPromptDone: 'Đã copy',
+  copyPromptHint: 'Copy prompt để dán vào Google Flow và tự bấm tạo',
   generateReusedForOnly: 'Dùng lại kết quả đã có (chỉ tạo node được chọn)',
   generateOnlyMissingUpstream: (name: string) =>
     `${name} chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước.`,
@@ -167,6 +170,9 @@ export const strings = {
   /** `[5]` NOT_FOUND: Flow không phục vụ nhánh Veo r2v cho tài khoản này. */
   veoReferenceNotServed: (model: string) =>
     `Flow trả NOT_FOUND cho model nối cảnh ${model} - tài khoản không có nhánh Veo tham chiếu.`,
+  flowUnusualActivity:
+    'Google Flow tạm chặn vì nghi hoạt động bất thường (PUBLIC_ERROR_UNUSUAL_ACTIVITY). ' +
+    'Dừng tạo khoảng 10-30 phút, mở tab Flow và tự tạo thử 1 ảnh bằng tay, rồi mới chạy lại.',
   /** Map Flow workflow failure codes (jwpduf) to actionable Vietnamese. */
   flowRenderFailureMessage: (code: string | null, reasons: string[]): string => {
     if (code === 'PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED') {
@@ -241,7 +247,7 @@ export const strings = {
   mergeNotReady: 'Nối ít nhất 1 video vào cổng 🎥',
 
   assetLabel: 'Label',
-  assetLocal: '· local (upload khi chạy)',
+  assetLocal: '· local',
   assetLocalAudio: '· local',
   missingFile: 'Thiếu file',
   pickFileAgain: 'Chọn lại',
@@ -287,11 +293,79 @@ export const strings = {
   aspectRatio: 'Tỉ lệ khung hình',
   outputCount: 'Số lượng tạo ra',
   resolution: 'Độ phân giải',
+  imageResolution: 'Độ phân giải ảnh',
   durationSec: 'Độ dài video (giây)',
   model: 'Model',
   inspectorTitle: 'Inspector',
   providerFlow: 'Google Flow',
   providerGemini: 'Gemini',
+
+  // Prompt presets (fashion + reuse)
+  presetEnhance: 'Cải thiện prompt',
+  presetAnalyzeImage: 'Phân tích ảnh',
+  presetScript: 'Viết kịch bản',
+  presetSummarize: 'Tóm tắt',
+  presetTranslate: 'Dịch',
+  presetBrainstorm: 'Động não',
+  presetCustom: 'Tuỳ chỉnh',
+  presetFashionScene: 'Phân tích scene thời trang',
+  presetFashionModel: 'Phân tích người mẫu',
+  presetFashionOutfit: 'Phân tích outfit',
+  presetFashionColor: 'Phối màu thời trang',
+  presetFashionCompose: 'Ghép prompt thời trang',
+  reusePrompt: 'Dùng lại prompt cũ',
+  forwardRefs: 'Chuyển tiếp ảnh xuống node sau',
+  promptReused: 'Dùng lại',
+  promptFresh: 'Mới phân tích',
+  promptOutputNotAnalyzed: 'Chưa phân tích - bấm Chạy node để gọi Gemini',
+  promptOutputPreviewHint: 'Instruction + prompt phía trước; [Label] + mô tả · mediaId {uuid}',
+  promptFetchFlowImage: (i: number, n: number) => `Đang tải ảnh từ Flow (${i}/${n})…`,
+  promptFlowImageFetchFailed: (label: string, reason: string) =>
+    `Không tải được ảnh ${label} từ Google Flow để gửi Gemini: ${reason}`,
+  promptSendingGemini: 'Gửi prompt tới Gemini…',
+  flowMediaSignFailed: 'Flow không trả về link tải cho media này (media đã bị xoá hoặc không thuộc project đang mở)',
+  geminiTypingPrompt: 'Nhập prompt…',
+  geminiUploadingImages: (i: number, n: number) => `Đang tải ảnh lên Gemini (${i}/${n})…`,
+  geminiAttachFailed: 'Gemini không nhận ảnh đính kèm - tải lại tab Gemini rồi chạy lại',
+  geminiSwitchingAccount: 'Chuyển Gemini sang tài khoản của Flow…',
+  geminiAccountMismatch: (gemini: string, flow: string) =>
+    `Gemini đang dùng tài khoản ${gemini}, Flow dùng ${flow} - đăng nhập ${flow} trên gemini.google.com rồi chạy lại`,
+  geminiSent: 'Đã gửi, chờ Gemini…',
+  geminiAnswering: (chars: number, sec: number) => `Gemini đang trả lời… ${chars} ký tự · ${sec}s`,
+  geminiTimeout: (sec: number, stopLabel: string, chars: number) =>
+    `Gemini không trả lời xong sau ${sec}s (nút dừng: ${stopLabel || 'không thấy'}, đã nhận ${chars} ký tự) - kiểm tra tab Gemini rồi chạy lại`,
+  geminiNoReply: (sec: number) =>
+    `Gemini chưa nhận prompt sau ${sec}s (không có câu trả lời mới) - mở tab Gemini xem prompt đã được gửi chưa rồi chạy lại`,
+  geminiNoResponse: 'Không lấy được phản hồi từ Gemini',
+  geminiDone: 'Xong',
+  promptOutputChars: (n: number) => `Output · ${n} ký tự`,
+  fashionJsonInvalid: 'Kết quả phân tích thời trang không phải JSON hợp lệ',
+  fashionJsonMissingType: (type: string) => `Thiếu khối JSON loại "${type}" để ghép prompt`,
+  fashionComposeEmpty: 'Chưa có đủ khối phân tích để ghép prompt thời trang',
+  promptJsonInvalid: 'Output không phải JSON hợp lệ',
+  flowFetchingImage: 'Tải ảnh…',
+  flowFetchingImage2k: 'Tải ảnh 2K…',
+  flowImage2kEmpty: 'SPrCad không trả JPEG 2K',
+  workflowOutputStats: (images: number, videos: number) => `${images} ảnh · ${videos} video`,
+  workflowOutputEmpty: '0 ảnh',
+
+  // Upload Flow một lần + panel phân tích
+  assetUploading: 'Đang upload lên Flow…',
+  assetUploaded: 'Đã có trên Flow',
+  assetUploadError: (detail: string | null) =>
+    `Upload lên Flow lỗi: ${detail?.trim() || 'không rõ nguyên nhân'}`,
+  assetUploadRetry: 'Upload lại',
+  flowUploadNoTab: 'Chưa mở tab Google Flow - mở một project Flow rồi bấm Upload lại',
+  flowUploadNodeNotLocal: 'Node không có ảnh local để upload lên Flow',
+  flowUploadedMediaGone: (detail: string) =>
+    `Flow không tìm thấy ảnh đã upload, kể cả sau khi upload lại từ file gốc: ${detail}`,
+  promptAnalyze: 'Phân tích',
+  promptReanalyze: 'Phân tích lại',
+  promptSkill: 'Skill',
+  promptSkillReset: 'Khôi phục mặc định',
+  promptResult: 'Kết quả',
+  promptEdited: 'Đã sửa tay',
+  promptResultEmpty: 'Chưa có kết quả phân tích',
 
   // Status
   statusQueued: 'Đang chờ',
@@ -320,6 +394,8 @@ export const strings = {
   exportIncludeOutputs: 'Kèm kết quả chạy gần nhất',
   exportSummary: (w: number, n: number, a: number, size: string) =>
     `${w} workflow · ${n} nodes · ${a} asset · ~${size}`,
+  exportWorkspace: 'Export workspace',
+  exportWorkspaceTitle: 'Export workspace',
   importTitle: 'Import workflow',
   importPreview: 'Xem trước import',
   importTargetWorkspace: 'Workspace đích',
@@ -335,6 +411,11 @@ export const strings = {
   importTooNew: 'File được tạo từ phiên bản mới hơn, hãy cập nhật extension',
   importInvalid: 'File không hợp lệ',
   importSuccess: (n: number) => `Đã nhập ${n} workflow`,
+  importWorkspace: 'Import workspace',
+  importAssetMissing: (nodeLabel: string) => `Thiếu media cho node ${nodeLabel}`,
+  importAssetMissingJson: 'Thiếu file media (json)',
+  importFlowAssetMissing: (nodeLabel: string) =>
+    `Asset Flow "${nodeLabel}" chỉ dùng được với tài khoản Flow gốc - chọn lại asset hoặc dùng file local`,
   backup: 'Backup',
   restore: 'Restore',
   backupDone: 'Đã tạo bản backup',
@@ -419,3 +500,23 @@ export const strings = {
 } as const;
 
 export type Strings = typeof strings;
+
+const PROMPT_PRESET_LABELS: Record<string, string> = {
+  enhance: strings.presetEnhance,
+  analyzeImage: strings.presetAnalyzeImage,
+  script: strings.presetScript,
+  summarize: strings.presetSummarize,
+  translate: strings.presetTranslate,
+  brainstorm: strings.presetBrainstorm,
+  custom: strings.presetCustom,
+  fashionScene: strings.presetFashionScene,
+  fashionModel: strings.presetFashionModel,
+  fashionOutfit: strings.presetFashionOutfit,
+  fashionColor: strings.presetFashionColor,
+  fashionCompose: strings.presetFashionCompose,
+};
+
+/** Nhãn tiếng Việt cho preset Prompt; value vẫn là enum key. */
+export function promptPresetLabel(preset: string): string {
+  return PROMPT_PRESET_LABELS[preset] ?? preset;
+}

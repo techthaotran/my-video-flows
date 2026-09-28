@@ -1,0 +1,23 @@
+{
+  "feature": "fashion-image-api-phase2",
+  "run_id": "2026-09-26-verify-api-p2",
+  "workflow": "COMPLETE",
+  "phase2_gate": "PASS",
+  "pass": 9,
+  "ng": 0,
+  "blocked": 0,
+  "full_suite_tests": 237,
+  "browser": "GATE_ONLY",
+  "screenshot_permission": "GRANTED",
+  "contracts": [
+    { "id": "VC-TYPECHECK", "status": "PASS" },
+    { "id": "VC-FULL-TEST", "status": "PASS" },
+    { "id": "VC-REUSE-HASH", "status": "PASS" },
+    { "id": "VC-FASHION-COMPOSE", "status": "PASS" },
+    { "id": "VC-VIDEO-REGRESSION", "status": "PASS" },
+    { "id": "VC-FORWARD-SCENE", "status": "PASS" },
+    { "id": "VC-SPR-CAD-SAFE", "status": "PASS" },
+    { "id": "VC-REV-002-STRINGS", "status": "PASS" },
+    { "id": "VC-REV-001-FENCE", "status": "PASS" }
+  ]
+}

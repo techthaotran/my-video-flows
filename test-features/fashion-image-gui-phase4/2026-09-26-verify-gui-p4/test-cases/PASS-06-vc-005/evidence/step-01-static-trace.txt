@@ -1,0 +1,113 @@
+=== SidePanel thumbs / revokeObjectURL / empty ===
+67-  const templates = useLiveQuery(() => templateRepo.list(), []) ?? [];
+68-  const current = workspaces.find((w) => w.isCurrent) ?? workspaces[0];
+69-
+70-  const [subTab, setSubTab] = useState<'workflows' | 'templates'>('workflows');
+71:  const [search, setSearch] = useState('');
+72-  const [filter, setFilter] = useState('all');
+73-  const [selected, setSelected] = useState<Set<string>>(new Set());
+74-  const [settingsOpen, setSettingsOpen] = useState(false);
+75-  const [settings, setSettingsState] = useState<AppSettings | null>(null);
+--
+119-
+120-  const filteredIds = useMemo(() => filtered.map((w) => w.id), [filtered]);
+121-  const filteredIdsKey = filteredIds.join('\0');
+122-  const outputStats =
+123:    useLiveQuery(() => runRepo.getOutputStats(filteredIds), [filteredIdsKey]) ?? {};
+124-
+125-  const grouped = useMemo(() => {
+126-    const map = new Map<string, Workflow[]>();
+127-    for (const w of filtered) {
+--
+238-      {/* Workspace */}
+239-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+240-        <select
+241-          className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+242:          value={current?.id ?? ''}
+243-          onChange={(e) => void workspaceRepo.setCurrent(e.target.value)}
+244-        >
+245-          {workspaces.map((w) => (
+246-            <option key={w.id} value={w.id}>
+247-              {w.name}
+248:              {w.isCurrent ? ` · ${strings.workspaceCurrent}` : ''}
+249-            </option>
+250-          ))}
+251-        </select>
+252-        <Button
+--
+442-                  {list.map((w) => (
+443-                    <WorkflowRow
+444-                      key={w.id}
+445-                      workflow={w}
+446:                      stats={outputStats[w.id] ?? { images: 0, videos: 0, thumbs: [] }}
+447-                      selected={selected.has(w.id)}
+448-                      onSelect={(v) => {
+449-                        setSelected((prev) => {
+450-                          const next = new Set(prev);
+--
+631-function Empty({ text }: { text: string }) {
+632-  return <div className="px-3 py-10 text-center text-sm text-muted-foreground">{text}</div>;
+633-}
+634-
+635:type WorkflowOutputStats = { images: number; videos: number; thumbs: OutputRecord[] };
+636-
+637:function WorkflowOutputThumbs({ thumbs }: { thumbs: OutputRecord[] }) {
+638-  const [entries, setEntries] = useState<{ id: string; url: string; kind: 'image' | 'video' }[]>([]);
+639-
+640-  useEffect(() => {
+641:    const next = thumbs
+642-      .filter((t): t is OutputRecord & { blob: Blob; kind: 'image' | 'video' } =>
+643-        !!t.blob && (t.kind === 'image' || t.kind === 'video'),
+644-      )
+645-      .map((t) => ({
+646-        id: t.id,
+647:        url: URL.createObjectURL(t.blob),
+648-        kind: t.kind,
+649-      }));
+650-    setEntries(next);
+651-    return () => {
+652:      for (const e of next) URL.revokeObjectURL(e.url);
+653-    };
+654:  }, [thumbs]);
+655-
+656-  if (!entries.length) return null;
+657-
+658-  return (
+--
+717-        <div className="truncate text-sm font-medium">{w.name}</div>
+718-        <div className="truncate text-[11px] text-muted-foreground">
+719-          {strings.nodesCount(w.nodes.length)} · {statsLabel} · {formatRelativeTime(w.updatedAt)}
+720-        </div>
+721:        {hasMedia && stats.thumbs.length > 0 ? <WorkflowOutputThumbs thumbs={stats.thumbs} /> : null}
+722-      </button>
+723-      <Button
+724-        variant="ghost"
+725-        size="icon"
+
+=== relevant useEffect / thumb render block ===
+src/shared/strings.ts:322:  workflowOutputEmpty: '0 ảnh',
+src/features/sidepanel/SidePanelApp.tsx:647:        url: URL.createObjectURL(t.blob),
+src/features/sidepanel/SidePanelApp.tsx:652:      for (const e of next) URL.revokeObjectURL(e.url);
+src/features/sidepanel/SidePanelApp.tsx:721:        {hasMedia && stats.thumbs.length > 0 ? <WorkflowOutputThumbs thumbs={stats.thumbs} /> : null}
+
+=== alt empty string on thumb img ===
+666:            <img src={e.url} alt="" className="h-full w-full object-cover" />
+
+=== empty / no-thumb path ===
+701-}) {
+702-  const { workflow: w, stats } = props;
+703:  const hasMedia = stats.images > 0 || stats.videos > 0;
+704:  const statsLabel = hasMedia
+705-    ? strings.workflowOutputStats(stats.images, stats.videos)
+706:    : strings.workflowOutputEmpty;
+707-
+708-  return (
+--
+719-          {strings.nodesCount(w.nodes.length)} · {statsLabel} · {formatRelativeTime(w.updatedAt)}
+720-        </div>
+721:        {hasMedia && stats.thumbs.length > 0 ? <WorkflowOutputThumbs thumbs={stats.thumbs} /> : null}
+722-      </button>
+723-      <Button
+
+=== strings.workflowOutputEmpty ===
+322:  workflowOutputEmpty: '0 ảnh',

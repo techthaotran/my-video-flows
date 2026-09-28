@@ -1,8 +1,18 @@
 import { FLOW_NO_UPLOAD, type ExecutorContext, type NodeExecutor, type NodeOutputValue } from '@/engine/types';
+import { hashValue } from '@/engine/cache';
+import {
+  composeFashionPrompt,
+  FASHION_REF_ROLE,
+  FASHION_SYSTEM,
+  type FashionRefLabels,
+  type FashionRefRole,
+} from '@/engine/presets/fashion';
+import { promptSystem } from '@/engine/presets/system';
 import { annotateAssetLabels, composePrompt, extractLabels, resolveTemplate, type AssetRef } from '@/engine/resolver';
 import type { FlowGenerateRef } from '@/shared/messaging';
 import { parseFlowMediaUrl } from '@/providers/flow/media';
 import { strings } from '@/shared/strings';
+import { blobToBase64, hashBlobContent, extractJsonPayload } from '@/shared/utils';
 import { orderedClipIds } from '@/media/layout';
 import type {
   AssetNodeDataSchema,
@@ -25,15 +35,6 @@ type GenImageData = z.infer<typeof GenerateImageNodeDataSchema>;
 type GenVideoData = z.infer<typeof GenerateVideoNodeDataSchema>;
 type MergeVideoData = z.infer<typeof MergeVideoNodeDataSchema>;
 type DownloadData = z.infer<typeof AutoDownloadNodeDataSchema>;
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
 
 function b64ToBlob(b64: string, mime: string): Blob {
   return new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: mime });
@@ -79,6 +80,31 @@ function dedupeRefs(values: NodeOutputValue[]): NodeOutputValue[] {
 
 function refsOf(values: NodeOutputValue[]): NodeOutputValue[] {
   return dedupeRefs(values.filter((v) => v.role === 'ref' && v.kind !== 'text'));
+}
+
+/** `[Label]` của ảnh theo vai trò thời trang, giữ thứ tự và không trùng. */
+function fashionLabelsOf(refs: NodeOutputValue[]): FashionRefLabels {
+  const labels: FashionRefLabels = {};
+  for (const ref of refs) {
+    if (!ref.fashionRole || !ref.assetLabel) continue;
+    const list = (labels[ref.fashionRole] ??= []);
+    if (!list.includes(ref.assetLabel)) list.push(ref.assetLabel);
+  }
+  return labels;
+}
+
+const FASHION_REF_ORDER: Record<FashionRefRole, number> = { scene: 0, model: 1, outfit: 2 };
+
+/**
+ * Node phân tích thời trang gắn vai trò cho ảnh nó chuyển tiếp; Ghép prompt đưa ảnh bối cảnh
+ * lên đầu (ảnh gốc để chỉnh sửa). Preset khác giữ nguyên.
+ */
+function fashionOrderedRefs(preset: string, refs: NodeOutputValue[]): NodeOutputValue[] {
+  const role = FASHION_REF_ROLE[preset];
+  if (role) return refs.map((r) => ({ ...r, fashionRole: role }));
+  if (preset !== 'fashionCompose') return refs;
+  const rank = (r: NodeOutputValue) => (r.fashionRole ? FASHION_REF_ORDER[r.fashionRole] : 3);
+  return [...refs].sort((a, b) => rank(a) - rank(b));
 }
 
 function asAssetRefs(refs: NodeOutputValue[]): AssetRef[] {
@@ -164,19 +190,105 @@ export const assetExecutor: NodeExecutor = async (ctx) => {
   ];
 };
 
-const PRESET_LABEL_RULE =
-  ' Keep every [Label] tag and every "[Label]: description" block exactly as written. ' +
-  'Do not insert flow-content.google URLs or media ids into the text.';
+/** Hash for prompt reuse: preset + skill + instruction + model + format + upstream texts + image content. */
+async function computePromptReuseHash(
+  data: PromptData,
+  upstream: string[],
+  refs: NodeOutputValue[],
+): Promise<string> {
+  const digestByBlob = new Map<Blob, string>();
+  const imageHashes: string[] = [];
+  for (const ref of refs) {
+    if (ref.kind !== 'image') continue;
+    if (ref.contentHash) {
+      imageHashes.push(ref.contentHash);
+      continue;
+    }
+    if (ref.blob) {
+      let digest = digestByBlob.get(ref.blob);
+      if (!digest) {
+        digest = await hashBlobContent(ref.blob);
+        digestByBlob.set(ref.blob, digest);
+        ref.contentHash = digest;
+      }
+      imageHashes.push(digest);
+      continue;
+    }
+    if (ref.flowMediaId) imageHashes.push(`flow:${ref.flowMediaId}`);
+  }
+  return hashValue({
+    preset: data.preset,
+    // Skill thực tế (ghi đè hoặc mặc định): đổi skill mặc định thì kết quả cũ không bị dùng lại.
+    system: promptSystem(data),
+    instruction: data.instruction ?? '',
+    model: data.model ?? '',
+    outputFormat: data.outputFormat ?? 'plain',
+    upstream,
+    images: imageHashes,
+  });
+}
 
-const PRESET_SYSTEM: Record<string, string> = {
-  enhance: 'Enhance and improve the following prompt for generative AI video/image.' + PRESET_LABEL_RULE,
-  analyzeImage: 'Analyze the provided image(s) in detail.' + PRESET_LABEL_RULE,
-  script: 'Write a short video script based on the inputs.' + PRESET_LABEL_RULE,
-  summarize: 'Summarize the following content concisely.' + PRESET_LABEL_RULE,
-  translate: 'Translate the following content to Vietnamese.' + PRESET_LABEL_RULE,
-  brainstorm: 'Brainstorm creative ideas based on the inputs.' + PRESET_LABEL_RULE,
-  custom: '',
-};
+function imageExt(mime: string): string {
+  const sub = mime.split('/')[1]?.split(/[+;]/)[0];
+  return sub === 'jpeg' ? 'jpg' : sub || 'png';
+}
+
+/**
+ * Download a Flow media once per run (signed url via the Flow tab). A failure
+ * is dropped from the cache so a later node in the run may try again.
+ */
+function fetchFlowImage(ctx: ExecutorContext, mediaId: string): Promise<Blob> {
+  const cached = ctx.flowMediaCache.get(mediaId);
+  if (cached) return cached;
+  const pending = ctx
+    .callDriver('flow', { name: 'fetchMediaById', payload: { mediaId } })
+    .then((res) => {
+      const m = res.medias?.[0];
+      if (!m?.dataBase64) throw new Error(strings.flowMediaSignFailed);
+      return b64ToBlob(m.dataBase64, m.mime || 'image/png');
+    });
+  ctx.flowMediaCache.set(mediaId, pending);
+  pending.catch(() => ctx.flowMediaCache.delete(mediaId));
+  return pending;
+}
+
+/**
+ * Images for Gemini: local blobs as-is; Flow-only refs (`flowMediaId`, no blob)
+ * are downloaded from Flow first. A failed download stops the node.
+ */
+async function geminiImagesOf(
+  ctx: ExecutorContext,
+  refs: NodeOutputValue[],
+): Promise<{ name: string; mime: string; dataBase64: string }[]> {
+  const imageRefs = refs.filter((r) => r.kind === 'image' && (r.blob || r.flowMediaId));
+  const remote = imageRefs.filter((r) => !r.blob);
+  const images = [];
+  let fetched = 0;
+  for (const ref of imageRefs) {
+    let blob = ref.blob;
+    if (!blob) {
+      fetched++;
+      ctx.onProgress(5, strings.promptFetchFlowImage(fetched, remote.length));
+      try {
+        blob = await fetchFlowImage(ctx, ref.flowMediaId!);
+      } catch (e) {
+        const label = ref.assetLabel ? `[${ref.assetLabel}]` : (ref.name ?? ref.flowMediaId!);
+        throw fail(
+          strings.promptFlowImageFetchFailed(label, e instanceof Error ? e.message : String(e)),
+          'FLOW_MEDIA_FETCH_FAILED',
+        );
+      }
+    }
+    const mime = ref.mime ?? (blob.type || 'image/png');
+    const base = ref.name ?? ref.assetLabel ?? ref.flowMediaId ?? 'image';
+    images.push({
+      name: /\.[a-z0-9]+$/i.test(base) ? base : `${base}.${imageExt(mime)}`,
+      mime,
+      dataBase64: await blobToBase64(blob),
+    });
+  }
+  return images;
+}
 
 const FLOW_URL_IN_PROMPT_RE = /https:\/\/flow-content\.google\/(?:image|video)\//i;
 
@@ -198,7 +310,8 @@ export function assertGeminiPromptPreserved(input: string, output: string): void
  * Prompt node:
  * - this node's instruction comes first, upstream Prompts are concatenated after it;
  * - `[Label]` stays in the body; descriptions gather under `Danh sách tham chiếu` (no URLs);
- * - references and the previous clip are forwarded so the generator receives them.
+ * - references and the previous clip are forwarded so the generator receives them
+ *   (unless `forwardRefs` is false); fashionCompose merges JSON locally (no Gemini).
  */
 export const promptExecutor: NodeExecutor = async (ctx) => {
   const data = ctx.node.data as PromptData;
@@ -210,48 +323,81 @@ export const promptExecutor: NodeExecutor = async (ctx) => {
   const continuation = await promptContinuation(ctx, data, continuationOf(inputs));
 
   let text = annotateAssetLabels(composePrompt(upstream, data.instruction ?? ''), asAssetRefs(refs));
+  let reuseHash: string | undefined;
+  const keepEdited = !ctx.force && data.outputEdited && !!data.formattedOutput?.trim();
+  const reuseSaved =
+    !keepEdited && !!ctx.reuseSavedPrompt && !!promptSystem(data) && !!data.formattedOutput?.trim();
 
-  const system = PRESET_SYSTEM[data.preset] ?? '';
-  if (system) {
-    const inputText = text;
-    const images = [];
-    for (const ref of refs) {
-      if (ref.kind !== 'image' || !ref.blob) continue;
-      images.push({ name: ref.name ?? 'image.png', mime: ref.mime ?? ref.blob.type, dataBase64: await blobToBase64(ref.blob) });
-    }
-    ctx.onProgress(10, 'Gửi prompt tới Gemini…');
-    const result = await ctx.callDriver('gemini', {
-      name: 'prompt',
-      payload: {
-        model: data.model,
-        instruction: system,
-        texts: [text],
-        images,
-        newChat: data.newChat,
-        outputFormat: data.outputFormat,
-      },
-    });
-    text = result.texts?.[0] ?? '';
-    assertGeminiPromptPreserved(inputText, text);
-    if (data.outputFormat === 'json') {
-      try {
-        JSON.parse(text);
-      } catch {
-        throw fail('Output không phải JSON hợp lệ');
+  if (keepEdited) {
+    ctx.onProgress(100, strings.promptEdited);
+    text = data.formattedOutput!;
+  } else if (reuseSaved) {
+    ctx.onProgress(100, strings.promptReused);
+    text = data.formattedOutput!;
+  } else if (data.preset === 'fashionCompose') {
+    text = composeFashionPrompt(upstream.length ? upstream : text.trim() ? [text] : [], fashionLabelsOf(refs));
+  } else {
+    const system = promptSystem(data);
+    if (system) {
+      reuseHash = await computePromptReuseHash(data, upstream, refs);
+      const canReuse =
+        !ctx.force &&
+        data.reusePrompt &&
+        !!data.formattedOutput?.trim() &&
+        !!data.reuseHash &&
+        data.reuseHash === reuseHash;
+
+      if (canReuse) {
+        ctx.onProgress(100, strings.promptReused);
+        text = data.formattedOutput!;
+      } else {
+        const inputText = text;
+        const images = await geminiImagesOf(ctx, refs);
+        ctx.onProgress(10, strings.promptSendingGemini);
+        const result = await ctx.callDriver('gemini', {
+          name: 'prompt',
+          payload: {
+            model: data.model,
+            instruction: system,
+            texts: [text],
+            images,
+            newChat: data.newChat,
+            outputFormat: data.outputFormat,
+          },
+        });
+        text = result.texts?.[0] ?? '';
+        // Fashion JSON presets intentionally drop [Label] tags.
+        if (!(data.preset in FASHION_SYSTEM)) {
+          assertGeminiPromptPreserved(inputText, text);
+        }
+        if (data.outputFormat === 'json') {
+          try {
+            const cleaned = extractJsonPayload(text);
+            JSON.parse(cleaned);
+            text = cleaned;
+          } catch {
+            throw fail(
+              data.preset in FASHION_SYSTEM ? strings.fashionJsonInvalid : strings.promptJsonInvalid,
+            );
+          }
+        }
+        ctx.onProgress(100, strings.promptFresh);
       }
     }
   }
 
+  const forwardRefs = data.forwardRefs !== false;
   return [
-    { kind: 'text', text, role: 'prompt' },
-    ...refs,
+    { kind: 'text', text, role: 'prompt', reuseHash, outputEdited: keepEdited },
+    ...(forwardRefs ? fashionOrderedRefs(data.preset, refs) : []),
     ...(continuation ? [continuation] : []),
   ];
 };
 
 /**
- * Reference → what the Flow driver needs: a media id, or a one-time upload for
- * local images. Media from Google Flow is never uploaded back.
+ * Reference → what the Flow driver needs: a media id, or a local upload payload.
+ * Media from Google Flow (`flowMediaId`) is never uploaded back.
+ * Local: reuse Asset `uploaded*` when project + sha match (driver decides).
  */
 async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<FlowGenerateRef | null> {
   if (ref.kind !== 'image' && ref.kind !== 'video' && ref.kind !== 'audio') return null;
@@ -264,15 +410,46 @@ async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<Fl
     );
   }
   if (ref.kind !== 'image' || !ref.blob) return base;
+
+  const sha256 = ref.contentHash ?? (await hashBlobContent(ref.blob));
+  ref.contentHash = sha256;
+  const sourceId = ref.sourceNodeId;
+  const assetNode = sourceId ? ctx.workflow.nodes.find((n) => n.id === sourceId) : undefined;
+  const assetData = assetNode?.type === 'asset' ? (assetNode.data as AssetData) : undefined;
+  const uploaded =
+    assetData?.uploadedMediaId && assetData.uploadedProjectId && assetData.uploadedSha256
+      ? {
+          mediaId: assetData.uploadedMediaId,
+          projectId: assetData.uploadedProjectId,
+          sha256: assetData.uploadedSha256,
+        }
+      : undefined;
+
   return {
     ...base,
     upload: {
       name: ref.name ?? 'image.png',
       mime: ref.mime ?? ref.blob.type,
       dataBase64: await blobToBase64(ref.blob),
-      cacheKey: `${ctx.runId}:${ref.localAssetId ?? ref.outputId ?? crypto.randomUUID()}`,
+      sha256,
+      nodeId: sourceId,
+      uploaded,
     },
   };
+}
+
+/** Persist new Flow upload ids onto the Asset nodes that produced them. */
+async function persistFlowUploads(
+  ctx: ExecutorContext,
+  uploads: NonNullable<Awaited<ReturnType<ExecutorContext['callDriver']>>['uploads']>,
+): Promise<void> {
+  for (const u of uploads) {
+    await ctx.patchNodeById(u.nodeId, {
+      uploadedMediaId: u.mediaId,
+      uploadedProjectId: u.projectId,
+      uploadedSha256: u.sha256,
+    });
+  }
 }
 
 /** Shared by both generators: prompt text, references and the previous clip. */
@@ -339,10 +516,12 @@ export const generateImageExecutor: NodeExecutor = async (ctx) => {
       outputsPerPrompt: data.count,
       prompt,
       refs,
+      resolution: data.resolution,
       timeoutSec: data.timeoutSec,
       logCtx: { runId: ctx.runId, nodeId: ctx.node.id },
     },
   });
+  if (result.uploads?.length) await persistFlowUploads(ctx, result.uploads);
 
   const outputs = await collectMedias(ctx, result.medias ?? [], 'image');
   if (!outputs.length) throw fail('Không lấy được ảnh');
@@ -384,6 +563,7 @@ export const generateVideoExecutor: NodeExecutor = async (ctx) => {
       logCtx: { runId: ctx.runId, nodeId: ctx.node.id },
     },
   });
+  if (result.uploads?.length) await persistFlowUploads(ctx, result.uploads);
 
   const outputs = await collectMedias(ctx, result.medias ?? [], 'video');
   if (!outputs.length) {

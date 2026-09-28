@@ -5,12 +5,21 @@ export const geminiSelectors = {
   signIn: [{ text: /sign in|đăng nhập/i }],
   newChat: [{ ariaLabel: /new chat|đoạn chat mới/i }, { text: /new chat|đoạn chat mới/i }],
   modelPicker: [{ ariaLabel: /model|fast|pro/i }],
-  input: [{ css: '[contenteditable="true"]' }, { css: 'rich-textarea' }, { ariaLabel: /enter a prompt|nhập/i }],
-  attach: [{ ariaLabel: /upload|attach|image|thêm/i }],
-  fileInput: [{ css: 'input[type="file"]' }],
+  // Ô chat thật nằm trong <rich-textarea>; extension khác (vd Sider) cũng chèn contenteditable.
+  input: [
+    { css: 'rich-textarea [contenteditable="true"]' },
+    { ariaLabel: /enter a prompt|nhập/i },
+    { css: '[contenteditable="true"]' },
+  ],
+  attachmentPreview: [{ css: 'uploader-file-preview' }],
   send: [{ ariaLabel: /send|gửi/i }, { css: 'button[aria-label*="Send" i]' }],
   stop: [{ ariaLabel: /stop|dừng/i }],
-  lastResponse: [{ css: 'message-content, .model-response, [data-response]' }],
+  /** Model reply containers; the driver keeps the outermost, last match. */
+  lastResponse: [
+    {
+      css: 'model-response, [data-message-author-role="model"], .model-response, .response-container, message-content',
+    },
+  ],
   mediaInResponse: [{ css: 'img[src*="google"], video, a[href*="download"]' }],
   createImageTool: [{ text: /create image|tạo hình|image/i }],
   createVideoTool: [{ text: /create video|tạo video|video/i }],

@@ -1,0 +1,31 @@
+=== workflowRepo.getDraft ===
+211:  async getDraft(workflowId: string) {
+212-    const draft = await db.drafts.get(workflowId);
+213-    if (!draft) return undefined;
+214-    // Draft có thể còn schema cũ (pre-v6); migrate trước khi restore vào editor.
+215-    return { ...draft, workflow: migrateWorkflow(draft.workflow) };
+216-  },
+
+=== EditorApp draft restore ===
+768-                  .__draft;
+769-                // Draft cũ có thể còn resolution số / thiếu reusePrompt - migrate trước load.
+770:                if (draft) store.loadWorkflow(migrateWorkflow(draft.workflow));
+771-                setDraftOpen(false);
+772-              }}
+773-            >
+774-              {strings.restoreDraftYes}
+775-            </Button>
+776-            <Button variant="secondary" onClick={() => setDraftOpen(false)}>
+777-              {strings.restoreDraftNo}
+778-            </Button>
+
+=== EditorApp import migrateWorkflow ===
+66:  migrateWorkflow,
+770:                if (draft) store.loadWorkflow(migrateWorkflow(draft.workflow));
+
+=== schema-v6 draft-like test name ===
+7:  validateNodeData,
+67:  it('migrate rồi validateNodeData: prompt reusePrompt false, ảnh resolution 1K', () => {
+69:      id: 'draft-wf',
+92:    const prompt = validateNodeData('prompt', wf.nodes[0]!.data) as { reusePrompt: boolean };
+93:    const image = validateNodeData('generateImage', wf.nodes[1]!.data) as { resolution: string };

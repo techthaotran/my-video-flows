@@ -1,0 +1,21 @@
+=== SCHEMA_VERSION + v6→v7 migrate ===
+7: * v6: Prompt `reusePrompt`/`forwardRefs`/`reuseHash`, preset fashion*, ảnh `IMAGE_RESOLUTIONS`, Output.workflowId.
+8: * v7: Asset `uploaded*` (id upload Flow của ảnh local), Prompt `systemPrompt`/`outputEdited` - field optional/default.
+10:export const SCHEMA_VERSION = 7;
+126:  uploadedMediaId: z.string().optional(),
+143:  /** Dùng lại formattedOutput khi reuseHash khớp. Node mới mặc định bật; migrate v5→v6 tắt cho node cũ. */
+150:  systemPrompt: z.string().optional(),
+154:  outputEdited: z.boolean().default(false),
+271:    schemaVersion: z.number().int().default(SCHEMA_VERSION),
+540:/** v5 → v6: đặt field Prompt/GenerateImage trước khi zod default làm lệch workflow video cũ. */
+588:  // v6 → v7: chỉ nâng version (field mới optional/default an toàn).
+592:    schemaVersion: SCHEMA_VERSION,
+600:  if ((wf.schemaVersion ?? 0) >= SCHEMA_VERSION) return wf;
+
+=== test v6→v7 ===
+8:  SCHEMA_VERSION,
+11:describe('schema v6 migrate', () => {
+31:    expect(wf.schemaVersion).toBe(SCHEMA_VERSION);
+98:  it('workflow v6 → v7: chỉ nâng version, field mới optional/default an toàn', () => {
+102:      name: 'fashion v6',
+131:    expect(asset.uploadedMediaId).toBeUndefined();

@@ -1,0 +1,12 @@
+=== promptPresetLabel definition ===
+474:export function promptPresetLabel(preset: string): string {
+475-  return PROMPT_PRESET_LABELS[preset] ?? preset;
+476-}
+
+=== UI usage (not raw fashionScene as sole label) ===
+src/features/editor/EditorApp.tsx:41:import { strings, promptPresetLabel } from '@/shared/strings';
+src/features/editor/EditorApp.tsx:950:            optionLabel={promptPresetLabel}
+src/features/editor/EditorApp.tsx:954:                ...(v === 'fashionScene' ? { forwardRefs: false } : {}),
+src/features/runner/GenerateItemList.tsx:15:import { strings, promptPresetLabel } from '@/shared/strings';
+src/features/runner/GenerateItemList.tsx:253:                      preset === 'fashionScene'
+src/features/runner/GenerateItemList.tsx:261:                      {promptPresetLabel(opt)}

@@ -1,0 +1,2 @@
+83:      (n.data as Record<string, unknown>).sha256 = asset.sha256;
+530:    const meta = preview.manifest.assets.find((a) => a.sha256 === sha);

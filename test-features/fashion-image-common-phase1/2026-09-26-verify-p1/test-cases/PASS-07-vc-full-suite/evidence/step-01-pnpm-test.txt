@@ -1,0 +1,151 @@
+
+> my-x-flows@0.1.0 test /Users/ggj/MyWork/my-video-flows
+> vitest run --config vitest.config.ts
+
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/run-repo-latest.test.ts (3 tests) 47ms
+ ✓ tests/unit/workflow-repo-patch.test.ts (5 tests) 56ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user
+[driver] Tab flow không có content script — inject lại 
+
+ ✓ tests/unit/flow-rpc-generate.test.ts (41 tests) 58ms
+stderr | tests/unit/run-only-node.test.ts > generate only this node > stops with a clear error when an upstream generator has no result to reuse
+[run] Lỗi: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước. Error: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước.
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:396:27)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:325:11) {
+  code: 'UNKNOWN'
+}
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào
+[node:mergeVideo] Lần 1 lỗi ERR_INVALID_ARG_TYPE: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView. TypeError: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+    at codedTypeError (node:internal/webidl:217:15)
+    at makeException (node:internal/webidl:226:10)
+    at Object.converters.BufferSource (node:internal/crypto/webidl:223:11)
+    at SubtleCrypto.digest (node:internal/crypto/webcrypto:71:28)
+    at sha256 (/Users/ggj/MyWork/my-video-flows/src/shared/utils/index.ts:56:36)
+    at Object.put (/Users/ggj/MyWork/my-video-flows/src/storage/repos/assetRepo.ts:11:24)
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:40:40)
+    at Object.composeVideo (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:512:34)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:440:26)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:31) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+
+stderr | tests/unit/run-regenerate.test.ts > RunManager.regenerate > generate loi -> khong compose
+[node:generateVideo] Lỗi CONTENT_POLICY (không retry): CONTENT_POLICY Error: CONTENT_POLICY
+    at Object.execute (/Users/ggj/MyWork/my-video-flows/tests/unit/run-regenerate.test.ts:186:31)
+    at Object.callDriver (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:533:25)
+    at generateVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:372:28)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:325:11)
+    at job (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:124:22) {
+  code: 'CONTENT_POLICY'
+}
+
+stderr | tests/unit/run-regenerate.test.ts > RunManager.regenerate > generate loi -> khong compose
+[run] Lỗi: CONTENT_POLICY Error: CONTENT_POLICY
+    at Object.execute (/Users/ggj/MyWork/my-video-flows/tests/unit/run-regenerate.test.ts:186:31)
+    at Object.callDriver (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:533:25)
+    at generateVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:372:28)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:325:11)
+    at job (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:124:22) {
+  code: 'CONTENT_POLICY'
+}
+
+ ✓ tests/unit/core.test.ts (28 tests) 200ms
+ ✓ tests/unit/run-regenerate.test.ts (6 tests) 192ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > chỉ inject content script của đúng provider
+[driver] Tab gemini không có content script — inject lại 
+
+ ✓ tests/unit/runner-actions.test.ts (4 tests) 41ms
+ ✓ tests/unit/run-patch-node-data.test.ts (1 test) 34ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject không cứu được thì mới reload tab
+[driver] Tab flow không có content script — inject lại 
+
+ ✓ tests/unit/node-pipeline.test.ts (16 tests) 38ms
+ ✓ tests/unit/media-kind.test.ts (10 tests) 19ms
+ ✓ tests/unit/run-deleted-guard.test.ts (2 tests) 37ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject không cứu được thì mới reload tab
+[driver] Inject lại không ăn thua — reload tab flow 
+
+ ✓ tests/unit/merge-video.test.ts (19 tests) 9ms
+ ✓ tests/unit/flow-batch.test.ts (20 tests) 8ms
+ ✓ tests/unit/output-stats.test.ts (4 tests) 44ms
+ ✓ tests/unit/run-events-channel.test.ts (4 tests) 9ms
+ ✓ tests/unit/background-windows.test.ts (4 tests) 5ms
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào
+[run] Lỗi: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView. TypeError: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+    at codedTypeError (node:internal/webidl:217:15)
+    at makeException (node:internal/webidl:226:10)
+    at Object.converters.BufferSource (node:internal/crypto/webidl:223:11)
+    at SubtleCrypto.digest (node:internal/crypto/webcrypto:71:28)
+    at sha256 (/Users/ggj/MyWork/my-video-flows/src/shared/utils/index.ts:56:36)
+    at Object.put (/Users/ggj/MyWork/my-video-flows/src/storage/repos/assetRepo.ts:11:24)
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:40:40)
+    at Object.composeVideo (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:512:34)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:440:26)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:31) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+
+ ✓ tests/unit/flow-payload-log.test.ts (8 tests) 4ms
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas
+[node:mergeVideo] Lần 1 lỗi ERR_INVALID_ARG_TYPE: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView. TypeError: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+    at codedTypeError (node:internal/webidl:217:15)
+    at makeException (node:internal/webidl:226:10)
+    at Object.converters.BufferSource (node:internal/crypto/webidl:223:11)
+    at SubtleCrypto.digest (node:internal/crypto/webcrypto:71:28)
+    at sha256 (/Users/ggj/MyWork/my-video-flows/src/shared/utils/index.ts:56:36)
+    at Object.put (/Users/ggj/MyWork/my-video-flows/src/storage/repos/assetRepo.ts:11:24)
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:40:40)
+    at Object.composeVideo (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:512:34)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:440:26)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:31) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+
+ ✓ tests/unit/flow-prompt-parts.test.ts (9 tests) 5ms
+ ✓ tests/unit/runner-selectors.test.ts (6 tests) 4ms
+ ✓ tests/unit/schema-v6-migrate.test.ts (4 tests) 4ms
+ ✓ tests/unit/merge-ready.test.ts (6 tests) 5ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Tab flow không có content script — inject lại 
+
+ ✓ tests/unit/incoming-inputs.test.ts (2 tests) 4ms
+ ✓ tests/unit/runner-store.test.ts (4 tests) 3ms
+ ✓ tests/unit/editor-external-sync.test.ts (4 tests) 3ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Inject lại không ăn thua — reload tab flow 
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas
+[run] Lỗi: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView. TypeError: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+    at codedTypeError (node:internal/webidl:217:15)
+    at makeException (node:internal/webidl:226:10)
+    at Object.converters.BufferSource (node:internal/crypto/webidl:223:11)
+    at SubtleCrypto.digest (node:internal/crypto/webcrypto:71:28)
+    at sha256 (/Users/ggj/MyWork/my-video-flows/src/shared/utils/index.ts:56:36)
+    at Object.put (/Users/ggj/MyWork/my-video-flows/src/storage/repos/assetRepo.ts:11:24)
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:40:40)
+    at Object.composeVideo (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:512:34)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:440:26)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:476:31) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+
+ ✓ tests/unit/run-only-node.test.ts (5 tests) 2673ms
+   ✓ chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào  1466ms
+   ✓ chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas  1126ms
+ ✓ tests/unit/content-script-recovery.test.ts (6 tests) 3620ms
+   ✓ phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user  303ms
+   ✓ phục hồi khi tab mất content script > chỉ inject content script của đúng provider  303ms
+   ✓ phục hồi khi tab mất content script > inject không cứu được thì mới reload tab  1504ms
+   ✓ phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome  1505ms
+
+ Test Files  25 passed (25)
+      Tests  221 passed (221)
+   Start at  12:15:06
+   Duration  4.75s (transform 808ms, setup 590ms, collect 2.53s, tests 7.12s, environment 7.99s, prepare 2.41s)
+

@@ -1,0 +1,6 @@
+42:describe('promptExecutor reusePrompt', () => {
+43:  it('same inputs → returns formattedOutput and does not call driver', async () => {
+93:  it('same size different content → calls driver again', async () => {
+137:  it('reusePrompt: false → always calls driver', async () => {
+174:  it('forwardRefs: false → text only (continuation still kept)', async () => {
+211:  it('fashionScene forwardRefs:false keeps scene media out of generateImage refs', async () => {

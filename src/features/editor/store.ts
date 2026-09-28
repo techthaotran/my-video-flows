@@ -497,7 +497,8 @@ export const useEditorStore = create<EditorState>()(
                     progress,
                     statusMessage:
                       status === 'running'
-                        ? (message ?? n.data.statusMessage)
+                        ? // A new run starts without a message: drop the previous run's.
+                          (message ?? (n.data.status === 'running' ? n.data.statusMessage : undefined))
                         : status === '' || status === 'queued'
                           ? undefined
                           : n.data.statusMessage,

@@ -1,0 +1,4 @@
+src/engine/executors.ts:233:  const keepEdited = !ctx.force && data.outputEdited && !!data.formattedOutput?.trim();
+src/engine/executors.ts:300:    { kind: 'text', text, role: 'prompt', reuseHash, outputEdited: keepEdited },
+src/engine/RunManager.ts:76:      /** Mode `node`: node đích bỏ qua dùng lại / xoá outputEdited. */
+src/engine/RunManager.ts:632:              outputEdited: !!textOut?.outputEdited,

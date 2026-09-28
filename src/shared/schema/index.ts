@@ -4,8 +4,10 @@ import { z } from 'zod';
  * v3: node Text gộp vào Prompt.
  * v4: Prompt có `continueFrameAssetId` (optional) - không cần biến đổi dữ liệu cũ.
  * v5: thêm node `mergeVideo` - node type mới, dữ liệu node cũ giữ nguyên shape.
+ * v6: Prompt `reusePrompt`/`forwardRefs`/`reuseHash`, preset fashion*, ảnh `IMAGE_RESOLUTIONS`, Output.workflowId.
+ * v7: Asset `uploaded*` (id upload Flow của ảnh local), Prompt `systemPrompt`/`outputEdited` - field optional/default.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 8;
 export const FORMAT_VERSION = 1;
 
 export const PortTypeSchema = z.enum(['text', 'image', 'video', 'audio', 'any']);
@@ -65,7 +67,27 @@ export function normalizeModelLabel(model: string | undefined, fallback: string)
   return LEGACY_MODEL_LABELS[model.trim().toLowerCase()] ?? model;
 }
 export const ASPECT_RATIOS = ['9:16', '16:9', '1:1', '4:3', '3:4'] as const;
+/** Độ phân giải video (Flow) - giữ số p. */
 export const RESOLUTIONS = [720, 1080] as const;
+/** Độ phân giải ảnh (Flow) - nhãn RPC; 2K dùng RPC riêng ở Phase 2. */
+export const IMAGE_RESOLUTIONS = ['1K', '2K'] as const;
+export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
+
+export const PROMPT_PRESETS = [
+  'enhance',
+  'analyzeImage',
+  'script',
+  'summarize',
+  'translate',
+  'brainstorm',
+  'custom',
+  'fashionScene',
+  'fashionModel',
+  'fashionOutfit',
+  'fashionColor',
+  'fashionCompose',
+] as const;
+export type PromptPreset = (typeof PROMPT_PRESETS)[number];
 
 export const ViewportSchema = z.object({
   x: z.number(),
@@ -97,6 +119,13 @@ export const AssetNodeDataSchema = z.object({
   flowMediaId: z.string().optional(),
   /** Signed URL lúc chọn — chỉ để preview, có thể hết hạn. */
   flowPreviewUrl: z.string().optional(),
+  /**
+   * Ảnh local đã upload lên Flow (`maseQ`): id dùng lại khi cùng project + sha256.
+   * Khác `flowMediaId` (asset gốc Flow); gắn với tài khoản nên export bỏ các field này.
+   */
+  uploadedMediaId: z.string().optional(),
+  uploadedProjectId: z.string().optional(),
+  uploadedSha256: z.string().optional(),
 });
 
 export const TextNodeDataSchema = z.object({
@@ -107,14 +136,22 @@ export const TextNodeDataSchema = z.object({
 export const PromptNodeDataSchema = z.object({
   provider: z.literal('gemini').default('gemini'),
   model: z.string().default(''),
-  preset: z
-    .enum(['enhance', 'analyzeImage', 'script', 'summarize', 'translate', 'brainstorm', 'custom'])
-    .default('custom'),
+  preset: z.enum(PROMPT_PRESETS).default('custom'),
   instruction: z.string().default(''),
   outputFormat: z.enum(['plain', 'json']).default('plain'),
   newChat: z.boolean().default(true),
-  /** Output của lần chạy gần nhất (read-only trên UI). */
+  /** Dùng lại formattedOutput khi reuseHash khớp. Node mới mặc định bật; migrate v5→v6 tắt cho node cũ. */
+  reusePrompt: z.boolean().default(true),
+  /** Hash đầu vào lần phân tích gần nhất (ảnh + instruction + model + preset + text). */
+  reuseHash: z.string().optional(),
+  /** Chuyển tiếp ảnh đầu vào xuống node sau. */
+  forwardRefs: z.boolean().default(true),
+  /** Skill (system prompt) riêng của node; trống = mặc định của preset. */
+  systemPrompt: z.string().optional(),
+  /** Output của lần chạy gần nhất (sửa tay được trên panel). */
   formattedOutput: z.string().optional(),
+  /** `formattedOutput` đã sửa tay: luôn dùng lại, chỉ "Phân tích lại" (force) mới xoá. */
+  outputEdited: z.boolean().default(false),
   /**
    * Asset (IndexedDB) giữ frame cuối của cảnh trước lần nối gần nhất.
    * Vẫn chuyển tiếp khi đã xoá liên kết tới Generate Video trước; xoá field để tạo cảnh mới.
@@ -127,7 +164,7 @@ export const GenerateImageNodeDataSchema = z.object({
   model: z.string().default(DEFAULT_IMAGE_MODEL),
   aspectRatio: z.string().default('9:16'),
   count: z.number().int().min(1).max(4).default(1),
-  resolution: z.number().int().default(720),
+  resolution: z.enum(IMAGE_RESOLUTIONS).default('1K'),
   timeoutSec: z.number().int().min(30).max(3600).default(600),
   retry: z.number().int().min(0).max(10).optional(),
   previewOutputId: z.string().optional(),
@@ -332,6 +369,8 @@ export type NodeRun = z.infer<typeof NodeRunSchema>;
 export const OutputSchema = z.object({
   id: z.string(),
   nodeRunId: z.string(),
+  /** Denormalized từ run để truy vấn thumbnail/đếm theo workflow (Dexie v2). */
+  workflowId: z.string().optional(),
   kind: z.enum(['text', 'image', 'video', 'audio', 'any']),
   mime: z.string().optional(),
   text: z.string().optional(),
@@ -423,10 +462,14 @@ function migrateNode(n: Record<string, unknown>): Record<string, unknown> {
 
   if (type === 'text') {
     // Text tĩnh = Prompt không có input; handle out:text giữ nguyên nên edge không đổi.
+    // reusePrompt: false - đây là dữ liệu cũ, không bật dùng lại mặc định.
     return {
       ...n,
       type: 'prompt',
-      data: PromptNodeDataSchema.parse({ instruction: String(data.content ?? '') }),
+      data: PromptNodeDataSchema.parse({
+        instruction: String(data.content ?? ''),
+        reusePrompt: false,
+      }),
     };
   }
 
@@ -440,7 +483,7 @@ function migrateNode(n: Record<string, unknown>): Record<string, unknown> {
           model: normalizeModelLabel(data.model as string | undefined, DEFAULT_IMAGE_MODEL),
           aspectRatio: data.aspectRatio || '9:16',
           count: data.outputsPerPrompt ?? 1,
-          resolution: 720,
+          resolution: '1K',
           timeoutSec: data.timeoutSec ?? 600,
           retry: data.retry,
         },
@@ -484,7 +527,7 @@ function migrateNode(n: Record<string, unknown>): Record<string, unknown> {
         model: normalizeModelLabel(data.model as string | undefined, DEFAULT_IMAGE_MODEL),
         aspectRatio: '9:16',
         count: 1,
-        resolution: 720,
+        resolution: '1K',
         timeoutSec: data.timeoutSec ?? 300,
         retry: data.retry,
       },
@@ -494,9 +537,34 @@ function migrateNode(n: Record<string, unknown>): Record<string, unknown> {
   return n;
 }
 
+/** v5 → v6: đặt field Prompt/GenerateImage trước khi zod default làm lệch workflow video cũ. */
+function migrateNodesV5ToV6(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
+  return nodes.map((n) => {
+    const type = String(n.type ?? '');
+    const data = (typeof n.data === 'object' && n.data !== null ? { ...n.data } : {}) as Record<
+      string,
+      unknown
+    >;
+
+    if (type === 'prompt') {
+      if (data.reusePrompt === undefined) data.reusePrompt = false;
+      if (data.forwardRefs === undefined) data.forwardRefs = true;
+      return { ...n, data };
+    }
+
+    if (type === 'generateImage' && typeof data.resolution === 'number') {
+      data.resolution = '1K';
+      return { ...n, data };
+    }
+
+    return n;
+  });
+}
+
 export function migrateWorkflow(raw: unknown): Workflow {
   const obj = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   let current = { ...obj };
+  const fromVersion = Number(current.schemaVersion ?? 0);
 
   if (Array.isArray(current.nodes)) {
     current.nodes = (current.nodes as Record<string, unknown>[]).map((n) => {
@@ -513,7 +581,16 @@ export function migrateWorkflow(raw: unknown): Workflow {
     });
   }
 
-  // Remap legacy edge handles if needed — keep as-is
+  if (fromVersion < 6 && Array.isArray(current.nodes)) {
+    current.nodes = migrateNodesV5ToV6(current.nodes as Record<string, unknown>[]);
+  }
+
+  // v6 → v7: chỉ nâng version (field mới optional/default an toàn).
+  // v7 → v8: ảnh bối cảnh giờ là ảnh gốc để chỉnh sửa → node fashionScene chuyển tiếp ảnh.
+  if (fromVersion < 8 && Array.isArray(current.nodes)) {
+    current.nodes = (current.nodes as Record<string, unknown>[]).map(enableSceneForwardRefs);
+  }
+  // Remap legacy edge handles if needed - keep as-is
   return WorkflowSchema.parse({
     ...current,
     schemaVersion: SCHEMA_VERSION,
@@ -522,14 +599,16 @@ export function migrateWorkflow(raw: unknown): Workflow {
   });
 }
 
+function enableSceneForwardRefs(node: Record<string, unknown>): Record<string, unknown> {
+  const data = node.data as Record<string, unknown> | undefined;
+  if (node.type !== 'prompt' || data?.preset !== 'fashionScene') return node;
+  return { ...node, data: { ...data, forwardRefs: true } };
+}
+
 /** Nâng cấp workflow đã lưu trong IndexedDB (không đi qua import). */
 export function upgradeStoredWorkflow(wf: Workflow): Workflow {
   if ((wf.schemaVersion ?? 0) >= SCHEMA_VERSION) return wf;
-  return {
-    ...wf,
-    schemaVersion: SCHEMA_VERSION,
-    nodes: wf.nodes.map((n) => migrateNode(n as Record<string, unknown>) as WorkflowNode),
-  };
+  return migrateWorkflow(wf);
 }
 
 export function validateNodeData(type: NodeType, data: unknown) {

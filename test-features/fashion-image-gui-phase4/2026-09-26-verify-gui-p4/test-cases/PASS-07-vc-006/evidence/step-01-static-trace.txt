@@ -1,0 +1,121 @@
+=== IMAGE_RESOLUTIONS in EditorApp generateImage ===
+src/features/sidepanel/SidePanelApp.tsx-20-import { templateRepo } from '@/storage/repos/templateRepo';
+src/features/sidepanel/SidePanelApp.tsx-21-import { runRepo } from '@/storage/repos/runRepo';
+src/features/sidepanel/SidePanelApp.tsx-22-import { getSettings, setSettings, getUiState, setUiState } from '@/storage/repos/settingsRepo';
+src/features/sidepanel/SidePanelApp.tsx-23-import {
+src/features/sidepanel/SidePanelApp.tsx-24-  exportWorkflows,
+src/features/sidepanel/SidePanelApp.tsx:25:  exportWorkspace,
+src/features/sidepanel/SidePanelApp.tsx-26-  exportBackup,
+src/features/sidepanel/SidePanelApp.tsx-27-  parseImportFile,
+src/features/sidepanel/SidePanelApp.tsx-28-  commitImport,
+src/features/sidepanel/SidePanelApp.tsx-29-} from '@/storage/transfer';
+src/features/sidepanel/SidePanelApp.tsx-30-import { chromeDownload, formatRelativeTime, cn } from '@/shared/utils';
+--
+src/features/sidepanel/SidePanelApp.tsx-173-    await chromeDownload(result.blob, result.filename, true);
+src/features/sidepanel/SidePanelApp.tsx-174-  };
+src/features/sidepanel/SidePanelApp.tsx-175-
+src/features/sidepanel/SidePanelApp.tsx-176-  const onExportWorkspace = async () => {
+src/features/sidepanel/SidePanelApp.tsx-177-    if (!current) return;
+src/features/sidepanel/SidePanelApp.tsx:178:    const result = await exportWorkspace(current.id);
+src/features/sidepanel/SidePanelApp.tsx-179-    await chromeDownload(result.blob, result.filename, true);
+src/features/sidepanel/SidePanelApp.tsx-180-  };
+src/features/sidepanel/SidePanelApp.tsx-181-
+src/features/sidepanel/SidePanelApp.tsx-182-  const onRunAll = async () => {
+src/features/sidepanel/SidePanelApp.tsx-183-    if (!current) return;
+--
+src/features/sidepanel/SidePanelApp.tsx-298-          <Trash2 className="h-4 w-4" />
+src/features/sidepanel/SidePanelApp.tsx-299-        </Button>
+src/features/sidepanel/SidePanelApp.tsx-300-        <Button
+src/features/sidepanel/SidePanelApp.tsx-301-          variant="outline"
+src/features/sidepanel/SidePanelApp.tsx-302-          size="icon"
+src/features/sidepanel/SidePanelApp.tsx:303:          title={strings.exportWorkspace}
+src/features/sidepanel/SidePanelApp.tsx-304-          disabled={!current}
+src/features/sidepanel/SidePanelApp.tsx-305-          onClick={() => void onExportWorkspace()}
+src/features/sidepanel/SidePanelApp.tsx-306-        >
+src/features/sidepanel/SidePanelApp.tsx-307-          <Download className="h-4 w-4" />
+src/features/sidepanel/SidePanelApp.tsx-308-        </Button>
+--
+src/features/editor/EditorApp.tsx-53-import type { NodeType } from '@/shared/schema';
+src/features/editor/EditorApp.tsx-54-import {
+src/features/editor/EditorApp.tsx-55-  ASSET_LABELS,
+src/features/editor/EditorApp.tsx-56-  ASPECT_RATIOS,
+src/features/editor/EditorApp.tsx-57-  IMAGE_MODELS,
+src/features/editor/EditorApp.tsx:58:  IMAGE_RESOLUTIONS,
+src/features/editor/EditorApp.tsx-59-  PROMPT_PRESETS,
+src/features/editor/EditorApp.tsx-60-  VIDEO_MODELS,
+src/features/editor/EditorApp.tsx-61-  VIDEO_DURATIONS,
+src/features/editor/EditorApp.tsx-62-  DEFAULT_IMAGE_MODEL,
+src/features/editor/EditorApp.tsx-63-  DEFAULT_VIDEO_MODEL,
+src/features/editor/EditorApp.tsx-64-  normalizeModelLabel,
+src/features/editor/EditorApp.tsx:65:  RESOLUTIONS,
+src/features/editor/EditorApp.tsx-66-  defaultKindForLabel,
+src/features/editor/EditorApp.tsx-67-  migrateWorkflow,
+src/features/editor/EditorApp.tsx-68-} from '@/shared/schema';
+src/features/editor/EditorApp.tsx-69-import {
+src/features/editor/EditorApp.tsx-70-  computePromptPreview,
+--
+src/features/editor/EditorApp.tsx-1022-            onChange={(v) => update(node.id, { count: Number(v) })}
+src/features/editor/EditorApp.tsx-1023-          />
+src/features/editor/EditorApp.tsx-1024-          <SelectField
+src/features/editor/EditorApp.tsx-1025-            label={strings.imageResolution}
+src/features/editor/EditorApp.tsx-1026-            value={String(d.resolution ?? '1K')}
+src/features/editor/EditorApp.tsx:1027:            options={[...IMAGE_RESOLUTIONS]}
+src/features/editor/EditorApp.tsx-1028-            onChange={(v) => update(node.id, { resolution: v })}
+src/features/editor/EditorApp.tsx-1029-          />
+src/features/editor/EditorApp.tsx-1030-        </>
+src/features/editor/EditorApp.tsx-1031-      )}
+src/features/editor/EditorApp.tsx-1032-
+--
+src/features/editor/EditorApp.tsx-1060-            onChange={(v) => update(node.id, { count: Number(v) })}
+src/features/editor/EditorApp.tsx-1061-          />
+src/features/editor/EditorApp.tsx-1062-          <SelectField
+src/features/editor/EditorApp.tsx-1063-            label={strings.resolution}
+src/features/editor/EditorApp.tsx-1064-            value={String(d.resolution ?? 720)}
+src/features/editor/EditorApp.tsx:1065:            options={RESOLUTIONS.map(String)}
+src/features/editor/EditorApp.tsx-1066-            onChange={(v) => update(node.id, { resolution: Number(v) })}
+src/features/editor/EditorApp.tsx-1067-          />
+src/features/editor/EditorApp.tsx-1068-          <SelectField
+src/features/editor/EditorApp.tsx-1069-            label={strings.durationSec}
+src/features/editor/EditorApp.tsx-1070-            value={String(d.durationSec ?? 4)}
+
+=== schema IMAGE_RESOLUTIONS ===
+7: * v6: Prompt `reusePrompt`/`forwardRefs`/`reuseHash`, preset fashion*, ảnh `IMAGE_RESOLUTIONS`, Output.workflowId.
+72:export const IMAGE_RESOLUTIONS = ['1K', '2K'] as const;
+73:export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
+155:  resolution: z.enum(IMAGE_RESOLUTIONS).default('1K'),
+
+=== strings exportWorkspace ===
+351:  exportWorkspace: 'Export workspace',
+352:  exportWorkspaceTitle: 'Export workspace',
+
+=== generateVideo still RESOLUTIONS ===
+55-  ASSET_LABELS,
+56-  ASPECT_RATIOS,
+57-  IMAGE_MODELS,
+58:  IMAGE_RESOLUTIONS,
+59-  PROMPT_PRESETS,
+60-  VIDEO_MODELS,
+61-  VIDEO_DURATIONS,
+62-  DEFAULT_IMAGE_MODEL,
+63-  DEFAULT_VIDEO_MODEL,
+64-  normalizeModelLabel,
+65:  RESOLUTIONS,
+66-  defaultKindForLabel,
+67-  migrateWorkflow,
+68-} from '@/shared/schema';
+--
+1024-          <SelectField
+1025-            label={strings.imageResolution}
+1026-            value={String(d.resolution ?? '1K')}
+1027:            options={[...IMAGE_RESOLUTIONS]}
+1028-            onChange={(v) => update(node.id, { resolution: v })}
+1029-          />
+1030-        </>
+--
+1062-          <SelectField
+1063-            label={strings.resolution}
+1064-            value={String(d.resolution ?? 720)}
+1065:            options={RESOLUTIONS.map(String)}
+1066-            onChange={(v) => update(node.id, { resolution: Number(v) })}
+1067-          />
+1068-          <SelectField

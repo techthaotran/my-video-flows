@@ -1,0 +1,38 @@
+=== hashIdx anywhere under src/storage/transfer ===
+NO_hashIdx
+=== void d / dead parse vars in transfer ===
+NO_void_d
+=== broader void patterns near parseImportFile ===
+251:function assertSafePath(path: string): void {
+=== parseImportFile / schemaVersion self-compare smell ===
+119:      schemaVersion: w.schemaVersion,
+230:  assetCount: number;
+290:): { nodes: Workflow['nodes']; assetCount: number; warnings: string[] } {
+292:  let assetCount = 0;
+308:      assetCount++;
+315:  return { nodes, assetCount, warnings };
+318:export async function parseImportFile(file: File, limits?: { maxZipMb?: number; maxJsonMb?: number }): Promise<ImportPreview> {
+338:          schemaVersion: wf.schemaVersion,
+353:      const { nodes, assetCount, warnings } = previewAssetNodes(migrated, new Map(), {
+360:        assetCount,
+419:    const { nodes, assetCount, warnings } = previewAssetNodes(migrated, assetBlobs);
+424:      assetCount,
+=== confirm remapMediaAssets has no positional index assign ===
+20:  const sha = (data as { sha256?: unknown }).sha256;
+83:      (n.data as Record<string, unknown>).sha256 = asset.sha256;
+85:        assetHashes.set(asset.sha256, {
+123:    assets: [...assetHashes.entries()].map(([sha256, a]) => ({
+124:      sha256,
+127:      path: `assets/${sha256}${extFromMime(a.mime)}`,
+303:      return { ...n, data: { ...n.data, missing: true, assetId: undefined } };
+309:      return { ...n, data: { ...n.data, missing: false } };
+312:    return { ...n, data: { ...n.data, missing: true, assetId: undefined } };
+400:    const path = a.path ?? `assets/${a.sha256}`;
+405:      const found = Object.keys(unzipped).find((p) => p.startsWith(`assets/${a.sha256}`));
+407:      assetBlobs.set(a.sha256, new Blob([unzipped[found]!.slice()], { type: a.mime }));
+409:      assetBlobs.set(a.sha256, new Blob([data.slice()], { type: a.mime }));
+526:/** Ghi blob từ preview vào IndexedDB; trả map sha256 → assetId local. */
+530:    const meta = preview.manifest.assets.find((a) => a.sha256 === sha);
+541:export function remapMediaAssets(wf: Workflow, hashToAssetId: Map<string, string>): Workflow {
+550:        data.missing = false;
+552:        data.missing = true;

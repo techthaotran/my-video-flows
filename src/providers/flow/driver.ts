@@ -1,4 +1,4 @@
-import { query, type Locator } from '@/providers/dom-kit';
+import { query, readAccountEmail, type Locator } from '@/providers/dom-kit';
 import { flowSelectors } from '@/providers/flow/selectors';
 import { IMAGE_MODELS, VIDEO_MODELS } from '@/shared/schema';
 import { parseFlowMediaUrl } from '@/providers/flow/media';
@@ -219,6 +219,8 @@ export async function handleDriverAction(
   switch (action.name) {
     case 'checkAuth':
       return { raw: { authenticated: await checkAuth() } };
+    case 'account':
+      return { raw: { email: readAccountEmail() } };
     case 'capabilities':
       return { raw: await capabilities() };
     case 'diagnose':

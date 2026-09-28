@@ -117,6 +117,7 @@ export const runRepo = {
     const rec: OutputRecord = {
       id: partial.id ?? nanoid(),
       nodeRunId: partial.nodeRunId,
+      workflowId: partial.workflowId,
       kind: partial.kind,
       mime: partial.mime,
       text: partial.text,
@@ -131,6 +132,68 @@ export const runRepo = {
 
   async getOutput(id: string): Promise<OutputRecord | undefined> {
     return db.outputs.get(id);
+  },
+
+  /**
+   * Đếm ảnh/video theo workflow; chỉ hydrate ≤ thumbLimit bản ghi mới nhất (có blob) cho thumbs.
+   * Vòng đếm chỉ giữ id + createdAt - không giữ blob của toàn bộ outputs.
+   */
+  async getOutputStats(
+    workflowIds: string[],
+    thumbLimit = 4,
+  ): Promise<Record<string, { images: number; videos: number; thumbs: OutputRecord[] }>> {
+    const result: Record<string, { images: number; videos: number; thumbs: OutputRecord[] }> = {};
+    for (const id of workflowIds) {
+      result[id] = { images: 0, videos: 0, thumbs: [] };
+    }
+    if (workflowIds.length === 0) return result;
+
+    /** Top thumb candidates per workflow (id + createdAt only). */
+    const candidates = new Map<string, { id: string; createdAt: number }[]>();
+
+    const pushCandidate = (wfId: string, id: string, createdAt: number) => {
+      let list = candidates.get(wfId);
+      if (!list) {
+        list = [];
+        candidates.set(wfId, list);
+      }
+      if (list.length < thumbLimit) {
+        list.push({ id, createdAt });
+        list.sort((a, b) => b.createdAt - a.createdAt);
+        return;
+      }
+      const oldest = list[list.length - 1]!;
+      if (createdAt <= oldest.createdAt) return;
+      list[list.length - 1] = { id, createdAt };
+      list.sort((a, b) => b.createdAt - a.createdAt);
+    };
+
+    await db.outputs.where('workflowId').anyOf(workflowIds).each((row) => {
+      const wfId = row.workflowId;
+      if (!wfId || !result[wfId]) return;
+      if (row.kind === 'image') result[wfId].images += 1;
+      else if (row.kind === 'video') result[wfId].videos += 1;
+      else return;
+      pushCandidate(wfId, row.id, row.createdAt);
+    });
+
+    const hydrateIds: string[] = [];
+    for (const list of candidates.values()) {
+      for (const c of list) hydrateIds.push(c.id);
+    }
+    if (hydrateIds.length === 0) return result;
+
+    const hydrated = await db.outputs.bulkGet(hydrateIds);
+    const byId = new Map<string, OutputRecord>();
+    for (const rec of hydrated) {
+      if (rec) byId.set(rec.id, rec);
+    }
+    for (const [wfId, list] of candidates) {
+      result[wfId]!.thumbs = list
+        .map((c) => byId.get(c.id))
+        .filter((r): r is OutputRecord => r != null);
+    }
+    return result;
   },
 
   async clearWorkflowOutputs(workflowId: string): Promise<void> {

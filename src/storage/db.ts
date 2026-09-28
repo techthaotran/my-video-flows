@@ -67,6 +67,34 @@ export class MyXFlowsDB extends Dexie {
       outputs: 'id, nodeRunId, createdAt',
       notifications: 'id, createdAt, read',
     });
+
+    this.version(2)
+      .stores({
+        outputs: 'id, nodeRunId, createdAt, workflowId',
+      })
+      .upgrade(async (tx) => {
+        const outputs = tx.table('outputs');
+        const nodeRuns = await tx.table('nodeRuns').toArray();
+        const runs = await tx.table('runs').toArray();
+        const runWorkflowId = new Map<string, string>(
+          runs.map((r: { id: string; workflowId: string }) => [r.id, r.workflowId]),
+        );
+        const nodeRunWorkflowId = new Map<string, string>();
+        for (const nr of nodeRuns as { id: string; runId: string }[]) {
+          const workflowId = runWorkflowId.get(nr.runId);
+          if (workflowId) nodeRunWorkflowId.set(nr.id, workflowId);
+        }
+        const rows = await outputs.toArray();
+        const updates = rows
+          .map((row: { id: string; nodeRunId: string; workflowId?: string }) => {
+            if (row.workflowId) return null;
+            const workflowId = nodeRunWorkflowId.get(row.nodeRunId);
+            if (!workflowId) return null;
+            return { ...row, workflowId };
+          })
+          .filter((row): row is NonNullable<typeof row> => row !== null);
+        if (updates.length > 0) await outputs.bulkPut(updates);
+      });
   }
 }
 

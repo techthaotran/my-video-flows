@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/flow-payload-log.test.ts (8 tests) 5ms
+ ✓ tests/unit/flow-batch.test.ts (22 tests) 9ms
+ ✓ tests/unit/flow-rpc-generate.test.ts (43 tests) 60ms
+
+ Test Files  3 passed (3)
+      Tests  73 passed (73)
+   Start at  12:36:19
+   Duration  1.04s (transform 219ms, setup 76ms, collect 342ms, tests 74ms, environment 1.04s, prepare 458ms)
+

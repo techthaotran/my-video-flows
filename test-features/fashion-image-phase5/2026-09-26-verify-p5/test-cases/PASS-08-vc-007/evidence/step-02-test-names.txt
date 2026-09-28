@@ -1,0 +1,4 @@
+98:  it('same project + sha → second generate does not call maseQ', async () => {
+116:  it('different project or sha → uploads again via maseQ', async () => {
+143:  it('stored media gone → re-upload once from blob; second miss fails clearly', async () => {
+166:  it('video Media not found with stored upload → original error, no maseQ retry wrap', async () => {

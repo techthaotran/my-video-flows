@@ -74,6 +74,8 @@ function fakeFlow(opts: {
   as29sNotReadyRounds?: number;
   /** ogiZ0b calls (1-based) that answer the transient `[8]` rejection. */
   transientImageCalls?: number[];
+  /** Every ogiZ0b call answers `[7]` PUBLIC_ERROR_UNUSUAL_ACTIVITY. */
+  unusualActivity?: boolean;
   /** i2v source media ids eb1hJf answers with `[13]` (INTERNAL). */
   internalSources?: string[];
 }) {
@@ -88,6 +90,16 @@ function fakeFlow(opts: {
       case 'ogiZ0b': {
         const items = inner(cmd)[1] as unknown[][];
         imageItems.push(...items);
+        if (opts.unusualActivity) {
+          return {
+            status: 200,
+            text: errorEnvelope('ogiZ0b', [
+              7,
+              null,
+              [['type.googleapis.com/google.rpc.ErrorInfo', ['PUBLIC_ERROR_UNUSUAL_ACTIVITY']]],
+            ]),
+          };
+        }
         if (opts.transientImageCalls?.includes(calls.filter((c) => c === 'ogiZ0b').length)) {
           return { status: 200, text: errorEnvelope('ogiZ0b', [8]) };
         }
@@ -96,6 +108,11 @@ function fakeFlow(opts: {
           status: 200,
           text: envelope('ogiZ0b', [[`https://flow-content.google/image/${id}?sig=1`]]),
         };
+      }
+      case 'SPrCad': {
+        // Minimal JPEG-looking base64 (SOI = /9j/) long enough for readImageBase64.
+        const jpegB64 = `/9j/${'A'.repeat(600)}`;
+        return { status: 200, text: envelope('SPrCad', [[jpegB64]]) };
       }
       case 'maseQ':
         return { status: 200, text: envelope('maseQ', [[IMAGE_ID, PROJECT, 'op', 'CAE']]) };
@@ -386,7 +403,8 @@ describe('generateViaRpc Omni Flash', () => {
             name: 'face.jpg',
             mime: 'image/jpeg',
             dataBase64: 'ZmFrZQ==',
-            cacheKey: 'run1:local-char',
+            sha256: 'sha-local-char',
+            nodeId: 'asset-char',
           },
         },
       ],
@@ -573,7 +591,7 @@ describe('generateViaRpc references', () => {
       prompt: '[Outfit] on [Character]',
       refs: [
         { kind: 'image', label: 'Character', mediaId: '33333333-3333-3333-3333-333333333333' },
-        { kind: 'image', label: 'Outfit', upload: { name: 'o.png', mime: 'image/png', dataBase64: 'aGVsbG8=', cacheKey: 'run-9:o' } },
+        { kind: 'image', label: 'Outfit', upload: { name: 'o.png', mime: 'image/png', dataBase64: 'aGVsbG8=', sha256: 'sha-o', nodeId: 'asset-o' } },
       ],
     };
     await run(payload);
@@ -837,7 +855,7 @@ describe('generateViaRpc references', () => {
         {
           kind: 'image',
           label: 'Character',
-          upload: { name: 'c.png', mime: 'image/png', dataBase64: 'aGVsbG8=', cacheKey: 'run:c' },
+          upload: { name: 'c.png', mime: 'image/png', dataBase64: 'aGVsbG8=', sha256: 'sha-c', nodeId: 'asset-c' },
         },
       ],
     });
@@ -865,6 +883,37 @@ describe('generateViaRpc image', () => {
     const result = await run({ mode: 'text-to-image', model: 'Nano Banana 2', outputsPerPrompt: 2 });
     expect(calls.filter((c) => c === 'ogiZ0b')).toHaveLength(3);
     expect(result.medias).toHaveLength(2);
+  });
+
+  it('UNUSUAL_ACTIVITY stops with a clear message and does not retry', async () => {
+    const { calls } = fakeFlow({ unusualActivity: true });
+    await expect(run({ mode: 'text-to-image', model: 'Nano Banana 2', outputsPerPrompt: 1 })).rejects.toThrow(
+      /hoạt động bất thường/,
+    );
+    expect(calls.filter((c) => c === 'ogiZ0b')).toHaveLength(1);
+  });
+
+  it('resolution 2K calls SPrCad after ogiZ0b and returns JPEG base64 (not 1K CDN)', async () => {
+    const { calls } = fakeFlow({});
+    const result = await run({
+      mode: 'text-to-image',
+      model: 'Nano Banana 2',
+      resolution: '2K',
+      outputsPerPrompt: 1,
+    });
+    expect(calls).toContain('ogiZ0b');
+    expect(calls).toContain('SPrCad');
+    expect(result.medias).toHaveLength(1);
+    expect(result.medias![0]!.mime).toBe('image/jpeg');
+    expect(result.medias![0]!.dataBase64?.startsWith('/9j/')).toBe(true);
+    expect(result.medias![0]!.url).toBeUndefined();
+  });
+
+  it('resolution 1K keeps ogiZ0b only (no SPrCad)', async () => {
+    const { calls } = fakeFlow({});
+    await run({ mode: 'text-to-image', model: 'Nano Banana 2', resolution: '1K' });
+    expect(calls).toContain('ogiZ0b');
+    expect(calls).not.toContain('SPrCad');
   });
 });
 

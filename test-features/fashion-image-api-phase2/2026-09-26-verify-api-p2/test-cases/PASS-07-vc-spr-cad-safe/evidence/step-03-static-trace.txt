@@ -1,0 +1,27 @@
+src/providers/flow/rpc/payloadLog.ts:7:  CAPTCHA_SLOT,
+src/providers/flow/rpc/payloadLog.ts:10:  RPC_GEN_IMAGE_2K,
+src/providers/flow/rpc/payloadLog.ts:116:    if (value === CAPTCHA_SLOT) return CAPTCHA_SLOT;
+src/providers/flow/rpc/payloadLog.ts:163:  if (rpcid === RPC_GEN_IMAGE_2K) return wireIdsFromImage2kRequest(inner);
+src/providers/flow/rpc/payloadLog.ts:171:/** SPrCad wire: `[sourceMediaId, 1, context…]`. */
+src/providers/flow/rpc/batch.ts:11:export const RPC_GEN_IMAGE_2K = 'SPrCad';
+src/providers/flow/rpc/batch.ts:16:export const RPC_UPLOAD_IMAGE = 'maseQ';
+src/providers/flow/rpc/batch.ts:22:export const CAPTCHA_SLOT = '__CAPTCHA__';
+src/providers/flow/rpc/batch.ts:91: * Veo i2v → r2v (MZZa6b) for scene continue. maseQ frames fail eb1hJf with
+src/providers/flow/rpc/batch.ts:402:  return [null, SURFACE_ID, null, null, null, projectId, null, null, null, null, [CAPTCHA_SLOT, 1]];
+src/providers/flow/rpc/batch.ts:457:/** 2K upscale/download (`SPrCad`) - mode slot `1` = 2K; context uses SURFACE_ID 22. */
+src/providers/flow/rpc/batch.ts:459:  return buildEnvelope(RPC_GEN_IMAGE_2K, [
+src/providers/flow/rpc/batch.ts:791: * JPEG base64 inline in an SPrCad wrb.fr payload (no data: prefix required).
+src/providers/flow/rpc/generate.ts:19:  RPC_GEN_IMAGE_2K,
+src/providers/flow/rpc/generate.ts:189:  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
+src/providers/flow/rpc/generate.ts:228:/** Shrink images before maseQ — large base64 breaks messaging / Flow rejects huge bodies. */
+src/providers/flow/rpc/generate.ts:369:      `Upload ảnh thất bại (maseQ): ${e instanceof Error ? e.message : String(e)} — ${detail}`,
+src/providers/flow/rpc/generate.ts:375: * After maseQ, Flow may need a beat before i2v can resolve the media id.
+src/providers/flow/rpc/generate.ts:565:  onProgress(85, payload.resolution === '2K' ? strings.flowFetchingImage2k : strings.flowFetchingImage);
+src/providers/flow/rpc/generate.ts:569:    if (payload.resolution === '2K') {
+src/providers/flow/rpc/generate.ts:579:        log.warn('SPrCad 2K thất bại', { mediaId: img.mediaId, err });
+src/providers/flow/rpc/generate.ts:593:/** After ogiZ0b: SPrCad returns inline JPEG base64 (2K). Captcha action = IMAGE_GENERATION. */
+src/providers/flow/rpc/generate.ts:603:    rpcid: RPC_GEN_IMAGE_2K,
+src/providers/flow/rpc/generate.ts:609:  const { text } = await rpcPayload(tabId, RPC_GEN_IMAGE_2K, freq, CAPTCHA_IMAGE);
+src/providers/flow/rpc/generate.ts:610:  const b64 = readImageBase64(firstPayload(text, RPC_GEN_IMAGE_2K));
+src/providers/flow/rpc/generate.ts:866: *   (Omni `abra_r2v_*` or Veo `veo_3_1_r2v_*`; maseQ frames fail `eb1hJf`).
+src/providers/flow/rpc/generate.ts:909: * Veo i2v (`eb1hJf`) answers "Media not found." for maseQ uploads, so continue

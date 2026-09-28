@@ -3,7 +3,7 @@ import { evenSize, frameTimestamps, logoRect, moveInOrder, orderedClipIds } from
 import { orderClipsForMerge } from '@/engine/executors';
 import { sourceAllowed } from '@/nodes/ports';
 import { DEFAULT_PORTS } from '@/nodes/ports';
-import { MergeVideoNodeDataSchema, migrateWorkflow } from '@/shared/schema';
+import { MergeVideoNodeDataSchema, migrateWorkflow, SCHEMA_VERSION } from '@/shared/schema';
 import type { NodeOutputValue } from '@/engine/types';
 
 function clip(sourceNodeId: string, name = sourceNodeId): NodeOutputValue {
@@ -150,7 +150,7 @@ describe('node Ghép video trong workflow', () => {
       createdAt: 1,
       updatedAt: 1,
     });
-    expect(wf.schemaVersion).toBe(5);
+    expect(wf.schemaVersion).toBe(SCHEMA_VERSION);
     expect(wf.nodes[0]!.type).toBe('generateVideo');
   });
 });

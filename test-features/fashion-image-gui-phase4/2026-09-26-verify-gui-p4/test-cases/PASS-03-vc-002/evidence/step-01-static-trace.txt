@@ -1,0 +1,47 @@
+=== GenerateItemList fashionScene → forwardRefs:false ===
+8-import {
+9-  ASPECT_RATIOS,
+10-  IMAGE_MODELS,
+11:  PROMPT_PRESETS,
+12-  VIDEO_DURATIONS,
+13-  VIDEO_MODELS,
+14-} from '@/shared/schema';
+15:import { strings, promptPresetLabel } from '@/shared/strings';
+16-import { cn } from '@/shared/utils';
+17-
+18-interface GenerateItemListProps {
+--
+250-                    const preset = e.target.value;
+251-                    onUpdateField(
+252-                      p.nodeId,
+253:                      preset === 'fashionScene'
+254:                        ? { preset, forwardRefs: false }
+255-                        : { preset },
+256-                    );
+257-                  }}
+258-                >
+259:                  {PROMPT_PRESETS.map((opt) => (
+260-                    <option key={opt} value={opt}>
+261:                      {promptPresetLabel(opt)}
+262-                    </option>
+263-                  ))}
+264-                </select>
+
+=== selectors PROMPT_PRESETS reuse ===
+14-
+15-interface PromptData {
+16:  preset?: PromptPreset;
+17-  instruction?: string;
+18-  formattedOutput?: string;
+--
+35-  nodeId: string;
+36-  slug?: string;
+37:  preset: PromptPreset;
+38-  instruction: string;
+39-  formattedOutput?: string;
+--
+81-      nodeId: src.id,
+82-      slug: src.slug,
+83:      preset: data.preset ?? 'custom',
+84-      instruction: data.instruction ?? '',
+85-      formattedOutput: data.formattedOutput,

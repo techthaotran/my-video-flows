@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/schema-v6-migrate.test.ts (5 tests) 4ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  16:53:57
+   Duration  890ms (transform 47ms, setup 28ms, collect 40ms, tests 4ms, environment 350ms, prepare 221ms)
+

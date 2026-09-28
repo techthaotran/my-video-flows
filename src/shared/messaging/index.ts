@@ -22,6 +22,19 @@ export interface WorkflowRegenerateResult {
   runId: string;
 }
 
+/** Upload ảnh local của node Asset lên Flow ngay khi chọn file. */
+export interface AssetUploadToFlowPayload {
+  workflowId: string;
+  nodeId: string;
+}
+
+/** Id upload Flow lưu trên node Asset (trả về UI để áp vào node). */
+export interface FlowUploadedIds {
+  uploadedMediaId: string;
+  uploadedProjectId: string;
+  uploadedSha256: string;
+}
+
 export interface RunDoneEvent {
   runId: string;
   /** Optional để tương thích nơi phát cũ. */
@@ -31,7 +44,15 @@ export interface RunDoneEvent {
 }
 
 export type UiToSwMessage =
-  | { type: 'workflow.run'; workflowId: string; fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from' }
+  | {
+      type: 'workflow.run';
+      workflowId: string;
+      fromNodeId?: string;
+      mode?: 'full' | 'node' | 'only' | 'from';
+      /** Chỉ cho mode `node`: node đích bỏ qua dùng lại kết quả (Phân tích lại). */
+      force?: boolean;
+    }
+  | ({ type: 'asset.uploadToFlow' } & AssetUploadToFlowPayload)
   | { type: 'run.cancel'; runId: string }
   | { type: 'workflow.cancel'; workflowId: string }
   | { type: 'runAll'; workspaceId: string }
@@ -87,7 +108,14 @@ export type DriverAction =
   | { name: 'prompt'; payload: GeminiPromptPayload }
   | { name: 'listMedia'; payload?: { kind?: 'image' | 'video' | 'any' } }
   | { name: 'fetchMedia'; payload: { url: string } }
+  /**
+   * Download a Flow media by id (SW signs the url via `as29s`, the Flow tab
+   * fetches it). Download only: never uploads (`maseQ`).
+   */
+  | { name: 'fetchMediaById'; payload: { mediaId: string } }
   | { name: 'checkAuth' }
+  /** Email tài khoản Google của tab (để Gemini dùng đúng tài khoản của Flow). */
+  | { name: 'account' }
   | { name: 'capabilities' }
   | { name: 'diagnose' };
 
@@ -114,8 +142,26 @@ export interface FlowGenerateRef {
   label?: string;
   /** Media đã có trên Flow: dùng thẳng, không upload. */
   mediaId?: string;
-  /** File local: upload một lần cho mỗi `cacheKey` (runId + asset id). */
-  upload?: { name: string; mime: string; dataBase64: string; cacheKey: string };
+  /** File local: dùng lại `uploaded` khi cùng project + sha256, không thì upload (`maseQ`). */
+  upload?: FlowUploadRef;
+}
+
+export interface FlowUploadedMedia {
+  mediaId: string;
+  projectId: string;
+  sha256: string;
+}
+
+export interface FlowUploadRef {
+  name: string;
+  mime: string;
+  dataBase64: string;
+  /** SHA-256 nội dung file; thiếu thì không dùng lại / không lưu id. */
+  sha256?: string;
+  /** Node Asset nguồn: engine lưu id upload mới vào node này. */
+  nodeId?: string;
+  /** Id đã upload trước đó; driver ghi đè khi upload mới. */
+  uploaded?: FlowUploadedMedia;
 }
 
 export interface FlowGeneratePayload {
@@ -131,6 +177,8 @@ export interface FlowGeneratePayload {
   projectTarget?: string;
   /** Clip length; Omni Flash snaps to 4/6/8/10s. Veo i2v has no duration slot. */
   durationSec?: number;
+  /** Độ phân giải ảnh Flow: 1K = ogiZ0b CDN; 2K = thêm SPrCad sau gen. */
+  resolution?: '1K' | '2K';
   timeoutSec?: number;
   /** Chỉ để gắn log — không gửi lên Flow. */
   logCtx?: { runId?: string; nodeId?: string };
@@ -158,6 +206,8 @@ export interface GeminiPromptPayload {
 export interface DriverResult {
   texts?: string[];
   medias?: { kind: 'image' | 'video'; mime: string; dataBase64?: string; url?: string; mediaId?: string }[];
+  /** Ảnh local vừa upload lên Flow trong lần generate này (theo node Asset nguồn). */
+  uploads?: ({ nodeId: string } & FlowUploadedMedia)[];
   raw?: unknown;
 }
 
@@ -174,6 +224,7 @@ export interface DriverError {
     | 'NO_FLOW_PROJECT'
     | 'CAPTCHA_FAILED'
     | 'UNSUPPORTED_ON_BATCH_API'
+    | 'FLOW_MEDIA_FETCH_FAILED'
     | 'UNKNOWN';
   message: string;
 }

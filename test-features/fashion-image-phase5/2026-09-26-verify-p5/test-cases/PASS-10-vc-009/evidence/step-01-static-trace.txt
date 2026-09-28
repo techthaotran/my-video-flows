@@ -1,0 +1,149 @@
+=== toFlowRef: flowMediaId short-circuit (no upload) ===
+/**
+ * Reference → what the Flow driver needs: a media id, or a local upload payload.
+ * Media from Google Flow (`flowMediaId`) is never uploaded back.
+ * Local: reuse Asset `uploaded*` when project + sha match (driver decides).
+ */
+async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<FlowGenerateRef | null> {
+  if (ref.kind !== 'image' && ref.kind !== 'video' && ref.kind !== 'audio') return null;
+  const base = { kind: ref.kind, label: ref.assetLabel };
+  if (ref.flowMediaId) return { ...base, mediaId: ref.flowMediaId };
+  if (ref.fromFlow) {
+    throw fail(
+      `${ref.assetLabel ? `[${ref.assetLabel}]` : (ref.name ?? 'Media')} đến từ Google Flow nhưng không có media id — không upload lại lên Flow. Chạy lại node nguồn hoặc chọn asset từ Flow.`,
+      FLOW_NO_UPLOAD,
+    );
+  }
+  if (ref.kind !== 'image' || !ref.blob) return base;
+
+  const sha256 = ref.contentHash ?? (await hashBlobContent(ref.blob));
+  ref.contentHash = sha256;
+  const sourceId = ref.sourceNodeId;
+  const assetNode = sourceId ? ctx.workflow.nodes.find((n) => n.id === sourceId) : undefined;
+  const assetData = assetNode?.type === 'asset' ? (assetNode.data as AssetData) : undefined;
+  const uploaded =
+    assetData?.uploadedMediaId && assetData.uploadedProjectId && assetData.uploadedSha256
+      ? {
+          mediaId: assetData.uploadedMediaId,
+          projectId: assetData.uploadedProjectId,
+          sha256: assetData.uploadedSha256,
+        }
+      : undefined;
+
+  return {
+    ...base,
+    upload: {
+      name: ref.name ?? 'image.png',
+      mime: ref.mime ?? ref.blob.type,
+      dataBase64: await blobToBase64(ref.blob),
+      sha256,
+      nodeId: sourceId,
+      uploaded,
+    },
+  };
+}
+
+=== assetUpload: refuse flowMediaId / non-image ===
+/**
+ * Upload the local image of an Asset node to the open Flow project (`maseQ`) and store
+ * `uploaded*` on the node. Flow assets (`flowMediaId`) are never uploaded.
+ * The patch is skipped when the user picked another file meanwhile.
+ */
+export async function uploadAssetNodeToFlow(
+  workflowId: string,
+  nodeId: string,
+  upload: FlowImageUploader,
+): Promise<FlowUploadedIds> {
+  const data = await assetNodeData(workflowId, nodeId);
+  if (!data?.assetId || data.flowMediaId || data.missing) {
+    throw new Error(strings.flowUploadNodeNotLocal);
+  }
+  const asset = await assetRepo.get(data.assetId);
+  if (!asset || !asset.mime.startsWith('image/')) throw new Error(strings.flowUploadNodeNotLocal);
+
+  const { mediaId, projectId } = await upload({
+
+=== resolveRefs / upload path: only ref.upload (local) ===
+/** Local file → Flow media id: the stored upload when still valid, else `maseQ` once and remember it. */
+async function localRefMediaId(
+  tabId: number,
+  projectId: string,
+  upload: FlowUploadRef,
+  onProgress: Progress,
+): Promise<string> {
+  const stored = storedUploadId(upload, projectId);
+  if (stored) return stored;
+  const mediaId = await uploadImage(tabId, projectId, upload, onProgress);
+  // Written back on the ref so generateViaRpc can hand the new id to the engine.
+  if (upload.sha256) upload.uploaded = { mediaId, projectId, sha256: upload.sha256 };
+  return mediaId;
+}
+
+/**
+ * Turn the node's references into Flow image media ids (ordered, deduped).
+ * Assets already on Flow are used by id and never uploaded; local files reuse the id
+ * stored on their Asset node (same project + sha256) or upload once.
+ * Prompt is cleaned of Flow CDN URLs — media ids go only in RPC slots.
+ */
+async function resolveRefs(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<{ imageIds: string[]; orderedRefs: OrderedRef[]; prompt: string }> {
+  const orderedRefs: OrderedRef[] = [];
+  const seen = new Set<string>();
+
+  for (const ref of payload.refs ?? []) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    if (ref.kind !== 'image') continue;
+    let mediaId = ref.mediaId;
+    let source: OrderedRef['source'] = 'flow';
+    if (!mediaId && ref.upload) {
+      source = 'upload';
+      mediaId = await localRefMediaId(tabId, projectId, ref.upload, onProgress);
+    }
+    if (!mediaId) continue;
+    if (seen.has(mediaId)) continue;
+    seen.add(mediaId);
+    orderedRefs.push({
+      label: ref.label?.trim() || `${strings.defaultImageRefLabel} ${orderedRefs.length + 1}`,
+      mediaId,
+      kind: 'image',
+      source,
+    });
+  }
+
+  const prompt = cleanPromptForSubmit(payload.prompt, orderedRefs);
+  return {
+    imageIds: orderedRefs.map((r) => r.mediaId),
+    orderedRefs,
+
+=== grep maseQ near flowMediaId paths ===
+src/background/assetUpload.ts:25: * `uploaded*` on the node. Flow assets (`flowMediaId`) are never uploaded.
+src/background/assetUpload.ts:34:  if (!data?.assetId || data.flowMediaId || data.missing) {
+src/engine/executors.ts:1:import { FLOW_NO_UPLOAD, type ExecutorContext, type NodeExecutor, type NodeOutputValue } from '@/engine/types';
+src/engine/executors.ts:61:    const key = v.flowMediaId
+src/engine/executors.ts:62:      ? `flow:${v.flowMediaId}`
+src/engine/executors.ts:82:    .map((r) => ({ label: r.assetLabel!, kind: r.kind, flowMediaId: r.flowMediaId }));
+src/engine/executors.ts:139:  if (data.flowMediaId) {
+src/engine/executors.ts:141:      { kind: data.kind ?? 'image', flowMediaId: data.flowMediaId, assetLabel: label, name: label, fromAsset: true, fromFlow: true },
+src/engine/executors.ts:147:      FLOW_NO_UPLOAD,
+src/engine/executors.ts:186:    if (ref.flowMediaId) imageHashes.push(`flow:${ref.flowMediaId}`);
+src/engine/executors.ts:308: * Media from Google Flow (`flowMediaId`) is never uploaded back.
+src/engine/executors.ts:314:  if (ref.flowMediaId) return { ...base, mediaId: ref.flowMediaId };
+src/engine/executors.ts:318:      FLOW_NO_UPLOAD,
+src/engine/executors.ts:406:      flowMediaId: m.mediaId ?? parseFlowMediaUrl(m.url)?.mediaId,
+src/engine/executors.ts:516:    throw fail(strings.mergeClipNoFile(missing.name ?? 'video'), FLOW_NO_UPLOAD);
+src/engine/executors.ts:521:    throw fail(strings.mergeAudioNoFile(audioValue.name ?? 'audio'), FLOW_NO_UPLOAD);
+src/engine/executors.ts:525:    throw fail(strings.mergeLogoNoFile(logoValue.name ?? 'logo'), FLOW_NO_UPLOAD);
+
+=== Confirm no uploadImage call when mediaId already set from flow ===
+src/engine/executors.ts:186:    if (ref.flowMediaId) imageHashes.push(`flow:${ref.flowMediaId}`);
+src/engine/executors.ts:314:  if (ref.flowMediaId) return { ...base, mediaId: ref.flowMediaId };
+src/providers/flow/rpc/generate.ts:342:async function uploadImage(
+src/providers/flow/rpc/generate.ts:445:  const mediaId = await uploadImage(tabId, projectId, upload, onProgress);
+src/providers/flow/rpc/generate.ts:908:  const frameId = await uploadImage(
+src/providers/flow/rpc/generate.ts:1600:export async function uploadImageViaRpc(
+src/providers/flow/rpc/generate.ts:1607:  const mediaId = await uploadImage(alive, projectId, img, () => undefined);

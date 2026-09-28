@@ -1,0 +1,62 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"11111111-1111-1111-1111-111111111111\\",null,null,null,1]],244362099,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]],null,null,null,\\"FDEF9A87-15F9-433F-8C43-2145AED0DF86\\",\\"5B0DA138-914E-4483-9F26-53E55A5E8B74\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"E1D8827B-3395-4DEB-A163-D77E2FA1902B\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] Id upload đã lưu không còn trên Flow - upload lại từ file gốc { count: 1 }
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"11111111-1111-1111-1111-111111111111\\",null,null,null,1]],284405867,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]],null,null,null,\\"2916D396-0FD0-455D-8F30-3C5D5041C36D\\",\\"4F05D51E-A62B-4B72-8E36-DDF3BBCCC866\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"E9BF04AA-D61E-46C0-8754-C584CC4D1426\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] Id upload đã lưu không còn trên Flow - upload lại từ file gốc { count: 1 }
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"22222222-2222-2222-2222-222222222222\\",null,null,null,1]],762002954,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 22222222-2222-2222-2222-222222222222\\"]]],null,null,null,\\"85D37DD3-63C8-40BE-8290-88143F812E0E\\",\\"0CD3DA92-FD74-4787-A4F3-662A6CE39DCF\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"A6A5D595-312A-46EB-93C5-B3C327563073\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > video Media not found with stored upload → original error, no maseQ retry wrap
+[rpc] MZZa6b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["MZZa6b","[[[[null,null,[[[\\"(AI-generated from text-only (fictional character, not a real person)) \\"],[null,[[\\"11111111-1111-1111-1111-111111111111\\",\\"Character\\"]]],[\\" walks\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]]],[[null,\\"11111111-1111-1111-1111-111111111111\\"]],\\"abra_r2v_4s\\",2,null,[null,null,null,null,\\"0FDE8319-3F30-43F8-BA91-6149B46EE619\\",\\"0FAF9CFC-6FA7-4D73-B831-CEDABCF9B134\\"]]],[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"295F62D6-D3FB-48E0-8280-44F9A9FA4317\\",2]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","MZZa6b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+ ✓ tests/unit/flow-upload-reuse.test.ts (4 tests) 1553ms
+   ✓ Flow local upload reuse (uploaded*) > same project + sha → second generate does not call maseQ  705ms
+   ✓ Flow local upload reuse (uploaded*) > different project or sha → uploads again via maseQ  554ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  16:54:00
+   Duration  2.45s (transform 126ms, setup 32ms, collect 133ms, tests 1.55s, environment 259ms, prepare 52ms)
+

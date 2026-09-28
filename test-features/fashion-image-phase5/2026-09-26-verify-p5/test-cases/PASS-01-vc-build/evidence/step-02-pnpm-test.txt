@@ -1,0 +1,182 @@
+
+> my-x-flows@0.1.0 test /Users/ggj/MyWork/my-video-flows
+> vitest run --config vitest.config.ts
+
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user
+[driver] Tab flow không có content script — inject lại 
+
+ ✓ tests/unit/prompt-reuse.test.ts (9 tests) 119ms
+stderr | tests/unit/run-only-node.test.ts > generate only this node > stops with a clear error when an upstream generator has no result to reuse
+[run] Lỗi: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước. Error: generateImage chưa có kết quả để dùng lại. Chạy node đó trước, hoặc bấm Generate để tạo lại cả phía trước.
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:429:27)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11) {
+  code: 'UNKNOWN'
+}
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào
+[node:mergeVideo] Lần 1 lỗi UNKNOWN: chrome.runtime.onMessage.removeListener is not a function TypeError: chrome.runtime.onMessage.removeListener is not a function
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:98:30)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:529:16)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+
+ ✓ tests/unit/transfer-hash.test.ts (8 tests) 194ms
+stderr | tests/unit/run-regenerate.test.ts > RunManager.regenerate > generate loi -> khong compose
+[node:generateVideo] Lỗi CONTENT_POLICY (không retry): CONTENT_POLICY Error: CONTENT_POLICY
+    at Object.execute (/Users/ggj/MyWork/my-video-flows/tests/unit/run-regenerate.test.ts:186:31)
+    at Object.callDriver (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:573:25)
+    at generateVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:460:28)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+    at job (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:130:22) {
+  code: 'CONTENT_POLICY'
+}
+
+stderr | tests/unit/run-regenerate.test.ts > RunManager.regenerate > generate loi -> khong compose
+[run] Lỗi: CONTENT_POLICY Error: CONTENT_POLICY
+    at Object.execute (/Users/ggj/MyWork/my-video-flows/tests/unit/run-regenerate.test.ts:186:31)
+    at Object.callDriver (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:573:25)
+    at generateVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:460:28)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+    at job (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:130:22) {
+  code: 'CONTENT_POLICY'
+}
+
+ ✓ tests/unit/core.test.ts (28 tests) 305ms
+ ✓ tests/unit/run-regenerate.test.ts (6 tests) 279ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > chỉ inject content script của đúng provider
+[driver] Tab gemini không có content script — inject lại 
+
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject không cứu được thì mới reload tab
+[driver] Tab flow không có content script — inject lại 
+
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > inject không cứu được thì mới reload tab
+[driver] Inject lại không ăn thua — reload tab flow 
+
+ ✓ tests/unit/flow-rpc-generate.test.ts (43 tests) 116ms
+ ✓ tests/unit/output-stats.test.ts (5 tests) 84ms
+ ✓ tests/unit/workflow-repo-patch.test.ts (5 tests) 75ms
+ ✓ tests/unit/run-patch-node-data.test.ts (2 tests) 53ms
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào
+[run] Lỗi: chrome.runtime.onMessage.removeListener is not a function TypeError: chrome.runtime.onMessage.removeListener is not a function
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:98:30)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:529:16)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas
+[node:mergeVideo] Lần 1 lỗi UNKNOWN: chrome.runtime.onMessage.removeListener is not a function TypeError: chrome.runtime.onMessage.removeListener is not a function
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:98:30)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processImmediate (node:internal/timers:473:9)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:529:16)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"11111111-1111-1111-1111-111111111111\\",null,null,null,1]],558663547,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]],null,null,null,\\"B69CD09F-33C0-434F-8D3B-44969C9EFCDD\\",\\"A57287BD-D9CD-4DBD-A53B-9E5518881DC0\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"EB4DD306-FF58-4C9C-AD6E-0CF489C35F0A\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] Id upload đã lưu không còn trên Flow - upload lại từ file gốc { count: 1 }
+
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Tab flow không có content script — inject lại 
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"11111111-1111-1111-1111-111111111111\\",null,null,null,1]],422442077,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]],null,null,null,\\"296FAD55-A98E-49C9-8774-3F974AACFD47\\",\\"77BBD1DA-72A1-4C33-BC17-F9B74114BAAE\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"5E721B39-ACA6-48C4-BF18-A4C41DAA2228\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] Id upload đã lưu không còn trên Flow - upload lại từ file gốc { count: 1 }
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly
+[rpc] ogiZ0b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["ogiZ0b","[null,[[null,null,[[\\"22222222-2222-2222-2222-222222222222\\",null,null,null,1]],119703085,2,\\"NARWHAL\\",null,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[[[\\"test\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 22222222-2222-2222-2222-222222222222\\"]]],null,null,null,\\"BCD361B9-4C1D-4426-BFE0-0D1C5404F92B\\",\\"AD8F3052-7750-4DC7-93DB-E184725DDBB6\\"]],1,[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"7657FF76-5993-46D6-B8E3-4316D54C4DE4\\"]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","ogiZ0b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+stderr | tests/unit/flow-upload-reuse.test.ts > Flow local upload reuse (uploaded*) > video Media not found with stored upload → original error, no maseQ retry wrap
+[rpc] MZZa6b ✗ HTTP 200 (0ms) {
+  status: 200,
+  bytes: 82,
+  error: undefined,
+  freq: '[[["MZZa6b","[[[[null,null,[[[\\"(AI-generated from text-only (fictional character, not a real person)) \\"],[null,[[\\"11111111-1111-1111-1111-111111111111\\",\\"Character\\"]]],[\\" walks\\\\n\\\\nDanh sách tham chiếu\\\\n[Character]: AI-generated from text-only (fictional character, not a real person). mediaId 11111111-1111-1111-1111-111111111111\\"]]]],[[null,\\"11111111-1111-1111-1111-111111111111\\"]],\\"abra_r2v_4s\\",2,null,[null,null,null,null,\\"34C1795F-0BDE-4DEF-AC3E-4A62E460C6F1\\",\\"ACB15749-119D-4B6E-8031-1D61F3003B94\\"]]],[null,22,null,null,null,\\"fcf16651-14f3-4335-9557-0a808bd11946\\",null,null,null,null,[\\"__CAPTCHA__\\",1]],[\\"5D620EC4-1D7E-48DE-AEFA-89D5344F7A2E\\",2]]",null,"generic"]]]',
+  body: ")]}'\n" +
+    '74\n' +
+    '[["wrb.fr","MZZa6b",null,null,null,[5,null,"Media not found."],"generic"]]'
+}
+
+ ✓ tests/unit/run-repo-latest.test.ts (3 tests) 76ms
+ ✓ tests/unit/flow-upload-reuse.test.ts (4 tests) 2350ms
+   ✓ Flow local upload reuse (uploaded*) > same project + sha → second generate does not call maseQ  1466ms
+   ✓ Flow local upload reuse (uploaded*) > different project or sha → uploads again via maseQ  576ms
+   ✓ Flow local upload reuse (uploaded*) > stored media gone → re-upload once from blob; second miss fails clearly  304ms
+ ✓ tests/unit/runner-actions.test.ts (4 tests) 71ms
+ ✓ tests/unit/node-pipeline.test.ts (16 tests) 69ms
+ ✓ tests/unit/run-deleted-guard.test.ts (2 tests) 75ms
+stderr | tests/unit/content-script-recovery.test.ts > phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome
+[driver] Inject lại không ăn thua — reload tab flow 
+
+stderr | tests/unit/run-only-node.test.ts > chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas
+[run] Lỗi: chrome.runtime.onMessage.removeListener is not a function TypeError: chrome.runtime.onMessage.removeListener is not a function
+    at composeVideoInOffscreen (/Users/ggj/MyWork/my-video-flows/src/media/composeClient.ts:98:30)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at processImmediate (node:internal/timers:473:9)
+    at mergeVideoExecutor (/Users/ggj/MyWork/my-video-flows/src/engine/executors.ts:529:16)
+    at RunManager.runNode (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:509:25)
+    at RunManager.executeRun (/Users/ggj/MyWork/my-video-flows/src/engine/RunManager.ts:348:11)
+
+ ✓ tests/unit/run-only-node.test.ts (5 tests) 2586ms
+   ✓ chạy node Ghép video > dùng lại clip cũ của node phía trước, không gọi Flow generate lần nào  1506ms
+   ✓ chạy node Ghép video > node Ghép video hiện trạng thái chạy trên canvas  964ms
+ ✓ tests/unit/workflow-output-stats-label.test.ts (3 tests) 3ms
+ ✓ tests/unit/media-kind.test.ts (10 tests) 41ms
+ ✓ tests/unit/schema-v6-migrate.test.ts (5 tests) 11ms
+ ✓ tests/unit/video-regression.test.ts (2 tests) 43ms
+ ✓ tests/unit/runner-selectors.test.ts (6 tests) 29ms
+ ✓ tests/unit/content-script-recovery.test.ts (6 tests) 3656ms
+   ✓ phục hồi khi tab mất content script > inject lại content script rồi thử lại, không đụng tới trang của user  324ms
+   ✓ phục hồi khi tab mất content script > chỉ inject content script của đúng provider  306ms
+   ✓ phục hồi khi tab mất content script > inject không cứu được thì mới reload tab  1506ms
+   ✓ phục hồi khi tab mất content script > hết cách thì báo lỗi tiếng Việt kèm code TAB_LOST, không lộ chuỗi gốc của Chrome  1503ms
+ ✓ tests/unit/run-events-channel.test.ts (4 tests) 23ms
+ ✓ tests/unit/background-windows.test.ts (4 tests) 11ms
+ ✓ tests/unit/merge-video.test.ts (19 tests) 19ms
+ ✓ tests/unit/flow-batch.test.ts (22 tests) 21ms
+ ✓ tests/unit/runner-store.test.ts (4 tests) 46ms
+ ✓ tests/unit/flow-payload-log.test.ts (8 tests) 10ms
+ ✓ tests/unit/merge-ready.test.ts (6 tests) 5ms
+ ✓ tests/unit/incoming-inputs.test.ts (2 tests) 17ms
+ ✓ tests/unit/flow-prompt-parts.test.ts (9 tests) 10ms
+ ✓ tests/unit/fashion-compose.test.ts (5 tests) 6ms
+ ✓ tests/unit/editor-external-sync.test.ts (4 tests) 4ms
+
+ Test Files  31 passed (31)
+      Tests  259 passed (259)
+   Start at  16:52:54
+   Duration  7.90s (transform 1.75s, setup 1.71s, collect 5.30s, tests 10.41s, environment 20.84s, prepare 4.65s)
+

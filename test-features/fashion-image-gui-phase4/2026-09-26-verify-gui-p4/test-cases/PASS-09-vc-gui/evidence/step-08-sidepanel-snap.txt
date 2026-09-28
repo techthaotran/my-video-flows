@@ -1,0 +1,53 @@
+
+╔════════════════════════════════════════════════════════════════════╗
+║ Update available for @playwright/cli: 0.1.18 → 0.1.21              ║
+║ Run `npm install -g @playwright/cli@latest` (global) or            ║
+║ `npm install --save-dev @playwright/cli@latest` (local) to update. ║
+╚════════════════════════════════════════════════════════════════════╝
+
+### Open tabs
+- 0: (current) [My X Flows](chrome-extension://mkdbgnffaddfhffminlbdkoalmkmdejc/src/pages/sidepanel/index.html)
+- 1: [Google Flow - AI Creative Studio for Video, Images & Custom Tools](https://flow.google.com/)
+- 2: [‎Google Gemini](https://gemini.google.com/app)
+### Page
+- Page URL: chrome-extension://mkdbgnffaddfhffminlbdkoalmkmdejc/src/pages/sidepanel/index.html
+- Page Title: My X Flows
+- Console: 0 errors, 8 warnings
+### Snapshot
+```yaml
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]: X
+      - generic [ref=f1e7]:
+        - generic [ref=f1e8]: My X Flows
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]: "Flow: Chưa đăng nhập"
+          - generic [ref=f1e11]: "Gemini: Chưa đăng nhập"
+    - generic [ref=f1e12]:
+      - button "Thông báo" [ref=f1e13] [cursor=pointer]
+      - button "Cài đặt" [ref=f1e17] [cursor=pointer]
+  - generic [ref=f1e21]:
+    - combobox [ref=f1e22]:
+      - option "Sep 26 · hiện tại" [selected]
+      - option "Sep 26 · hiện tại"
+    - button "Tạo workspace" [ref=f1e23] [cursor=pointer]
+    - button "Xoá workspace" [ref=f1e25] [cursor=pointer]
+    - button "Export workspace" [ref=f1e29] [cursor=pointer]
+  - generic [ref=f1e33]:
+    - button "Workflows" [ref=f1e34] [cursor=pointer]
+    - button "Templates" [ref=f1e35] [cursor=pointer]
+  - generic [ref=f1e36]:
+    - textbox "Tìm workflow..." [ref=f1e41]
+    - button "Làm mới" [ref=f1e42] [cursor=pointer]
+    - generic "Import" [ref=f1e49]
+    - button "Tất cả" [ref=f1e53] [cursor=pointer]
+    - button "Chạy tất cả" [ref=f1e56] [cursor=pointer]
+    - button "Thêm" [ref=f1e59] [cursor=pointer]
+  - generic [ref=f1e61]: Chưa có workflow nào. Bấm + Thêm để tạo.
+  - contentinfo [ref=f1e63]:
+    - generic [ref=f1e64]:
+      - switch "Max Speed" [ref=f1e65] [cursor=pointer]
+      - text: Max Speed
+    - generic [ref=f1e66]: Hàng đợi trống
+```

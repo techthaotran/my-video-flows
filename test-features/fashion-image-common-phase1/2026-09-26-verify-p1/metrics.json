@@ -1,0 +1,14 @@
+{
+  "feature": "fashion-image-common-phase1",
+  "run_id": "2026-09-26-verify-p1",
+  "workflow": "COMPLETE",
+  "phase1_gate": "PASS",
+  "pass": 7,
+  "ng": 0,
+  "blocked": 0,
+  "screenshot_permission": "GRANTED",
+  "browser_contract": "NOT_NEEDED",
+  "typecheck": "PASS",
+  "full_suite_tests": 221,
+  "full_suite_files": 25
+}

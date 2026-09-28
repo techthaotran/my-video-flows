@@ -1,0 +1,28 @@
+=== strings.promptResultEmpty ===
+333:  promptAnalyze: 'Phân tích',
+335:  promptSkill: 'Skill',
+336:  promptSkillReset: 'Khôi phục mặc định',
+338:  promptEdited: 'Đã sửa tay',
+339:  promptResultEmpty: 'Chưa có kết quả phân tích',
+
+=== EditorApp placeholder usage ===
+1020:              placeholder="nhân vật [Character] đang mặc một [Outfit]"
+1036:              placeholder={promptOutput || strings.promptResultEmpty}
+1050:              placeholder="Prompt để generate…"
+1088:              placeholder="Prompt để generate…"
+
+=== Hardcoded Vietnamese placeholders in editor (should be empty or only via strings) ===
+src/features/editor/EditorApp.tsx:1020:              placeholder="nhân vật [Character] đang mặc một [Outfit]"
+src/features/editor/EditorApp.tsx:1050:              placeholder="Prompt để generate…"
+src/features/editor/EditorApp.tsx:1088:              placeholder="Prompt để generate…"
+src/features/editor/nodes/WorkflowNodeView.tsx:169:            placeholder="Nội dung… hỗ trợ [Character], @slug"
+src/features/editor/nodes/WorkflowNodeView.tsx:395:        placeholder="vd: [Character] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
+src/features/editor/nodes/WorkflowNodeView.tsx:419:          placeholder="Instruction + prompt phía trước; [Label] + mô tả · mediaId {uuid}"
+src/features/editor/nodes/WorkflowNodeView.tsx:794:        placeholder="Prompt để generate…"
+src/features/editor/nodes/WorkflowNodeView.tsx:876:        placeholder="Ghi chú…"
+1020:              placeholder="nhân vật [Character] đang mặc một [Outfit]"
+1036:              placeholder={promptOutput || strings.promptResultEmpty}
+1050:              placeholder="Prompt để generate…"
+1088:              placeholder="Prompt để generate…"
+src/features/editor/EditorApp.tsx:1036:              placeholder={promptOutput || strings.promptResultEmpty}
+src/shared/strings.ts:339:  promptResultEmpty: 'Chưa có kết quả phân tích',

@@ -1,0 +1,3 @@
+=== editor console (errors?) ===
+=== sidepanel console ===
+=== playwright reported Console: 0 errors on editor/sidepanel pages ===

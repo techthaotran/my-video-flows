@@ -1,0 +1,15 @@
+{
+  "feature": "fashion-image-common-phase3",
+  "runId": "2026-09-26-verify-p3",
+  "phase": 3,
+  "workflow": "COMPLETE",
+  "pass": 10,
+  "ng": 0,
+  "blocked": 0,
+  "overallGate": "PASS",
+  "typecheck": "PASS",
+  "fullTest": { "files": 29, "tests": 244, "status": "PASS" },
+  "playwrightGate": "PASSED",
+  "browserContract": "NOT_NEEDED",
+  "remediation": []
+}

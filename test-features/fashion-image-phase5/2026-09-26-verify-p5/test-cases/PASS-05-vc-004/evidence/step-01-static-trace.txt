@@ -1,0 +1,248 @@
+=== WorkflowNodeView upload UI gated by kind === image ===
+      {hasAsset && !flowMediaId && (
+        <LocalAssetInfo
+          name={(data.originalName as string) ?? kind}
+          kind={kind}
+          url={localUrl}
+        />
+      )}
+      {hasAsset && !flowMediaId && kind === 'image' && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {uploadStatus === 'uploading' && (
+            <span className="text-muted-foreground">{strings.assetUploading}</span>
+          )}
+          {uploadStatus !== 'uploading' && uploadedOnFlow && (
+            <span className="text-emerald-600">{strings.assetUploaded}</span>
+          )}
+          {uploadStatus === 'error' && !uploadedOnFlow && (
+            <>
+              <span className="text-destructive">{strings.assetUploadError}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => void uploadLocalToFlow()}
+              >
+                {strings.assetUploadRetry}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+      {!hasAsset && (
+        <div className="rounded border border-dashed border-border py-2 text-center text-[11px] text-muted-foreground">
+          {flowWithoutId
+            ? 'Asset Google Flow mất media id — chọn lại từ Flow (không upload lại)'
+            : data.missing
+              ? strings.missingFile
+              : kind === 'audio'
+                ? strings.dropOrPickAudio
+                : strings.pickFlowAssetHint}
+        </div>
+      )}
+
+      <div className="flex gap-1">
+        {kind !== 'audio' && (
+          <Button
+            type="button"
+            variant={hasAsset ? 'outline' : 'default'}
+            size="sm"
+            className="flex-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFlowOpen(true);
+            }}
+          >
+            {strings.pickFromFlow}
+          </Button>
+        )}
+        {localPicker('flex-1', strings.pickFromLocal)}
+      </div>
+
+=== assetUpload.ts flowMediaId / kind guards ===
+import type { FlowUploadedIds } from '@/shared/messaging';
+import type { AssetNodeDataSchema } from '@/shared/schema';
+import { strings } from '@/shared/strings';
+import { blobToBase64 } from '@/shared/utils';
+import { assetRepo } from '@/storage/repos/assetRepo';
+import { workflowRepo } from '@/storage/repos/workflowRepo';
+import type { z } from 'zod';
+
+type AssetData = z.infer<typeof AssetNodeDataSchema>;
+
+export type FlowImageUploader = (img: {
+  name: string;
+  mime: string;
+  dataBase64: string;
+}) => Promise<{ mediaId: string; projectId: string }>;
+
+async function assetNodeData(workflowId: string, nodeId: string): Promise<AssetData | undefined> {
+  const wf = await workflowRepo.get(workflowId);
+  const node = wf?.nodes.find((n) => n.id === nodeId && n.type === 'asset');
+  return node?.data as AssetData | undefined;
+}
+
+/**
+ * Upload the local image of an Asset node to the open Flow project (`maseQ`) and store
+ * `uploaded*` on the node. Flow assets (`flowMediaId`) are never uploaded.
+ * The patch is skipped when the user picked another file meanwhile.
+ */
+export async function uploadAssetNodeToFlow(
+  workflowId: string,
+  nodeId: string,
+  upload: FlowImageUploader,
+): Promise<FlowUploadedIds> {
+  const data = await assetNodeData(workflowId, nodeId);
+  if (!data?.assetId || data.flowMediaId || data.missing) {
+    throw new Error(strings.flowUploadNodeNotLocal);
+  }
+  const asset = await assetRepo.get(data.assetId);
+  if (!asset || !asset.mime.startsWith('image/')) throw new Error(strings.flowUploadNodeNotLocal);
+
+  const { mediaId, projectId } = await upload({
+    name: asset.originalName,
+    mime: asset.mime,
+    dataBase64: await blobToBase64(asset.blob),
+  });
+  const ids: FlowUploadedIds = {
+    uploadedMediaId: mediaId,
+    uploadedProjectId: projectId,
+    uploadedSha256: asset.sha256,
+  };
+
+  const current = await assetNodeData(workflowId, nodeId);
+  if (current?.assetId === data.assetId) {
+    await workflowRepo.patchNodeData(workflowId, nodeId, { ...ids });
+  }
+  return ids;
+}
+
+=== generate.ts Media not found retry — image vs video ===
+91:/** A 6s retry of a `[8]` rejection was still refused live; 34s cleared it. */
+178:    if (ref.kind === 'image') continue;
+187:  const imageRefs = refs.filter((r) => r.kind === 'image' && (r.mediaId || r.upload));
+189:  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
+376: * Poll as29s for an image URL; [5] / Media not found keep waiting until deadline.
+404:    strings.flowVideoOpFailed('Media not found. — frame upload chưa sẵn sàng trên Flow'),
+557:  // [8] is Flow shedding load; one cooldown retry once the whole wave settled.
+701:/** Terminal poll errors — fail on first hit, do not retry or wrap as "5 lần liên tiếp". */
+756:        // Veo complained (e.g. "Media not found.") — fail now, do not burn the full timeout.
+846:  return m?.[0] ?? 'Media not found.';
+921: * Veo i2v (`eb1hJf`) answers "Media not found." for maseQ uploads, so continue
+1542:    // Chỉ ảnh: "Media not found" trên id upload đã lưu → upload lại 1 lần.
+1543:    // Video (poll / frame / render) cũng có thể báo Media not found - không gói thành flowUploadedMediaGone.
+1558: * A stored upload id Flow no longer knows ("Media not found"): upload again once from
+
+=== flow-upload-reuse video no maseQ retry ===
+40:    mime: 'image/png',
+46:function imagePayload(upload: FlowUploadRef): FlowGeneratePayload {
+48:    mode: 'text-to-image',
+54:    refs: [{ kind: 'image', label: 'Character', upload }],
+80:          text: envelope('ogiZ0b', [[`https://flow-content.google/image/${OUT}?sig=1`]]),
+106:    const first = await generateViaRpc(1, imagePayload(upload), () => undefined, new AbortController().signal);
+111:    const second = await generateViaRpc(1, imagePayload(upload), () => undefined, new AbortController().signal);
+123:    const r1 = await generateViaRpc(1, imagePayload(wrongProject), () => undefined, new AbortController().signal);
+139:    await generateViaRpc(1, imagePayload(wrongSha), () => undefined, new AbortController().signal);
+152:    const ok = await generateViaRpc(1, imagePayload(upload), () => undefined, new AbortController().signal);
+162:      generateViaRpc(1, imagePayload(upload), () => undefined, new AbortController().signal),
+166:  it('video Media not found with stored upload → original error, no maseQ retry wrap', async () => {
+192:        refs: [{ kind: 'image', label: 'Character', upload }],
+  it('video Media not found with stored upload → original error, no maseQ retry wrap', async () => {
+    const upload = uploadRef({
+      sha256: 'abc',
+      nodeId: 'asset-1',
+      uploaded: { mediaId: STORED, projectId: PROJECT, sha256: 'abc' },
+    });
+    const calls: string[] = [];
+    rpc.mockImplementation(async (_tab, cmd) => {
+      calls.push(cmd.rpcid);
+      // Omni + ảnh local: MZZa6b. Báo Media not found như lỗi render video (không phải id upload ảnh).
+      if (cmd.rpcid === 'MZZa6b') {
+        return {
+          status: 200,
+          text: errorEnvelope('MZZa6b', [5, null, 'Media not found.']),
+        };
+      }
+      return { status: 200, text: envelope(cmd.rpcid, []) };
+    });
+
+    const promise = generateViaRpc(
+      1,
+      {
+        mode: 'frames-to-video',
+        model: 'Omni Flash',
+        prompt: '[Character] walks',
+        durationSec: 4,
+        refs: [{ kind: 'image', label: 'Character', upload }],
+      },
+      () => undefined,
+      new AbortController().signal,
+    );
+    await expect(promise).rejects.toSatisfy((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return /Media not found/i.test(msg) && !/không tìm thấy ảnh đã upload/i.test(msg);
+    });
+    expect(calls.filter((c) => c === 'maseQ')).toHaveLength(0);
+    // Id đã lưu vẫn còn - video path không xoá / upload lại.
+    expect(upload.uploaded?.mediaId).toBe(STORED);
+  });
+});
+
+=== generate.ts withFlowUploadRetry image-only (1542+) ===
+  const imageMode = isImageMode(payload.mode);
+  const generate = () =>
+    imageMode
+      ? generateImageRpc(alive, projectId, payload, onProgress, signal)
+      : generateVideoRpc(alive, projectId, payload, onProgress, signal);
+
+  try {
+    // Chỉ ảnh: "Media not found" trên id upload đã lưu → upload lại 1 lần.
+    // Video (poll / frame / render) cũng có thể báo Media not found - không gói thành flowUploadedMediaGone.
+    const result = imageMode
+      ? await generateWithStaleUploadRetry(generate, uploadRefs, projectId)
+      : await generate();
+    const uploads = freshUploads(uploadRefs, storedBefore);
+    return uploads.length ? { ...result, uploads } : result;
+  } finally {
+    log = baseLog;
+    chrome.tabs
+      .sendMessage(alive, { type: 'driver.rpcKeepalive', start: false })
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * A stored upload id Flow no longer knows ("Media not found"): upload again once from
+ * the local file and generate again. A second miss is reported, never retried.
+ */
+async function generateWithStaleUploadRetry(
+  generate: () => Promise<DriverResult>,
+  uploadRefs: FlowUploadRef[],
+  projectId: string,
+): Promise<DriverResult> {
+  const stale = uploadRefs.filter((u) => storedUploadId(u, projectId));
+  try {
+    return await generate();
+  } catch (e) {
+    if (!stale.length || !isMediaNotFoundError(e)) throw e;
+    log.warn('Id upload đã lưu không còn trên Flow - upload lại từ file gốc', {
+      count: stale.length,
+    });
+    for (const u of stale) u.uploaded = undefined;
+    try {
+      return await generate();
+    } catch (again) {
+      if (!isMediaNotFoundError(again)) throw again;
+      throw driverError('UPLOAD_FAILED', strings.flowUploadedMediaGone(mediaNotFoundDetail(again)));
+    }
+  }
+}
+
+/** Uploads made during this generate that belong to an Asset node (engine persists them). */
+function freshUploads(
+  uploadRefs: FlowUploadRef[],
+  storedBefore: (string | undefined)[],
+): NonNullable<DriverResult['uploads']> {
+  return uploadRefs.flatMap((u, i) =>
+    u.nodeId && u.uploaded && u.uploaded.mediaId !== storedBefore[i]

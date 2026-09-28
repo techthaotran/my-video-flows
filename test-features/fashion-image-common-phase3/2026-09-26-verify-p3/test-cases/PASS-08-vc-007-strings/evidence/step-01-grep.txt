@@ -1,0 +1,18 @@
+=== grep (nhập) in src/storage/transfer ===
+NO_MATCH_TRANSFER
+=== grep (nhập) broader storage/transfer + related ===
+=== strings helpers for import label ===
+57:  copySuffix: '(copy)',
+58:  importSuffix: '(nhập)',
+279:  flowPickerAuth: 'Chưa đăng nhập Google Flow. Đăng nhập trên tab Flow rồi thử lại.',
+280:  flowPickerLogin: 'Đăng nhập Google Flow',
+281:  flowPickerLoginHint: 'Đã mở tab Flow — đăng nhập xong quay lại bấm Làm mới.',
+325:  authRequired: 'Chưa đăng nhập provider',
+359:  importSuccess: (n: number) => `Đã nhập ${n} workflow`,
+385:  providerOk: 'Đã đăng nhập',
+386:  providerUnauth: 'Chưa đăng nhập',
+=== transfer references to strings for copy/import naming ===
+296:      warnings.push(strings.importFlowAssetMissing(n.label ?? n.id));
+311:    warnings.push(strings.importAssetMissing(n.label ?? n.id));
+314:  if (jsonLocalMissing) warnings.push(strings.importAssetMissingJson);
+495:        if (nameClash || existing) name = `${item.name} ${strings.importSuffix}`;

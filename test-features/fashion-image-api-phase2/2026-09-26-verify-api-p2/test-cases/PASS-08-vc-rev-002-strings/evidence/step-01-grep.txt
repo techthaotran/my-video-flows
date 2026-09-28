@@ -1,0 +1,17 @@
+=== rg hardcoded in src/ ===
+src/shared/strings.ts:312:  flowFetchingImage2k: 'Tải ảnh 2K…',
+src/shared/strings.ts:313:  flowImage2kEmpty: 'SPrCad không trả JPEG 2K',
+COUNT_HARDCODED:
+src/shared/strings.ts:2
+=== strings.ts keys ===
+312:  flowFetchingImage2k: 'Tải ảnh 2K…',
+313:  flowImage2kEmpty: 'SPrCad không trả JPEG 2K',
+=== usages ===
+src/shared/strings.ts:312:  flowFetchingImage2k: 'Tải ảnh 2K…',
+src/shared/strings.ts:313:  flowImage2kEmpty: 'SPrCad không trả JPEG 2K',
+src/providers/flow/rpc/generate.ts:565:  onProgress(85, payload.resolution === '2K' ? strings.flowFetchingImage2k : strings.flowFetchingImage);
+src/providers/flow/rpc/generate.ts:611:  if (!b64) throw driverError('UNKNOWN', strings.flowImage2kEmpty);
+=== literals outside strings.ts (must be 0) ===
+(no matches)
+OUTSIDE_STRINGS_COUNT:
+0

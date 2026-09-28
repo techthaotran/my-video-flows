@@ -1,0 +1,14 @@
+src/storage/transfer/index.ts:202:export async function exportWorkspace(workspaceId: string): Promise<ExportResult> {
+src/storage/transfer/index.ts:205:    kind: 'workspace',
+src/storage/transfer/index.ts:248:  createWorkspaceFromFile?: boolean;
+src/storage/transfer/index.ts:440:  const createWorkspaceFromFile =
+src/storage/transfer/index.ts:441:    opts.createWorkspaceFromFile ?? preview.manifest.kind === 'workspace';
+src/storage/transfer/index.ts:451:      if (createWorkspaceFromFile && preview.workspaces[0]) {
+tests/unit/transfer-hash.test.ts:9:  exportWorkspace,
+tests/unit/transfer-hash.test.ts:230:  it('exportWorkspace → import tạo workspace mới', async () => {
+tests/unit/transfer-hash.test.ts:231:    const source = await workspaceRepo.create('Trước Gương 3');
+tests/unit/transfer-hash.test.ts:240:    const exported = await exportWorkspace(source.id);
+tests/unit/transfer-hash.test.ts:241:    expect(exported.manifest.kind).toBe('workspace');
+tests/unit/transfer-hash.test.ts:242:    expect(exported.manifest.workspaces).toEqual([{ id: source.id, name: 'Trước Gương 3' }]);
+tests/unit/transfer-hash.test.ts:248:    expect(preview.manifest.kind).toBe('workspace');
+tests/unit/transfer-hash.test.ts:263:    expect(newWs?.name).toBe('Trước Gương 3');

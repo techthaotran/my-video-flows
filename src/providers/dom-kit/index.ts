@@ -219,3 +219,23 @@ export function base64ToBlob(b64: string, mime: string): Blob {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }
+
+const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+
+/** Email tài khoản Google đang đăng nhập, đọc từ nút avatar ("Google Account: Tên (email)"). */
+export function readAccountEmail(root: ParentNode = document): string | undefined {
+  for (const el of root.querySelectorAll('[aria-label*="@"], img[alt*="@"], [title*="@"]')) {
+    const text = el.getAttribute('aria-label') ?? el.getAttribute('alt') ?? el.getAttribute('title') ?? '';
+    const email = EMAIL_RE.exec(text)?.[0];
+    if (email) return email.toLowerCase();
+  }
+  return undefined;
+}
+
+/** Dán file vào ô soạn thảo như Cmd+V (không mở hộp thoại chọn file của hệ điều hành). */
+export function pasteFiles(target: Element, files: File[]): void {
+  const dt = new DataTransfer();
+  for (const f of files) dt.items.add(f);
+  (target as HTMLElement).focus?.();
+  target.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
+}

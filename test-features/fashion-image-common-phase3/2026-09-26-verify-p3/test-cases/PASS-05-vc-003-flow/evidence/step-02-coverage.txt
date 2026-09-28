@@ -1,0 +1,13 @@
+src/shared/strings.ts:126:  flowMediaIdNotInPayload: (labels: string) =>
+src/shared/strings.ts:363:  importFlowAssetMissing: (nodeLabel: string) =>
+src/shared/strings.ts:364:    `Asset Flow "${nodeLabel}" chỉ dùng được với tài khoản Flow gốc - chọn lại asset hoặc dùng file local`,
+src/storage/transfer/index.ts:12:  return isAssetNodeType(n.type) && !(n.data as { flowMediaId?: string }).flowMediaId;
+src/storage/transfer/index.ts:16:  return isAssetNodeType(n.type) && !!(n.data as { flowMediaId?: string }).flowMediaId;
+src/storage/transfer/index.ts:296:      warnings.push(strings.importFlowAssetMissing(n.label ?? n.id));
+tests/unit/transfer-hash.test.ts:266:  it('node Asset Flow giữ media id và có cảnh báo theo từng node', async () => {
+tests/unit/transfer-hash.test.ts:280:            flowMediaId: 'flow-media-a',
+tests/unit/transfer-hash.test.ts:292:            flowMediaId: 'flow-media-b',
+tests/unit/transfer-hash.test.ts:310:      strings.importFlowAssetMissing('Flow outfit'),
+tests/unit/transfer-hash.test.ts:311:      strings.importFlowAssetMissing('Flow scene'),
+tests/unit/transfer-hash.test.ts:314:      preview.items[0]!.workflow.nodes.map((n) => (n.data as { flowMediaId?: string }).flowMediaId),
+tests/unit/transfer-hash.test.ts:323:      created[0]!.nodes.map((n) => (n.data as { flowMediaId?: string }).flowMediaId),

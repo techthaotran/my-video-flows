@@ -81,6 +81,9 @@ export function localAssetPatch(
   source: 'local';
   flowMediaId: undefined;
   flowPreviewUrl: undefined;
+  uploadedMediaId: undefined;
+  uploadedProjectId: undefined;
+  uploadedSha256: undefined;
 } {
   return {
     assetId,
@@ -91,5 +94,9 @@ export function localAssetPatch(
     source: 'local',
     flowMediaId: undefined,
     flowPreviewUrl: undefined,
+    // Đổi file → id upload Flow cũ không còn hợp lệ.
+    uploadedMediaId: undefined,
+    uploadedProjectId: undefined,
+    uploadedSha256: undefined,
   };
 }

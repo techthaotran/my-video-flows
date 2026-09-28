@@ -1,0 +1,49 @@
+- generic [ref=f2e3]:
+  - banner [ref=f2e4]:
+    - generic [ref=f2e5]:
+      - textbox [ref=f2e6]
+      - generic [ref=f2e7]:
+        - switch "Bật" [ref=f2e8] [cursor=pointer]
+        - text: Bật
+    - generic [ref=f2e9]:
+      - generic [ref=f2e10]:
+        - switch "Max Speed" [ref=f2e11] [cursor=pointer]
+        - text: Max Speed
+      - button "Reset" [ref=f2e12] [cursor=pointer]
+      - button "Khoá canvas" [ref=f2e16] [cursor=pointer]
+      - button "Lưu" [ref=f2e20] [cursor=pointer]
+      - button [ref=f2e25] [cursor=pointer]
+  - generic [ref=f2e30]:
+    - complementary [ref=f2e31]:
+      - button "Asset" [ref=f2e32] [cursor=pointer]
+      - button "Prompt" [ref=f2e37] [cursor=pointer]
+      - button "Generate Image" [ref=f2e40] [cursor=pointer]
+      - button "Generate Video" [ref=f2e45] [cursor=pointer]
+      - button "Ghép video" [ref=f2e51] [cursor=pointer]
+      - button "Auto Download" [ref=f2e54] [cursor=pointer]
+      - button "Note" [ref=f2e58] [cursor=pointer]
+      - button "Chọn" [ref=f2e63] [cursor=pointer]
+      - button "Pan" [ref=f2e66] [cursor=pointer]
+      - button "Chạy" [ref=f2e73] [cursor=pointer]
+      - button "Dừng chạy" [ref=f2e76] [cursor=pointer]
+      - button "Hoàn tác" [ref=f2e79] [cursor=pointer]
+      - button "Làm lại" [ref=f2e83] [cursor=pointer]
+      - button "Tự sắp xếp" [ref=f2e87] [cursor=pointer]
+    - generic [ref=f2e93]:
+      - application [ref=f2e94]:
+        - generic [ref=f2e96] [cursor=pointer]
+        - img "Mini Map" [ref=f2e98]
+        - generic "Control Panel" [ref=f2e99]:
+          - button "Zoom In" [ref=f2e100] [cursor=pointer]
+          - button "Zoom Out" [ref=f2e103] [cursor=pointer]
+          - button "Fit View" [ref=f2e106] [cursor=pointer]
+        - link "React Flow attribution" [ref=f2e110] [cursor=pointer]:
+          - /url: https://reactflow.dev?utm_source=attribution
+          - text: React Flow
+      - generic [ref=f2e112]:
+        - button [ref=f2e113] [cursor=pointer]
+        - generic [ref=f2e117]: 80%
+        - button [ref=f2e118] [cursor=pointer]
+        - button "Căn giữa" [ref=f2e122] [cursor=pointer]
+        - button "Export" [ref=f2e123] [cursor=pointer]
+        - button "Console" [ref=f2e128] [cursor=pointer]

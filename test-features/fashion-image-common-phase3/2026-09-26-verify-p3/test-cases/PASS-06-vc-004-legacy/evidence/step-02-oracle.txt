@@ -1,0 +1,6 @@
+352:            missing: true,
+445:  it('file cũ không có sha256 trên node → missing: true', async () => {
+451:    const legacyWf: Workflow = {
+465:            assetId: 'legacy-local-id',
+484:      workflow: legacyWf,
+487:    const file = new File([zipBlob], 'legacy.xflow.zip', { type: 'application/zip' });

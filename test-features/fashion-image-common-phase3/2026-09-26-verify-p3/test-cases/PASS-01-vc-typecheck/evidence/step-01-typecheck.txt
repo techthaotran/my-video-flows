@@ -1,0 +1,4 @@
+
+> my-x-flows@0.1.0 typecheck /Users/ggj/MyWork/my-video-flows
+> tsc -b --noEmit
+

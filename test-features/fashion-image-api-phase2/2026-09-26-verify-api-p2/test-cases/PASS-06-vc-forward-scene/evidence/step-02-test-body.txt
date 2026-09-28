@@ -1,0 +1,70 @@
+  it('fashionScene forwardRefs:false keeps scene media out of generateImage refs', async () => {
+    const { gatherInputs } = await import('@/engine/RunManager');
+    const { executors } = await import('@/engine/executors');
+    const SCENE = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const MODEL = 'bbbbbbbb-2222-4222-8222-222222222222';
+
+    const wf = {
+      id: 'w',
+      nodes: [
+        {
+          id: 'asset-scene',
+          type: 'asset' as const,
+          position: { x: 0, y: 0 },
+          data: { kind: 'image', assetLabel: 'Background', source: 'flow', flowMediaId: SCENE },
+        },
+        {
+          id: 'asset-model',
+          type: 'asset' as const,
+          position: { x: 0, y: 0 },
+          data: { kind: 'image', assetLabel: 'Character', source: 'flow', flowMediaId: MODEL },
+        },
+        {
+          id: 'prompt-scene',
+          type: 'prompt' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            preset: 'fashionScene',
+            outputFormat: 'json',
+            reusePrompt: false,
+            forwardRefs: false,
+            newChat: true,
+          },
+        },
+        {
+          id: 'prompt-model',
+          type: 'prompt' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            preset: 'fashionModel',
+            outputFormat: 'json',
+            reusePrompt: false,
+            forwardRefs: true,
+            newChat: true,
+          },
+        },
+        {
+          id: 'prompt-compose',
+          type: 'prompt' as const,
+          position: { x: 0, y: 0 },
+          data: { preset: 'fashionCompose', outputFormat: 'plain', reusePrompt: false, forwardRefs: true },
+        },
+        {
+          id: 'gen',
+          type: 'generateImage' as const,
+          position: { x: 0, y: 0 },
+          data: { model: 'Nano Banana 2', aspectRatio: '9:16', count: 1, resolution: '1K' },
+        },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: 'asset-scene',
+          sourceHandle: 'out:image',
+          target: 'prompt-scene',
+          targetHandle: 'in:image',
+          type: 'image',
+        },
+        {
+          id: 'e2',
+          source: 'asset-model',

@@ -1,0 +1,96 @@
+=== fetchImage2k / SPrCad function body (no maseQ) ===
+19:  RPC_GEN_IMAGE_2K,
+20-  RPC_GEN_VIDEO,
+21-  RPC_GEN_VIDEO_REFS,
+22-  RPC_GEN_VIDEO_TEXT,
+23-  RPC_MEDIA,
+24-  RPC_OPERATION,
+25-  RPC_PROJECT_MEDIA,
+26-  RPC_UPLOAD_IMAGE,
+27-  RpcError,
+28-  extractUuidsFromText,
+29-  extractVideoMediaIdsFromText,
+30-  firstPayload,
+31-  findMediaId,
+32-  findMediaIdInText,
+33-  image2kRequest,
+34-  imageRequest,
+35-  isOmniFlashModel,
+36-  mediaRequest,
+37-  omniReferenceVideoModel,
+38-  omniTextVideoModel,
+39-  operationRequest,
+40-  projectMediaRequest,
+41-  readImageBase64,
+42-  readImages,
+43-  readMediaUrls,
+44-  readOperation,
+45-  readTextVideoSubmit,
+46-  readUploadedMediaId,
+47-  readWorkflowPoll,
+48-  isMediaNotReadyRpcError,
+49-  referenceVideoRequest,
+50-  resolveImageModel,
+51-  textVideoRequest,
+52-  uploadRequest,
+53-  videoModelFallbackChain,
+54-  videoR2vFallbackChain,
+55-  videoRequest,
+56-  type GeneratedImage,
+57-  type Operation,
+58-} from '@/providers/flow/rpc/batch';
+59-import {
+--
+408:async function fetchUrlAsMedia(
+409-  url: string,
+410-  kind: 'image' | 'video',
+411-): Promise<{ kind: 'image' | 'video'; mime: string; dataBase64: string; url: string }> {
+412-  const res = await fetch(url);
+413-  if (!res.ok) throw driverError('UPLOAD_FAILED', `Không tải được media (HTTP ${res.status})`);
+414-  const blob = await res.blob();
+415-  const mime =
+416-    blob.type && blob.type !== 'application/octet-stream'
+417-      ? blob.type
+418-      : kind === 'video'
+419-        ? 'video/mp4'
+420-        : 'image/png';
+421-  if (mime.includes('text/html') || blob.size < 512) {
+422-    throw driverError('UNKNOWN', 'Media trả về không hợp lệ');
+423-  }
+424-  const bytes = new Uint8Array(await blob.arrayBuffer());
+425-  return { kind, mime, dataBase64: bytesToB64(bytes), url };
+426-}
+427-
+428-/** Local uploads already on Flow, keyed by `${projectId}:${cacheKey}` (cacheKey carries the run id). */
+429-const uploadedMediaIds = new Map<string, string>();
+430-const MAX_UPLOAD_CACHE = 200;
+431-
+432-/**
+433- * Turn the node's references into Flow image media ids (ordered, deduped).
+434- * Assets already on Flow are used by id and never uploaded; local files upload once per run.
+435- * Prompt is cleaned of Flow CDN URLs — media ids go only in RPC slots.
+436- */
+437-async function resolveRefs(
+438-  tabId: number,
+439-  projectId: string,
+440-  payload: FlowGeneratePayload,
+441-  onProgress: Progress,
+442-  signal: AbortSignal,
+443-): Promise<{ imageIds: string[]; orderedRefs: OrderedRef[]; prompt: string }> {
+444-  const orderedRefs: OrderedRef[] = [];
+445-  const seen = new Set<string>();
+=== maseQ mentions in generate.ts near 2K ===
+26:  RPC_UPLOAD_IMAGE,
+106:  if (detail.missingRefs.length && input.rpcid !== RPC_UPLOAD_IMAGE) {
+189:  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
+228:/** Shrink images before maseQ — large base64 breaks messaging / Flow rejects huge bodies. */
+342:async function uploadImage(
+357:    rpcid: RPC_UPLOAD_IMAGE,
+362:  const { text, raw } = await rpcPayload(tabId, RPC_UPLOAD_IMAGE, freq, CAPTCHA_IMAGE);
+364:    return readUploadedMediaId(firstPayload(text, RPC_UPLOAD_IMAGE));
+369:      `Upload ảnh thất bại (maseQ): ${e instanceof Error ? e.message : String(e)} — ${detail}`,
+375: * After maseQ, Flow may need a beat before i2v can resolve the media id.
+457:        mediaId = await uploadImage(tabId, projectId, ref.upload, onProgress);
+866: *   (Omni `abra_r2v_*` or Veo `veo_3_1_r2v_*`; maseQ frames fail `eb1hJf`).
+896:  const frameId = await uploadImage(
+909: * Veo i2v (`eb1hJf`) answers "Media not found." for maseQ uploads, so continue

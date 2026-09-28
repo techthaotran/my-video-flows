@@ -7,6 +7,7 @@ import {
   SCHEMA_VERSION,
   validateNodeData,
   upgradeStoredWorkflow,
+  migrateWorkflow,
   type NodeType,
 } from '@/shared/schema';
 import { nanoid } from '@/shared/utils';
@@ -208,7 +209,10 @@ export const workflowRepo = {
   },
 
   async getDraft(workflowId: string) {
-    return db.drafts.get(workflowId);
+    const draft = await db.drafts.get(workflowId);
+    if (!draft) return undefined;
+    // Draft có thể còn schema cũ (pre-v6); migrate trước khi restore vào editor.
+    return { ...draft, workflow: migrateWorkflow(draft.workflow) };
   },
 
   async clearDraft(workflowId: string) {

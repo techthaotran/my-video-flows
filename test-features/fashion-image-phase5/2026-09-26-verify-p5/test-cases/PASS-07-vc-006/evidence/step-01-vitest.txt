@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/transfer-hash.test.ts (8 tests | 7 skipped) 38ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 7 skipped (8)
+   Start at  16:53:58
+   Duration  853ms (transform 163ms, setup 28ms, collect 133ms, tests 38ms, environment 242ms, prepare 192ms)
+

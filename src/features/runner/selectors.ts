@@ -2,6 +2,7 @@ import { firstMergeNode, isMergeReady, mergeClipNodeIds } from '@/engine/mergeRe
 import { topoSort } from '@/engine/scheduler';
 import type {
   AssetLabel,
+  PromptPreset,
   Workflow,
   WorkflowNode,
 } from '@/shared/schema';
@@ -9,14 +10,7 @@ import { defaultKindForLabel } from '@/shared/schema';
 import { strings } from '@/shared/strings';
 import type { RunnerState } from '@/features/runner/store';
 
-export type PromptPreset =
-  | 'enhance'
-  | 'analyzeImage'
-  | 'script'
-  | 'summarize'
-  | 'translate'
-  | 'brainstorm'
-  | 'custom';
+export type { PromptPreset };
 
 interface PromptData {
   preset?: PromptPreset;

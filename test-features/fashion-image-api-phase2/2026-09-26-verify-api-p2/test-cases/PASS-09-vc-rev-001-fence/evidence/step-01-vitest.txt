@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/ggj/MyWork/my-video-flows
+
+ ✓ tests/unit/fashion-compose.test.ts (5 tests | 4 skipped) 2ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  12:36:21
+   Duration  632ms (transform 46ms, setup 27ms, collect 39ms, tests 2ms, environment 207ms, prepare 79ms)
+

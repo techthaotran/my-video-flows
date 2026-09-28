@@ -13,7 +13,7 @@ import { NON_RETRYABLE, type NodeOutputValue } from '@/engine/types';
 import type { ProviderRouter, EventBroadcaster } from '@/providers/TabPool';
 import type { SwToUiEvent } from '@/shared/messaging';
 import type { RunStatus, Workflow, WorkflowNode } from '@/shared/schema';
-import { nanoid } from '@/shared/utils';
+import { nanoid, hashBlobContent, blobToBase64 } from '@/shared/utils';
 import { createLogger } from '@/shared/log';
 import { strings } from '@/shared/strings';
 
@@ -23,6 +23,8 @@ interface ActiveRun {
   runId: string;
   abort: AbortController;
   workflowId: string;
+  /** Flow media downloaded for Gemini during this run (by media id). */
+  flowMedia: Map<string, Promise<Blob>>;
 }
 
 /** Loại media mà node này xuất ra — dùng khi output không tự khai `kind`. */
@@ -69,7 +71,13 @@ export class RunManager {
 
   async runWorkflow(
     workflowId: string,
-    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from'; nodeId?: string },
+    opts?: {
+      fromNodeId?: string;
+      mode?: 'full' | 'node' | 'only' | 'from';
+      nodeId?: string;
+      /** Mode `node`: node đích bỏ qua dùng lại / xoá outputEdited. */
+      force?: boolean;
+    },
   ): Promise<string> {
     const workflow = await workflowRepo.get(workflowId);
     if (!workflow) throw new Error('Workflow không tồn tại');
@@ -229,7 +237,12 @@ export class RunManager {
   private async executeRun(
     runId: string,
     workflow: Workflow,
-    opts?: { fromNodeId?: string; mode?: 'full' | 'node' | 'only' | 'from'; nodeId?: string },
+    opts?: {
+      fromNodeId?: string;
+      mode?: 'full' | 'node' | 'only' | 'from';
+      nodeId?: string;
+      force?: boolean;
+    },
   ): Promise<RunStatus> {
     // Job có thể xếp hàng trước khi workflow bị xoá mềm — kiểm tra lại lúc bắt đầu.
     const fresh = await workflowRepo.get(workflow.id);
@@ -250,7 +263,7 @@ export class RunManager {
     }
 
     const abort = new AbortController();
-    this.active.set(runId, { runId, abort, workflowId: workflow.id });
+    this.active.set(runId, { runId, abort, workflowId: workflow.id, flowMedia: new Map() });
     await runRepo.update(runId, { status: 'running' });
 
     const outputsByNode = new Map<string, NodeOutputValue[]>();
@@ -276,9 +289,12 @@ export class RunManager {
       const concurrency = workflow.settings.concurrency ?? 1;
       const settings = await getSettings();
       const maxConcurrent = settings.maxSpeed ? Math.max(concurrency, settings.defaultConcurrency) : 1;
+      const forceTargetId =
+        opts?.force && opts?.mode === 'node' ? (opts.nodeId ?? opts.fromNodeId) : undefined;
       runLog.info(`Bắt đầu "${workflow.name}" — ${plan.order.length} node`, {
         mode: opts?.mode ?? 'full',
         fromNodeId: opts?.fromNodeId ?? opts?.nodeId,
+        force: !!forceTargetId,
         order: plan.order,
         maxConcurrent,
       });
@@ -299,7 +315,16 @@ export class RunManager {
           const idx = queue.findIndex(canRun);
           if (idx < 0) break;
           const nodeId = queue.splice(idx, 1)[0]!;
-          const p = this.runNode(runId, workflow, nodeId, outputsByNode, slugIndex, abort.signal, onlyNodeId)
+          const p = this.runNode(
+            runId,
+            workflow,
+            nodeId,
+            outputsByNode,
+            slugIndex,
+            abort.signal,
+            onlyNodeId,
+            forceTargetId === nodeId,
+          )
             .then(() => {
               done.add(nodeId);
             })
@@ -354,6 +379,7 @@ export class RunManager {
     slugIndex: Map<string, string>,
     signal: AbortSignal,
     onlyNodeId?: string,
+    force = false,
   ) {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -367,6 +393,15 @@ export class RunManager {
 
     const inputs = gatherInputs(workflow, nodeId, outputsByNode);
 
+    // Hash each input blob once; stamp contentHash so prompt reuse can reuse the digest.
+    for (const vs of Object.values(inputs)) {
+      for (const v of vs) {
+        if (v.blob && !v.contentHash) {
+          v.contentHash = await hashBlobContent(v.blob);
+        }
+      }
+    }
+
     const inputHash = await computeInputHash(node.data, Object.fromEntries(
       Object.entries(inputs).map(([k, vs]) => [
         k,
@@ -376,7 +411,7 @@ export class RunManager {
           text: v.text,
           outputId: v.outputId,
           flowMediaId: v.flowMediaId,
-          size: v.blob?.size,
+          contentHash: v.contentHash,
         })),
       ]),
     ));
@@ -470,6 +505,17 @@ export class RunManager {
       }
       const attemptStart = Date.now();
       let lastProgressMessage: string | undefined;
+      // Executor and driver progress: logged once per message and broadcast. Driver
+      // progress is chatty, so only executor progress is persisted (for replay).
+      const reportProgress = (progress: number, message?: string, persist = true) => {
+        if (message && message !== lastProgressMessage) {
+          lastProgressMessage = message;
+          nodeLog.debug(`${progress}% ${message}`);
+        }
+        if (!showStatus) return;
+        if (persist) void runRepo.setNodeStatus(runId, nodeId, 'running', { progress, message });
+        this.broadcast({ type: 'node.progress', runId, nodeId, progress, message });
+      };
       nodeLog.info(attempt ? `Thử lại lần ${attempt}` : 'Bắt đầu');
 
       try {
@@ -479,15 +525,9 @@ export class RunManager {
           node,
           inputs,
           signal,
-          onProgress: (progress, message) => {
-            if (message && message !== lastProgressMessage) {
-              lastProgressMessage = message;
-              nodeLog.debug(`${progress}% ${message}`);
-            }
-            if (!showStatus) return;
-            void runRepo.setNodeStatus(runId, nodeId, 'running', { progress, message });
-            this.broadcast({ type: 'node.progress', runId, nodeId, progress, message });
-          },
+          force,
+          reuseSavedPrompt: !!onlyNodeId && nodeId !== onlyNodeId,
+          onProgress: (progress, message) => reportProgress(progress, message),
           resolveSlug: (slug) => {
             const id = slugIndex.get(slug);
             if (!id) return undefined;
@@ -502,6 +542,12 @@ export class RunManager {
             await this.patchNodeSafely(workflow.id, nodeId, patch);
             this.broadcast({ type: 'node.data', runId, nodeId, data: patch });
           },
+          patchNodeById: async (otherId, patch) => {
+            await this.patchNodeSafely(workflow.id, otherId, patch);
+            const target = workflow.nodes.find((n) => n.id === otherId);
+            if (target) target.data = { ...(target.data as object), ...patch };
+            this.broadcast({ type: 'node.data', runId, nodeId: otherId, data: patch });
+          },
           extractLastFrame: async (video) => {
             const dataBase64 = await extractLastFrame({
               mime: video.type || 'video/mp4',
@@ -514,6 +560,7 @@ export class RunManager {
             const nr = await runRepo.getNodeRun(runId, nodeId);
             const out = await runRepo.saveOutput({
               nodeRunId: nr?.id ?? nanoid(),
+              workflowId: workflow.id,
               kind: value.kind,
               mime: value.mime,
               text: value.text,
@@ -528,15 +575,9 @@ export class RunManager {
             });
             return out.id;
           },
+          flowMediaCache: this.active.get(runId)?.flowMedia ?? new Map(),
           callDriver: (provider, action) =>
-            this.router.execute(provider, action, signal, (p, m) => {
-              if (m && m !== lastProgressMessage) {
-                lastProgressMessage = m;
-                nodeLog.debug(`${p}% ${m}`);
-              }
-              if (!showStatus) return;
-              this.broadcast({ type: 'node.progress', runId, nodeId, progress: p, message: m });
-            }),
+            this.router.execute(provider, action, signal, (p, m) => reportProgress(p, m, false)),
         });
 
         for (const r of results) {
@@ -544,6 +585,7 @@ export class RunManager {
             const nr = await runRepo.getNodeRun(runId, nodeId);
             const out = await runRepo.saveOutput({
               nodeRunId: nr!.id,
+              workflowId: workflow.id,
               kind: r.kind,
               mime: r.mime,
               text: r.text,
@@ -581,14 +623,21 @@ export class RunManager {
             });
           }
         } else if (node.type === 'prompt') {
-          const text = results.find((r) => r.kind === 'text')?.text;
+          const textOut = results.find((r) => r.kind === 'text');
+          const text = textOut?.text;
           if (text) {
-            await this.patchNodeSafely(workflow.id, nodeId, { formattedOutput: text });
+            const patch: Record<string, unknown> = {
+              formattedOutput: text,
+              // Luôn đồng bộ cờ sửa tay từ executor (giữ true khi keepEdited; false khi force / gọi lại).
+              outputEdited: !!textOut?.outputEdited,
+            };
+            if (textOut?.reuseHash) patch.reuseHash = textOut.reuseHash;
+            await this.patchNodeSafely(workflow.id, nodeId, patch);
             this.broadcast({
               type: 'node.data',
               runId,
               nodeId,
-              data: { formattedOutput: text },
+              data: patch,
             });
           }
         }
@@ -737,15 +786,6 @@ export function gatherInputs(
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
 }
 
 function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {

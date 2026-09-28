@@ -1,0 +1,15 @@
+17:  extras?: { force?: boolean },
+31:    force: extras?.force,
+419:  it('systemPrompt override changes reuseHash and is sent to Gemini', async () => {
+430:          systemPrompt: 'Skill A',
+455:          systemPrompt: 'Skill B',
+466:  it('outputEdited keeps formattedOutput even when image changes', async () => {
+478:          outputEdited: true,
+490:    expect(out[0]!.outputEdited).toBe(true);
+494:  it('force skips reuse and outputEdited, calls Gemini', async () => {
+495:    const blob = pngBlob('force');
+496:    const callDriver = vi.fn(async () => ({ texts: ['forced-fresh'] }));
+506:          outputEdited: true,
+512:        { force: true },
+516:    expect(out[0]!.text).toBe('forced-fresh');
+517:    expect(out[0]!.outputEdited).toBe(false);

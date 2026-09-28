@@ -14,11 +14,19 @@ import {
   Trash2,
 } from 'lucide-react';
 import { db } from '@/storage/db';
+import type { OutputRecord } from '@/storage/db';
 import { workspaceRepo } from '@/storage/repos/workspaceRepo';
 import { workflowRepo, createEmptyWorkflow } from '@/storage/repos/workflowRepo';
 import { templateRepo } from '@/storage/repos/templateRepo';
+import { runRepo } from '@/storage/repos/runRepo';
 import { getSettings, setSettings, getUiState, setUiState } from '@/storage/repos/settingsRepo';
-import { exportWorkflows, exportBackup, parseImportFile, commitImport } from '@/storage/transfer';
+import {
+  exportWorkflows,
+  exportWorkspace,
+  exportBackup,
+  parseImportFile,
+  commitImport,
+} from '@/storage/transfer';
 import { chromeDownload, formatRelativeTime, cn } from '@/shared/utils';
 import { strings } from '@/shared/strings';
 import { sendToSw, connectRunEvents } from '@/shared/messaging';
@@ -109,6 +117,11 @@ export function SidePanelApp() {
     return list;
   }, [workflows, current, search, filter]);
 
+  const filteredIds = useMemo(() => filtered.map((w) => w.id), [filtered]);
+  const filteredIdsKey = filteredIds.join('\0');
+  const outputStats =
+    useLiveQuery(() => runRepo.getOutputStats(filteredIds), [filteredIdsKey]) ?? {};
+
   const grouped = useMemo(() => {
     const map = new Map<string, Workflow[]>();
     for (const w of filtered) {
@@ -157,6 +170,12 @@ export function SidePanelApp() {
 
   const onExport = async (ids: string[]) => {
     const result = await exportWorkflows({ workflowIds: ids, includeAssets: true, format: 'zip' });
+    await chromeDownload(result.blob, result.filename, true);
+  };
+
+  const onExportWorkspace = async () => {
+    if (!current) return;
+    const result = await exportWorkspace(current.id);
     await chromeDownload(result.blob, result.filename, true);
   };
 
@@ -277,6 +296,15 @@ export function SidePanelApp() {
           }}
         >
           <Trash2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          title={strings.exportWorkspace}
+          disabled={!current}
+          onClick={() => void onExportWorkspace()}
+        >
+          <Download className="h-4 w-4" />
         </Button>
       </div>
 
@@ -415,6 +443,7 @@ export function SidePanelApp() {
                     <WorkflowRow
                       key={w.id}
                       workflow={w}
+                      stats={outputStats[w.id] ?? { images: 0, videos: 0, thumbs: [] }}
                       selected={selected.has(w.id)}
                       onSelect={(v) => {
                         setSelected((prev) => {
@@ -555,10 +584,19 @@ export function SidePanelApp() {
       <Dialog open={!!importPreview} onOpenChange={(o) => !o && setImportPreview(null)}>
         <DialogContent className="w-[min(92vw,480px)]">
           <DialogHeader>
-            <DialogTitle>{strings.importPreview}</DialogTitle>
+            <DialogTitle>
+              {importPreview?.manifest.kind === 'workspace'
+                ? strings.importWorkspace
+                : strings.importPreview}
+            </DialogTitle>
           </DialogHeader>
           {importPreview && (
             <div className="space-y-2 text-sm">
+              {importPreview.manifest.kind === 'workspace' && importPreview.workspaces[0] && (
+                <div className="rounded border border-border bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                  {strings.importCreateWorkspace}: {importPreview.workspaces[0].name}
+                </div>
+              )}
               {importPreview.items.map((item) => (
                 <div key={item.id} className="rounded border border-border p-2">
                   <div className="font-medium">{item.name}</div>
@@ -594,8 +632,61 @@ function Empty({ text }: { text: string }) {
   return <div className="px-3 py-10 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
+type WorkflowOutputStats = { images: number; videos: number; thumbs: OutputRecord[] };
+
+function WorkflowOutputThumbs({ thumbs }: { thumbs: OutputRecord[] }) {
+  const [entries, setEntries] = useState<{ id: string; url: string; kind: 'image' | 'video' }[]>([]);
+
+  useEffect(() => {
+    const next = thumbs
+      .filter((t): t is OutputRecord & { blob: Blob; kind: 'image' | 'video' } =>
+        !!t.blob && (t.kind === 'image' || t.kind === 'video'),
+      )
+      .map((t) => ({
+        id: t.id,
+        url: URL.createObjectURL(t.blob),
+        kind: t.kind,
+      }));
+    setEntries(next);
+    return () => {
+      for (const e of next) URL.revokeObjectURL(e.url);
+    };
+  }, [thumbs]);
+
+  if (!entries.length) return null;
+
+  return (
+    <div className="mt-1 flex gap-0.5">
+      {entries.map((e) => (
+        <div
+          key={e.id}
+          className="relative h-8 w-8 shrink-0 overflow-hidden rounded border border-border bg-muted"
+        >
+          {e.kind === 'image' ? (
+            <img src={e.url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <>
+              <video
+                src={e.url}
+                preload="metadata"
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+              />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40">
+                <Play className="h-2.5 w-2.5 fill-white text-white" />
+              </span>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function WorkflowRow(props: {
   workflow: Workflow;
+  stats: WorkflowOutputStats;
   selected: boolean;
   onSelect: (v: boolean) => void;
   onOpen: () => void;
@@ -608,20 +699,26 @@ function WorkflowRow(props: {
   onRun: () => void;
   onSaveTemplate: () => void;
 }) {
-  const { workflow: w } = props;
+  const { workflow: w, stats } = props;
+  const hasMedia = stats.images > 0 || stats.videos > 0;
+  const statsLabel = hasMedia
+    ? strings.workflowOutputStats(stats.images, stats.videos)
+    : strings.workflowOutputEmpty;
+
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-2 hover:border-primary/40">
+    <div className="flex items-start gap-1.5 rounded-md border border-border bg-card px-2 py-2 hover:border-primary/40">
       <input
         type="checkbox"
         checked={props.selected}
         onChange={(e) => props.onSelect(e.target.checked)}
-        className="accent-primary"
+        className="mt-1.5 accent-primary"
       />
       <button className="min-w-0 flex-1 text-left" onClick={props.onOpen}>
         <div className="truncate text-sm font-medium">{w.name}</div>
-        <div className="text-[11px] text-muted-foreground">
-          {strings.nodesCount(w.nodes.length)} · {formatRelativeTime(w.updatedAt)}
+        <div className="truncate text-[11px] text-muted-foreground">
+          {strings.nodesCount(w.nodes.length)} · {statsLabel} · {formatRelativeTime(w.updatedAt)}
         </div>
+        {hasMedia && stats.thumbs.length > 0 ? <WorkflowOutputThumbs thumbs={stats.thumbs} /> : null}
       </button>
       <Button
         variant="ghost"
@@ -632,7 +729,7 @@ function WorkflowRow(props: {
       >
         <Upload className="h-4 w-4" />
       </Button>
-      <Switch checked={w.enabled} onCheckedChange={props.onToggle} />
+      <Switch checked={w.enabled} onCheckedChange={props.onToggle} className="mt-1" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">

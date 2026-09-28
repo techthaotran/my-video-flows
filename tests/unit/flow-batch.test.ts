@@ -6,11 +6,13 @@ import {
   firstPayload,
   parseEnvelope,
   readImages,
+  readImageBase64,
   readMediaUrls,
   readTextVideoSubmit,
   readUploadedMediaId,
   extractVideoMediaIdsFromText,
   videoRequest,
+  image2kRequest,
   resolveVideoModel,
   resolveVeoReferenceVideoModel,
   videoR2vFallbackChain,
@@ -25,7 +27,9 @@ import {
   WORKFLOW_STATUS_DONE,
   WORKFLOW_STATUS_FAILED,
   RPC_GEN_VIDEO_REFS,
+  RPC_GEN_IMAGE_2K,
   RPC_MEDIA,
+  CAPTCHA_SLOT,
   type PromptPart,
 } from '@/providers/flow/rpc/batch';
 import { strings } from '@/shared/strings';
@@ -92,6 +96,31 @@ describe('flow batch readImages', () => {
   it('still reads a clean signed result when that is the only url', () => {
     const images = readImages([[`https://flow-content.google/image/${scene}?sig=abc`]]);
     expect(images).toEqual([{ mediaId: scene, url: `https://flow-content.google/image/${scene}?sig=abc` }]);
+  });
+});
+
+describe('flow batch SPrCad 2K', () => {
+  const media = 'aaaaaaaa-1111-4111-8111-ffffffffffff';
+  const project = 'fcf16651-14f3-4335-9557-0a808bd11946';
+
+  it('image2kRequest wire matches Phase 0 capture shape', () => {
+    const freq = image2kRequest({ sourceMediaId: media, projectId: project });
+    const outer = JSON.parse(freq) as unknown[][][];
+    expect(outer[0]![0]![0]).toBe(RPC_GEN_IMAGE_2K);
+    const inner = JSON.parse(outer[0]![0]![1] as string) as unknown[];
+    expect(inner[0]).toBe(media);
+    expect(inner[1]).toBe(1);
+    const ctx = inner[2] as unknown[];
+    expect(ctx[1]).toBe(22);
+    expect(ctx[5]).toBe(project);
+    expect(ctx[10]).toEqual([CAPTCHA_SLOT, 1]);
+  });
+
+  it('readImageBase64 picks the longest JPEG candidate', () => {
+    const short = `/9j/${'B'.repeat(100)}`;
+    const long = `/9j/${'C'.repeat(800)}`;
+    expect(readImageBase64([[short, long]])).toBe(long);
+    expect(readImageBase64(['not-jpeg'])).toBeNull();
   });
 });
 

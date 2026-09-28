@@ -5,6 +5,7 @@ import type { UiToSwMessage, SwToUiEvent, MessageResponse } from '@/shared/messa
 import { isUiToSwMessage } from '@/shared/messaging';
 import { clearLogs, createLogger, getLogs, subscribeLogs } from '@/shared/log';
 import { openOrFocusWindow } from '@/background/windows';
+import { uploadAssetNodeToFlow } from '@/background/assetUpload';
 
 const ports = new Set<chrome.runtime.Port>();
 
@@ -140,8 +141,19 @@ async function handleUiMessage(message: UiToSwMessage): Promise<MessageResponse>
       const runId = await runManager.runWorkflow(message.workflowId, {
         mode: message.mode ?? (message.fromNodeId ? 'from' : 'full'),
         fromNodeId: message.fromNodeId,
+        force: message.force,
       });
       return { ok: true, data: { runId } };
+    }
+    case 'asset.uploadToFlow': {
+      try {
+        const data = await uploadAssetNodeToFlow(message.workflowId, message.nodeId, (img) =>
+          router.uploadFlowImage(img),
+        );
+        return { ok: true, data };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
     }
     case 'workflow.regenerate': {
       const runId = await runManager.regenerate(message.workflowId, message.nodeId);

@@ -1,0 +1,13 @@
+tests/unit/prompt-reuse.test.ts:419:  it('systemPrompt override changes reuseHash and is sent to Gemini', async () => {
+tests/unit/prompt-reuse.test.ts:430:          systemPrompt: 'Skill A',
+tests/unit/prompt-reuse.test.ts:455:          systemPrompt: 'Skill B',
+tests/unit/prompt-reuse.test.ts:466:  it('outputEdited keeps formattedOutput even when image changes', async () => {
+tests/unit/prompt-reuse.test.ts:478:          outputEdited: true,
+tests/unit/prompt-reuse.test.ts:490:    expect(out[0]!.outputEdited).toBe(true);
+tests/unit/prompt-reuse.test.ts:494:  it('force skips reuse and outputEdited, calls Gemini', async () => {
+tests/unit/prompt-reuse.test.ts:506:          outputEdited: true,
+tests/unit/prompt-reuse.test.ts:517:    expect(out[0]!.outputEdited).toBe(false);
+tests/unit/run-patch-node-data.test.ts:51:  it('outputEdited:true + formattedOutput rỗng → chạy không force xoá cờ', async () => {
+tests/unit/run-patch-node-data.test.ts:57:        outputEdited: true,
+tests/unit/run-patch-node-data.test.ts:81:      outputEdited?: boolean;
+tests/unit/run-patch-node-data.test.ts:84:    expect(data.outputEdited).toBe(false);

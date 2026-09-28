@@ -1,0 +1,9 @@
+5:import { migrateWorkflow, type Workflow, type WorkflowNode } from '@/shared/schema';
+76:/** Classic video pipeline after schema v6 migrate: Asset → Prompt enhance → Generate Video. */
+78:  const wf = migrateWorkflow({
+96:        // v5: no reusePrompt / forwardRefs - migrate sets reusePrompt false
+118:    forwardRefs?: boolean;
+121:  expect(promptData.forwardRefs).toBe(true);
+155:  it('migrated enhance prompt still calls Gemini every run and forwards refs', async () => {
+167:  it('migrated continue-scene graph still forwards last-frame continuation', async () => {
+168:    const wf = migrateWorkflow({

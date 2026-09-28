@@ -7,6 +7,7 @@ import {
   CAPTCHA_SLOT,
   MEDIA_HOST,
   RPC_GEN_IMAGE,
+  RPC_GEN_IMAGE_2K,
   RPC_GEN_VIDEO,
   RPC_GEN_VIDEO_REFS,
   RPC_GEN_VIDEO_TEXT,
@@ -40,6 +41,8 @@ export interface DescribeSubmitInput {
   aspect?: string | number;
   durationSec?: number;
   count?: number;
+  /** Image resolution label (1K / 2K) - logged only; never captcha/token. */
+  resolution?: string;
   prompt: string;
   refs?: SubmitRefInfo[];
   /** When set (MZZa6b), urls are scanned from text parts only via this string. */
@@ -52,6 +55,7 @@ export interface DescribeSubmitResult {
   aspect?: string | number;
   durationSec?: number;
   count?: number;
+  resolution?: string;
   prompt: string | string[];
   promptLength: number;
   labelsInPrompt: string[];
@@ -156,11 +160,18 @@ function collectUuids(node: unknown, out: string[]): void {
 export function extractWireMediaIds(rpcid: string, freqOrInner: string | unknown): string[] {
   const inner = typeof freqOrInner === 'string' ? decodeFreqInner(freqOrInner) : freqOrInner;
   if (rpcid === RPC_GEN_IMAGE) return wireIdsFromImageRequest(inner);
+  if (rpcid === RPC_GEN_IMAGE_2K) return wireIdsFromImage2kRequest(inner);
   if (rpcid === RPC_GEN_VIDEO) return wireIdsFromVideoRequest(inner);
   if (rpcid === RPC_GEN_VIDEO_TEXT) return [];
   if (rpcid === RPC_GEN_VIDEO_REFS) return wireIdsFromReferenceVideoRequest(inner);
   if (rpcid === RPC_UPLOAD_IMAGE) return [];
   return wireIdsGeneric(inner);
+}
+
+/** SPrCad wire: `[sourceMediaId, 1, context…]`. */
+function wireIdsFromImage2kRequest(inner: unknown): string[] {
+  if (!Array.isArray(inner) || typeof inner[0] !== 'string' || !UUID_RE.test(inner[0])) return [];
+  return [inner[0]];
 }
 
 /** Image-part media ids inside MZZa6b structured prompt (item[0]). */
@@ -283,6 +294,7 @@ export function describeSubmit(input: DescribeSubmitInput): DescribeSubmitResult
     aspect: input.aspect,
     durationSec: input.durationSec,
     count: input.count,
+    resolution: input.resolution,
     prompt: chunkForLog(input.prompt),
     promptLength: input.prompt.length,
     labelsInPrompt: labelsInPrompt(input.prompt),
@@ -318,5 +330,6 @@ export function describeSubmit(input: DescribeSubmitInput): DescribeSubmitResult
 export function summarizeSubmit(d: DescribeSubmitResult): string {
   const wired = d.refs.length ? `${d.refs.length - d.missingRefs.length}/${d.refs.length}` : '0/0';
   const model = d.model ? ` (${d.model})` : '';
-  return `payload → ${d.rpcid}${model} ref ${wired} vào wire, ${d.urlsInPrompt.length} link`;
+  const resolution = d.resolution ? ` ${d.resolution}` : '';
+  return `payload → ${d.rpcid}${model}${resolution} ref ${wired} vào wire, ${d.urlsInPrompt.length} link`;
 }

@@ -1,0 +1,137 @@
+
+╔════════════════════════════════════════════════════════════════════╗
+║ Update available for @playwright/cli: 0.1.18 → 0.1.21              ║
+║ Run `npm install -g @playwright/cli@latest` (global) or            ║
+║ `npm install --save-dev @playwright/cli@latest` (local) to update. ║
+╚════════════════════════════════════════════════════════════════════╝
+
+### Open tabs
+- 0: (current) [Editor — My X Flows](chrome-extension://mkdbgnffaddfhffminlbdkoalmkmdejc/src/pages/editor/index.html)
+- 1: [Google Flow - AI Creative Studio for Video, Images & Custom Tools](https://flow.google.com/about)
+- 2: [Google Gemini](https://gemini.google.com/app)
+### Page
+- Page URL: chrome-extension://mkdbgnffaddfhffminlbdkoalmkmdejc/src/pages/editor/index.html
+- Page Title: Editor — My X Flows
+- Console: 0 errors, 30 warnings
+### Snapshot
+```yaml
+- generic [ref=f2e3]:
+  - banner [ref=f2e4]:
+    - generic [ref=f2e5]:
+      - textbox [ref=f2e6]
+      - generic [ref=f2e7]:
+        - switch "Bật" [ref=f2e8] [cursor=pointer]
+        - text: Bật
+      - generic [ref=f2e132]: Chưa lưu
+    - generic [ref=f2e9]:
+      - generic [ref=f2e10]:
+        - switch "Max Speed" [ref=f2e11] [cursor=pointer]
+        - text: Max Speed
+      - button "Reset" [ref=f2e12] [cursor=pointer]
+      - button "Khoá canvas" [ref=f2e16] [cursor=pointer]
+      - button "Lưu" [ref=f2e20] [cursor=pointer]
+      - button [ref=f2e25] [cursor=pointer]
+  - generic [ref=f2e30]:
+    - complementary [ref=f2e31]:
+      - button "Asset" [ref=f2e32] [cursor=pointer]
+      - button "Prompt" [ref=f2e37] [cursor=pointer]
+      - button "Generate Image" [active] [ref=f2e40] [cursor=pointer]
+      - button "Generate Video" [ref=f2e45] [cursor=pointer]
+      - button "Ghép video" [ref=f2e51] [cursor=pointer]
+      - button "Auto Download" [ref=f2e54] [cursor=pointer]
+      - button "Note" [ref=f2e58] [cursor=pointer]
+      - button "Chọn" [ref=f2e63] [cursor=pointer]
+      - button "Pan" [ref=f2e66] [cursor=pointer]
+      - button "Chạy" [ref=f2e73] [cursor=pointer]
+      - button "Dừng chạy" [ref=f2e76] [cursor=pointer]
+      - button "Hoàn tác" [ref=f2e79] [cursor=pointer]
+      - button "Làm lại" [ref=f2e83] [cursor=pointer]
+      - button "Tự sắp xếp" [ref=f2e87] [cursor=pointer]
+    - generic [ref=f2e93]:
+      - application [ref=f2e94]:
+        - generic [ref=f2e96] [cursor=pointer]:
+          - generic:
+            - generic:
+              - group [ref=f2e133]:
+                - generic [ref=f2e134]:
+                  - generic [ref=f2e135]: Prompt
+                  - generic [ref=f2e138]:
+                    - generic "T Prompt" [ref=f2e139]
+                    - generic "🖼 Asset ảnh" [ref=f2e140]
+                    - generic "🎥 Asset video / cảnh trước" [ref=f2e141]
+                    - generic "🔊 Asset audio" [ref=f2e142]
+                    - generic [ref=f2e143]:
+                      - 'textbox "vd: [Character] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu" [ref=f2e144]'
+                      - generic [ref=f2e145]:
+                        - generic [ref=f2e146]: Output
+                        - 'textbox "Instruction + prompt phía trước; [Label] + mô tả · mediaId {uuid}" [ref=f2e147]'
+                    - generic "T Prompt + refs" [ref=f2e148]
+                  - generic [ref=f2e149]: Output · 0 ký tự
+              - group [ref=f2e170]:
+                - generic [ref=f2e171]:
+                  - generic [ref=f2e172]: Generate Image
+                  - generic [ref=f2e175]:
+                    - generic "T Prompt" [ref=f2e176]
+                    - generic "🖼 Asset ảnh" [ref=f2e177]
+                    - generic [ref=f2e178]:
+                      - generic [ref=f2e179]: Nhập prompt bên dưới — hoặc nối text/ảnh vào node
+                      - textbox "Prompt để generate…" [ref=f2e180]
+                      - generic [ref=f2e183]:
+                        - generic [ref=f2e189]: Chưa có ảnh
+                        - generic [ref=f2e190]: Nhập prompt hoặc nối text/ảnh vào node
+                      - generic [ref=f2e191]: 9:16 · 1 · 1K
+                      - button "Generate Image" [ref=f2e193]
+                    - generic "🖼 image" [ref=f2e199]
+                  - generic [ref=f2e200]: Nano Banana 2 · 9:16 · 1K
+        - img "Mini Map" [ref=f2e98]
+        - generic "Control Panel" [ref=f2e99]:
+          - button "Zoom In" [ref=f2e100] [cursor=pointer]
+          - button "Zoom Out" [ref=f2e103] [cursor=pointer]
+          - button "Fit View" [ref=f2e106] [cursor=pointer]
+        - link "React Flow attribution" [ref=f2e110] [cursor=pointer]:
+          - /url: https://reactflow.dev?utm_source=attribution
+          - text: React Flow
+      - generic [ref=f2e112]:
+        - button [ref=f2e113] [cursor=pointer]
+        - generic [ref=f2e117]: 150%
+        - button [ref=f2e118] [cursor=pointer]
+        - button "Căn giữa" [ref=f2e122] [cursor=pointer]
+        - button "Export" [ref=f2e123] [cursor=pointer]
+        - button "Console" [ref=f2e128] [cursor=pointer]
+    - complementary [ref=f2e152]:
+      - generic [ref=f2e153]: Inspector
+      - generic [ref=f2e155]:
+        - generic [ref=f2e156]: Generate Image
+        - generic [ref=f2e157]:
+          - generic [ref=f2e158]: Inputs & references
+          - generic [ref=f2e159]: Chưa có input / reference
+        - generic [ref=f2e203]:
+          - text: Prompt
+          - textbox "Prompt" [ref=f2e204]:
+            - /placeholder: Prompt để generate…
+        - generic [ref=f2e205]:
+          - text: Model
+          - combobox "Model" [ref=f2e206]:
+            - option "Nano Banana 2" [selected]
+            - option "Nano Banana 2 Lite"
+        - generic [ref=f2e207]:
+          - text: Tỉ lệ khung hình
+          - combobox "Tỉ lệ khung hình" [ref=f2e208]:
+            - option "9:16" [selected]
+            - option "16:9"
+            - option "1:1"
+            - option "4:3"
+            - option "3:4"
+        - generic [ref=f2e209]:
+          - text: Số lượng tạo ra
+          - combobox "Số lượng tạo ra" [ref=f2e210]:
+            - option "1" [selected]
+            - option "2"
+            - option "3"
+            - option "4"
+        - generic [ref=f2e211]:
+          - text: Độ phân giải ảnh
+          - combobox "Độ phân giải ảnh" [ref=f2e212]:
+            - option "1K" [selected]
+            - option "2K"
+```

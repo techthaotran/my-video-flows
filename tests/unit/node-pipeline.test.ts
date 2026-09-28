@@ -53,12 +53,17 @@ async function runGraph(
       patchNodeData: async (patch) => {
         Object.assign(n.data, patch);
       },
+      patchNodeById: async (otherId, patch) => {
+        const target = wf.nodes.find((x) => x.id === otherId);
+        if (target) Object.assign(target.data, patch);
+      },
       extractLastFrame: async (video) => new Blob([`last-of-${await video.text()}`], { type: 'image/jpeg' }),
       composeVideo: async (job) => {
         opts.onCompose?.(job as ComposeVideoJob);
         const names = await Promise.all(job.clips.map((c) => c.text()));
         return new Blob([`merged(${names.join('+')})`], { type: 'video/mp4' });
       },
+      flowMediaCache: new Map(),
       callDriver: async (_provider, action) => {
         if (action.name === 'generate') calls.push(action);
         return (opts.driver?.(action) ?? {
@@ -188,8 +193,10 @@ describe('generate node', () => {
     expect(payload.refs?.[0]).toMatchObject({
       kind: 'image',
       label: 'Character',
-      upload: { cacheKey: 'run-1:local-1', mime: 'image/png' },
+      upload: { mime: 'image/png', nodeId: 'char' },
     });
+    expect(payload.refs?.[0]?.upload?.sha256).toBeTruthy();
+    expect(payload.refs?.[0]?.upload?.dataBase64).toBeTruthy();
   });
 
   it('continues from the previous clip when Generate Video feeds the next scene prompt', async () => {

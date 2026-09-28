@@ -1,0 +1,49 @@
+=== SCHEMA_VERSION ===
+9:export const SCHEMA_VERSION = 6;
+
+=== Fashion / reuse keys in strings.ts ===
+151:  generateReusedForOnly: 'Dùng lại kết quả đã có (chỉ tạo node được chọn)',
+290:  imageResolution: 'Độ phân giải ảnh',
+297:  // Prompt presets (fashion + reuse)
+298:  presetFashionScene: 'Phân tích scene thời trang',
+299:  presetFashionModel: 'Phân tích người mẫu',
+300:  presetFashionOutfit: 'Phân tích outfit',
+301:  presetFashionColor: 'Phối màu thời trang',
+302:  presetFashionCompose: 'Ghép prompt thời trang',
+303:  reusePrompt: 'Dùng lại prompt cũ',
+304:  forwardRefs: 'Chuyển tiếp ảnh xuống node sau',
+305:  promptReused: 'Dùng lại',
+307:  fashionJsonInvalid: 'Kết quả phân tích thời trang không phải JSON hợp lệ',
+308:  fashionJsonMissingType: (type: string) => `Thiếu khối JSON loại "${type}" để ghép prompt`,
+309:  fashionComposeEmpty: 'Chưa có đủ khối phân tích để ghép prompt thời trang',
+310:  workflowOutputStats: (images: number, videos: number) => `${images} ảnh · ${videos} video`,
+
+=== Hardcoded Vietnamese fashion/reuse in components (should be empty or only via strings.) ===
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:71:/** Độ phân giải ảnh (Flow) - nhãn RPC; 2K dùng RPC riêng ở Phase 2. */
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:83:  'fashionScene',
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:84:  'fashionModel',
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:85:  'fashionOutfit',
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:86:  'fashionColor',
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:87:  'fashionCompose',
+/Users/ggj/MyWork/my-video-flows/src/shared/schema/index.ts:139:  /** Chuyển tiếp ảnh đầu vào xuống node sau. */
+
+=== strings. usage for fashion presets in UI ===
+/Users/ggj/MyWork/my-video-flows/src/features/editor/EditorApp.tsx:1008:            label={strings.imageResolution}
+
+=== List keys matching fashion/reuse in strings object ===
+290:  imageResolution: 'Độ phân giải ảnh',
+298:  presetFashionScene: 'Phân tích scene thời trang',
+299:  presetFashionModel: 'Phân tích người mẫu',
+300:  presetFashionOutfit: 'Phân tích outfit',
+301:  presetFashionColor: 'Phối màu thời trang',
+302:  presetFashionCompose: 'Ghép prompt thời trang',
+303:  reusePrompt: 'Dùng lại prompt cũ',
+304:  forwardRefs: 'Chuyển tiếp ảnh xuống node sau',
+307:  fashionJsonInvalid: 'Kết quả phân tích thời trang không phải JSON hợp lệ',
+308:  fashionJsonMissingType: (type: string) => `Thiếu khối JSON loại "${type}" để ghép prompt`,
+309:  fashionComposeEmpty: 'Chưa có đủ khối phân tích để ghép prompt thời trang',
+
+=== CONCLUSION ===
+SCHEMA_VERSION=6 confirmed
+Vietnamese fashion/reuse UI labels only in strings.ts (schema comment is not UI)
+No hardcoded fashion/reuse labels in features/editor or nodes components
