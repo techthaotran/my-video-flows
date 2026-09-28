@@ -10,3 +10,5 @@ release
 .env
 .env.*
 !*.xflow.json
+.playwright-cli
+test-features
