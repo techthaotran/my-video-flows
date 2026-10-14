@@ -13,6 +13,7 @@ Dùng khi người dùng gửi ảnh người mẫu mặc sản phẩm (áo bà 
 - Chữ in hoa, font không chân nét cực đậm, không bóng mờ, tương phản cao. Mỗi tag 2-4 từ. **Không ghi giá.**
 - Font phải có đủ dấu tiếng Việt: dùng **Inter Display ExtraBold/Black** (`/usr/share/fonts/opentype/inter/`). KHÔNG dùng Poppins (thiếu glyph Ẻ, Ổ, Ả, Ẵ, Ễ → hiện ô vuông). Nếu font khác, kiểm tra cmap có đủ `ẺỔẢẴỄỀĐƠ` trước.
 - Không thêm viền hoa văn bao quanh.
+- **Người mẫu phải cao hơn 80% khung hình**: từ đỉnh đầu tới phần thân thấy được ở mép dưới (theo mask người) ≥ 960px trên canvas 1200 (> 80% chiều cao), và đầu cách mép trên ~40-120px. Nếu thấp hơn thì thu nhỏ vùng crop (giảm `crop_w`/`crop_h`, giữ tỉ lệ 760:1200) cho người mẫu to lên, không phóng to bằng cách đẩy người ra ngoài khung.
 
 ## Bố cục chuẩn (toạ độ trên canvas 1200)
 - Ảnh người mẫu: cột trái rộng 760px, cao full 1200; mép phải hoà dần (fade 60px) vào cột nền be `#F6ECDC`.
@@ -45,9 +46,9 @@ Icon trắng đặc, nét dày, cùng một phong cách; footer dùng **cùng ki
      https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net_human_seg.onnx
    ```
    Copy `scripts/shopee_thumb.py` trong thư mục skill ra thư mục làm việc.
-2. Với mỗi ảnh: đọc kích thước, xác định **tâm mặt** và **gốc crop** (vùng 1267×2000 px nguồn cho ảnh ~1800×2400; người mẫu nằm giữa vùng crop, đầu cách mép trên ~120-250px). Vẽ elip thử lên ảnh, crop xem để chỉnh toạ độ - đừng đoán mù. Xác định hộp logo nếu cần xoá.
+2. Với mỗi ảnh: đọc kích thước, xác định **tâm mặt** và **gốc crop** (vùng 1267×2000 px nguồn cho ảnh ~1800×2400; người mẫu nằm giữa vùng crop, đầu cách mép trên ~120-250px). Vẽ elip thử lên ảnh, crop xem để chỉnh toạ độ - đừng đoán mù. Chiều cao người trong crop phải > 80% `crop_h` (đo bằng bbox mask người); nếu không, thu nhỏ `crop_w/crop_h`. Xác định hộp logo nếu cần xoá.
 3. Viết config JSON (định dạng trong docstring script), chạy `python3 -I shopee_thumb.py cfg.json`. Đổi `title/subtitle/tags/size_label/footer` theo sản phẩm (vd áo voan thì không ghi "THUN").
-4. **Kiểm tra trước khi giao**: xem ảnh full; zoom mặt trước/sau (không viền lạ, da không sạn); xem mask người; đo lề header; chắc chắn góc dưới trái không có chữ; người mẫu không bị capsule/header che (nhất là tay giơ lên mặt).
+4. **Kiểm tra trước khi giao**: xem ảnh full; zoom mặt trước/sau (không viền lạ, da không sạn); xem mask người; đo lề header; chắc chắn góc dưới trái không có chữ; đo bbox mask người: cao > 960px/1200; người mẫu không bị capsule/header che (nhất là tay giơ lên mặt).
 5. Gửi file (SendUserFile), tên dạng `bia-shopee-<sp>-<mau>.jpg`; trả lời ngắn: đã làm gì, lưu ý còn lại, gợi ý 1 bước tiếp nếu có.
 
 Nguồn ảnh nên là ảnh chụp sạch (chưa có chữ/khung). Nếu ảnh đầu vào đã là ảnh bìa có sẵn khung chữ, sửa trực tiếp trên ảnh đó (dịch khối chữ cho cân, vẽ lại icon vào đúng vòng tròn cũ bằng cách tô đĩa màu nền rồi dán icon mới) thay vì dựng lại.
