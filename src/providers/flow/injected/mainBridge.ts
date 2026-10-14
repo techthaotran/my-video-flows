@@ -15,6 +15,7 @@ declare global {
   interface Window {
     grecaptcha?: {
       enterprise?: {
+        ready?: (callback: () => void) => void;
         execute: (siteKey: string, opts: { action: string }) => Promise<string>;
       };
     };
@@ -58,16 +59,58 @@ export function installFlowMainBridge(): boolean {
         () => reject(new Error('grecaptcha.execute timed out')),
         EXECUTE_TIMEOUT_MS,
       );
-      window
-        .grecaptcha!.enterprise!.execute(SITE_KEY, { action: pageAction })
-        .then((token) => {
-          clearTimeout(timer);
-          resolve(token);
-        })
-        .catch((e) => {
-          clearTimeout(timer);
-          reject(e);
-        });
+      const enterprise = window.grecaptcha!.enterprise!;
+      const finish = (token: string) => {
+        clearTimeout(timer);
+        resolve(token);
+      };
+      const fail = (e: unknown) => {
+        clearTimeout(timer);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      };
+      const run = () => {
+        const exec = enterprise.execute.bind(enterprise);
+        // Flow's captcha service saves the real execute, then replaces
+        // enterprise.execute so any other caller is minted with action
+        // "extension_hijack_detected" (Object.assign overwrites opts.action).
+        // Assessment of that token comes back PUBLIC_ERROR_UNUSUAL_ACTIVITY.
+        // Put the requested action back for that one assign, then restore
+        // Object.assign before the token promise settles.
+        const hijacked = String(enterprise.execute).includes('extension_hijack_detected');
+        const realAssign = Object.assign;
+        if (hijacked) {
+          Object.assign = ((target: object, ...sources: object[]) => {
+            let hijack = false;
+            let keep = '';
+            for (const source of sources) {
+              if (!source || typeof source !== 'object') continue;
+              const action = (source as { action?: unknown }).action;
+              if (action === 'extension_hijack_detected') hijack = true;
+              else if (typeof action === 'string' && action) keep = action;
+            }
+            if (hijack && keep) {
+              const merged = realAssign({}, ...sources) as { action?: string };
+              merged.action = keep;
+              return realAssign(target, merged);
+            }
+            return realAssign(target, ...sources);
+          }) as typeof Object.assign;
+        }
+        let pending: Promise<string>;
+        try {
+          pending = exec(SITE_KEY, { action: pageAction });
+        } catch (e) {
+          if (hijacked) Object.assign = realAssign;
+          fail(e);
+          return;
+        } finally {
+          if (hijacked) Object.assign = realAssign;
+        }
+        pending.then(finish).catch(fail);
+      };
+      // Flow's own page calls execute from ready(); a token minted before that fails assessment.
+      if (typeof enterprise.ready === 'function') enterprise.ready(run);
+      else run();
     });
 
   /**

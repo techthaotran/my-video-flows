@@ -41,6 +41,7 @@ function errorEnvelope(rpcid: string, detail: unknown): string {
 }
 
 const DENIED = [7, null, [['type.googleapis.com/google.rpc.ErrorInfo', ['PUBLIC_ERROR_MODEL_ACCESS_DENIED']]]];
+const UNUSUAL_ACTIVITY = [7, null, [['type.googleapis.com/google.rpc.ErrorInfo', ['PUBLIC_ERROR_UNUSUAL_ACTIVITY']]]];
 
 function inner(cmd: BatchRpcCmd): unknown[] {
   const outer = JSON.parse(cmd.freq) as unknown[][][];
@@ -74,7 +75,7 @@ function fakeFlow(opts: {
   as29sNotReadyRounds?: number;
   /** ogiZ0b calls (1-based) that answer the transient `[8]` rejection. */
   transientImageCalls?: number[];
-  /** Every ogiZ0b call answers `[7]` PUBLIC_ERROR_UNUSUAL_ACTIVITY. */
+  /** Every ogiZ0b / eb1hJf / YhhmEf call answers `[7]` PUBLIC_ERROR_UNUSUAL_ACTIVITY. */
   unusualActivity?: boolean;
   /** i2v source media ids eb1hJf answers with `[13]` (INTERNAL). */
   internalSources?: string[];
@@ -91,14 +92,7 @@ function fakeFlow(opts: {
         const items = inner(cmd)[1] as unknown[][];
         imageItems.push(...items);
         if (opts.unusualActivity) {
-          return {
-            status: 200,
-            text: errorEnvelope('ogiZ0b', [
-              7,
-              null,
-              [['type.googleapis.com/google.rpc.ErrorInfo', ['PUBLIC_ERROR_UNUSUAL_ACTIVITY']]],
-            ]),
-          };
+          return { status: 200, text: errorEnvelope('ogiZ0b', UNUSUAL_ACTIVITY) };
         }
         if (opts.transientImageCalls?.includes(calls.filter((c) => c === 'ogiZ0b').length)) {
           return { status: 200, text: errorEnvelope('ogiZ0b', [8]) };
@@ -117,6 +111,9 @@ function fakeFlow(opts: {
       case 'maseQ':
         return { status: 200, text: envelope('maseQ', [[IMAGE_ID, PROJECT, 'op', 'CAE']]) };
       case 'YhhmEf': {
+        if (opts.unusualActivity) {
+          return { status: 200, text: errorEnvelope('YhhmEf', UNUSUAL_ACTIVITY) };
+        }
         submitted.push(videoModelOf(cmd));
         const mediaId = `bbbbbbbb-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
         return { status: 200, text: envelope('YhhmEf', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
@@ -136,6 +133,9 @@ function fakeFlow(opts: {
       case 'eb1hJf': {
         const model = videoModelOf(cmd);
         submitted.push(model);
+        if (opts.unusualActivity) {
+          return { status: 200, text: errorEnvelope('eb1hJf', UNUSUAL_ACTIVITY) };
+        }
         if (opts.deniedModels?.includes(model)) {
           return { status: 200, text: errorEnvelope('eb1hJf', DENIED) };
         }
@@ -327,6 +327,17 @@ describe('generateViaRpc Omni Flash', () => {
     expect(calls).not.toContain('MZZa6b');
     expect(calls.filter((c) => c === 'jwpduf').length).toBeGreaterThan(0);
     expect(result.medias![0]!.url).toContain('/video/bbbbbbbb-');
+  });
+
+  it('UNUSUAL_ACTIVITY on Omni text-to-video stops with CAPTCHA_FAILED - no poll', async () => {
+    const { calls } = fakeFlow({ unusualActivity: true });
+    await expect(run({ model: 'Omni Flash', durationSec: 4 })).rejects.toMatchObject({
+      code: 'CAPTCHA_FAILED',
+      message: strings.flowUnusualActivity,
+    });
+    expect(calls.filter((c) => c === 'YhhmEf')).toHaveLength(1);
+    expect(calls).not.toContain('jwpduf');
+    expect(calls).not.toContain('eb1hJf');
   });
 
   it('keeps polling when as29s returns [5] before the clip is ready', async () => {
@@ -581,6 +592,14 @@ describe('generateViaRpc references', () => {
     // One submit attempt only — no recompose, no cooldown-and-resubmit.
     expect(calls.filter((c) => c === 'eb1hJf')).toHaveLength(1);
     expect(calls).not.toContain('ogiZ0b');
+  });
+
+  it('UNUSUAL_ACTIVITY on a Veo i2v submit stops with CAPTCHA_FAILED - no model fallback', async () => {
+    const { calls } = fakeFlow({ unusualActivity: true });
+    await expect(
+      run({ model: 'Veo 3.1 Lite', refs: [{ kind: 'image', mediaId: IMAGE_ID }] }),
+    ).rejects.toMatchObject({ code: 'CAPTCHA_FAILED', message: strings.flowUnusualActivity });
+    expect(calls.filter((c) => c === 'eb1hJf')).toHaveLength(1);
   });
 
   it('passes Flow asset ids as image references and keeps [Label] without URLs', async () => {

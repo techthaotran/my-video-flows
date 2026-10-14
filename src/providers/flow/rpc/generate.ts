@@ -283,11 +283,19 @@ function summarizeRpcFailure(text: string, status?: number): string {
 
 /**
  * Flow chặn vì nghi hoạt động bất thường (reCAPTCHA điểm thấp / gửi dồn dập).
- * Không tự retry: gửi tiếp chỉ làm tài khoản bị chặn lâu hơn.
+ * Không tự retry, không thử model khác: gửi tiếp chỉ làm tài khoản bị chặn lâu hơn.
+ * Bắt chung ở `rpcPayload` nên mọi RPC (ảnh, Veo, Omni, upload) báo cùng một lỗi.
  */
 function isUnusualActivity(err: unknown): boolean {
   const detail = err instanceof RpcError ? JSON.stringify(err.detail) : String(err ?? '');
   return /PUBLIC_ERROR_UNUSUAL_ACTIVITY/.test(detail);
+}
+
+/** Stop before model fallback or "không trả operation" wrapping. A retry deepens the block. */
+function throwIfUnusualActivity(text: string, err?: unknown): void {
+  if (isUnusualActivity(err) || /PUBLIC_ERROR_UNUSUAL_ACTIVITY/.test(text)) {
+    throw driverError('CAPTCHA_FAILED', strings.flowUnusualActivity);
+  }
 }
 
 function isModelAccessDenied(err: unknown, text?: string): boolean {
@@ -345,7 +353,9 @@ async function rpcPayload(
       `batchexecute ${rpcid} thất bại — ${summarizeRpcFailure(out.text ?? '', out.status)}`,
     );
   }
-  return { text: out.text ?? '', raw: out };
+  const text = out.text ?? '';
+  throwIfUnusualActivity(text);
+  return { text, raw: out };
 }
 
 async function uploadImage(
@@ -580,9 +590,7 @@ async function generateImageRpc(
     return r.status === 'fulfilled' ? [r.value] : [];
   });
   if (!images.length) {
-    const reason = (results.get(0) as PromiseRejectedResult).reason;
-    if (isUnusualActivity(reason)) throw driverError('CAPTCHA_FAILED', strings.flowUnusualActivity);
-    throw reason;
+    throw (results.get(0) as PromiseRejectedResult).reason;
   }
 
   onProgress(85, payload.resolution === '2K' ? strings.flowFetchingImage2k : strings.flowFetchingImage);
@@ -1275,6 +1283,7 @@ async function parseOmniSubmitResponse(
   const excluded = excludeMediaIds ?? new Set<string>();
 
   const failHard = (e: unknown): never => {
+    throwIfUnusualActivity(text, e);
     const denied = isModelAccessDenied(e, text);
     throw Object.assign(
       driverError(
@@ -1292,6 +1301,7 @@ async function parseOmniSubmitResponse(
   try {
     return readTextVideoSubmit(firstPayload(text, rpcid));
   } catch (e) {
+    throwIfUnusualActivity(text, e);
     if (e instanceof RpcError || isModelAccessDenied(e, text)) return failHard(e);
 
     const fromText =
@@ -1433,6 +1443,7 @@ async function submitVideo(
   try {
     return readOperation(firstPayload(text, RPC_GEN_VIDEO));
   } catch (e) {
+    throwIfUnusualActivity(text, e);
     const detail = summarizeRpcFailure(text, raw.status);
     const internal = isInternalRejection(e);
     if (e instanceof RpcError || internal || isModelAccessDenied(e, text)) {

@@ -485,7 +485,7 @@ export function videoRequest(opts: {
   return buildEnvelope(RPC_GEN_VIDEO, inner);
 }
 
-/** Omni Flash text-to-video submit (YhhmEf) — FlowKit PR #41 capture. */
+/** Omni Flash text-to-video submit (YhhmEf). Trailer flag 2 matches the live Flow UI. */
 export function textVideoRequest(opts: {
   prompt: string;
   projectId: string;
@@ -499,7 +499,7 @@ export function textVideoRequest(opts: {
     null,
     [null, null, null, null, clientUuid(), clientUuid()],
   ];
-  return buildEnvelope(RPC_GEN_VIDEO_TEXT, [[item], context(opts.projectId), [clientUuid(), 1]]);
+  return buildEnvelope(RPC_GEN_VIDEO_TEXT, [[item], context(opts.projectId), [clientUuid(), 2]]);
 }
 
 /** Wire shape for structured prompt parts inside MZZa6b item[0]. */

@@ -342,7 +342,7 @@ describe('referenceVideoRequest (MZZa6b)', () => {
 });
 
 describe('fixture contrast notes (YhhmEf / eb1hJf)', () => {
-  it('documents YhhmEf trailer drift: capture [uuid,2] vs app [uuid,1]', () => {
+  it('YhhmEf trailer matches capture [uuid, 2]', () => {
     const fixture = loadFixture('yhhmef-t2v.json');
     const trailer = (fixture.args as unknown[])[2] as unknown[];
     expect(trailer[1]).toBe(2);
@@ -354,7 +354,7 @@ describe('fixture contrast notes (YhhmEf / eb1hJf)', () => {
       aspect: '16:9',
     });
     const inner = decodeFreqInner(freq) as unknown[];
-    expect((inner[2] as unknown[])[1]).toBe(1);
+    expect((inner[2] as unknown[])[1]).toBe(2);
   });
 
   it('documents eb1hJf crop drift: capture [null,null,1,1] vs app FULL_FRAME_CROP', () => {

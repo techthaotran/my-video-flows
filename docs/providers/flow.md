@@ -21,7 +21,7 @@
 |---|---|
 | Tab | `TabPool.acquire('flow')` — ưu tiên tab có `/project/{uuid}` |
 | Project | UUID từ URL hoặc `chrome.storage.local.flowProjectId` → lỗi `NO_FLOW_PROJECT` |
-| Captcha | MAIN-world `grecaptcha.enterprise` (`IMAGE_GENERATION` / `VIDEO_GENERATION`) |
+| Captcha | MAIN-world `grecaptcha.enterprise` (`IMAGE_GENERATION` / `VIDEO_GENERATION`). Trang Flow ghi đè `execute` thành action `extension_hijack_detected`; mint phải giữ action thật, không thì submit trả `PUBLIC_ERROR_UNUSUAL_ACTIVITY`. |
 | POST | `chrome.scripting.executeScript({ world: 'MAIN' })` → `/_/AiSandboxAngularFrontend/data/batchexecute` với cookie + `at` (`WIZ_global_data.SNlM0e`) |
 | Image | upload refs local nếu có (`maseQ`) → `ogiZ0b` → URL inline → base64. Asset Flow **không** upload lại |
 | Video | **Không** tạo ảnh trung gian (`ogiZ0b`). Prompt **không** chứa link CDN. Omni text → `YhhmEf`. Omni + ảnh → `MZZa6b` (ảnh neo trong structured prompt). Veo → đúng 1 start frame → `eb1hJf` → poll… |
@@ -67,7 +67,8 @@ Wire `SPrCad` (đã thay captcha):
 - Fallback fixture: [sp1007/flowkit](https://github.com/sp1007/flowkit) `agent/services/testdata/boq_payloads.json` (MIT), commit `9d119432…` — model Veo `veo_3_1_r2v_lite_low_priority`, cùng wire shape.
 - Khoá Omni `abra_r2v_{4,6,8,10}s` xác nhận từ Flow UI (`MEDIA_GENERATION_SETTINGS` trong `WuwhI`, 2026-09-14).
 - Fixture local: `tests/fixtures/providers/flow/mzza6b-r2v.json` (+ đối chứng `yhhmef-t2v.json`, `eb1hjf-i2v.json`).
-- Drift đã ghi: YhhmEf trailer capture `[uuid,2]` vs app `[uuid,1]` (Omni live); eb1hJf crop capture `[null,null,1,1]` vs app `FULL_FRAME_CROP`.
+- YhhmEf trailer khớp capture `[uuid, 2]` (Omni Flash UI, 2026-10-12).
+- Drift đã ghi: eb1hJf crop capture `[null,null,1,1]` vs app `FULL_FRAME_CROP`.
 
 ### Đọc log payload
 

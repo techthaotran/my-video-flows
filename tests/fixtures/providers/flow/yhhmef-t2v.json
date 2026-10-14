@@ -6,7 +6,7 @@
     "path": "agent/services/testdata/boq_payloads.json",
     "license": "MIT",
     "modelKey": "veo_3_1_t2v_lite_low_priority",
-    "note": "Contrast fixture for textVideoRequest (YhhmEf). Capture used Veo t2v key; app Omni uses abra_t2v_*. Drift: capture batch trailer is [uuid, 2]; app sends [uuid, 1] (verified live Omni)."
+    "note": "Contrast fixture for textVideoRequest (YhhmEf). Capture used Veo t2v key; app Omni uses abra_t2v_*. Trailer [uuid, 2] matches the live Omni Flash UI (2026-10-12)."
   },
   "rpcid": "YhhmEf",
   "args": [
