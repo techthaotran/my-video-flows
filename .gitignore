@@ -12,3 +12,4 @@ release
 !*.xflow.json
 .playwright-cli
 test-features
+output

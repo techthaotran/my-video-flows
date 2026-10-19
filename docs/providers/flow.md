@@ -35,6 +35,8 @@
 | Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio (Audio voice, Video reference); `entityId` ingredient; extend REST cũ |
 | Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi (không continue). continueFrame (Omni hoặc Veo) → frame cuối `maseQ` rồi `MZZa6b` (Omni `abra_r2v_*` / Veo `veo_3_1_r2v_*` với fallback chuỗi r2v rồi `abra_r2v_*` nếu tài khoản không có Veo r2v); frame là ảnh đầu `[Cảnh trước]`; **không** `eb1hJf` vì maseQ frame trả "Media not found.". Không dùng link làm dự phòng |
 
+Veo ảnh local: id upload đã lưu mà Flow không còn biết → bỏ id, upload lại (`maseQ`) và thay id mới; id mới phải resolve được (poll `as29s`) rồi mới submit. `eb1hJf` chỉ nhận id do Flow sinh (id `maseQ` báo "Media not found." sau submit), nên start frame là file local đi qua `MZZa6b` (`veo_3_1_r2v_*`, fallback `abra_r2v_*`); start frame là asset Flow vẫn `eb1hJf`.
+
 RPC ids: `ogiZ0b` (image), `SPrCad` (image 2K upscale/download), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload), `mYWVGd` (metadata `primary_media_id`).
 `WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) - **không** tái tạo / không submit.
 Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV`.

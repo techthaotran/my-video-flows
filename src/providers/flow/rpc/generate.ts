@@ -452,6 +452,39 @@ function storedUploadId(upload: FlowUploadRef, projectId: string): string | unde
   return saved.mediaId;
 }
 
+/** One probe: does Flow currently resolve this media id? Not-found / not-ready count as no. */
+async function flowKnowsMedia(tabId: number, mediaId: string): Promise<boolean> {
+  try {
+    const { text } = await rpcPayload(tabId, RPC_MEDIA, mediaRequest(mediaId));
+    const urls = readMediaUrls(firstPayload(text, RPC_MEDIA), mediaId);
+    return Boolean(urls.image || urls.video);
+  } catch (e) {
+    if (isMediaNotReadyRpcError(e) || isMediaNotFoundError(e)) return false;
+    throw e;
+  }
+}
+
+/**
+ * Video submit has no stale-upload retry, so a stored upload id Flow no longer knows is
+ * dropped up front; resolveRefs then uploads the local file again and the new id replaces it.
+ */
+async function dropStaleStoredUploads(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  signal: AbortSignal,
+): Promise<void> {
+  for (const ref of payload.refs ?? []) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    if (ref.kind !== 'image' || ref.mediaId || !ref.upload) continue;
+    const stored = storedUploadId(ref.upload, projectId);
+    if (stored && !(await flowKnowsMedia(tabId, stored))) {
+      log.warn('Id upload đã lưu không còn trên Flow - upload lại trước khi tạo video');
+      ref.upload.uploaded = undefined;
+    }
+  }
+}
+
 /** Local file → Flow media id: the stored upload when still valid, else `maseQ` once and remember it. */
 async function localRefMediaId(
   tabId: number,
@@ -964,6 +997,22 @@ async function generateContinuedSceneVideo(
     ...payload,
     prompt: strings.omniContinuePromptLead(strings.continueFrameRefLabel) + resolved.prompt,
   };
+  return submitReferenceScene(tabId, projectId, payload, scene, orderedRefs, onProgress, signal);
+}
+
+/**
+ * Submit `scene` through reference-to-video (`MZZa6b`) with `orderedRefs` as the image slots and
+ * poll the result. Shared by scene continue and by Veo with a local start image.
+ */
+async function submitReferenceScene(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  scene: FlowGeneratePayload,
+  orderedRefs: OrderedRef[],
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
   const omni = isOmniFlashModel(payload.model);
   const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
   const knownVideos = await listProjectVideoIds(tabId, projectId);
@@ -1182,12 +1231,23 @@ async function generateVeoI2vVideo(
   signal: AbortSignal,
 ): Promise<DriverResult> {
   const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
+  await dropStaleStoredUploads(tabId, projectId, payload, signal);
   const resolved = await resolveRefs(tabId, projectId, payload, onProgress, signal);
+  // Local image: upload first (done in resolveRefs), then wait until Flow resolves the id, only then submit.
+  for (const ref of resolved.orderedRefs) {
+    if (ref.source === 'upload') await waitForUploadedImageReady(tabId, ref.mediaId, onProgress, signal);
+  }
   const startFrameId = resolved.imageIds[0];
   if (!startFrameId) {
     throw driverError('UNKNOWN', strings.videoNeedsStartFrame);
   }
   const scene: FlowGeneratePayload = { ...payload, prompt: resolved.prompt };
+  // `eb1hJf` only knows ids Flow generated: a maseQ upload ends in "Media not found." after submit.
+  // A local start image therefore rides the reference path (`MZZa6b`), which accepts uploads.
+  if (resolved.orderedRefs[0]?.source === 'upload') {
+    log.info('Ảnh start frame là file local → Veo qua ảnh tham chiếu (MZZa6b), không dùng eb1hJf');
+    return submitReferenceScene(tabId, projectId, payload, scene, resolved.orderedRefs, onProgress, signal);
+  }
   const jobs = await submitVeoI2vJobs(
     tabId,
     projectId,

@@ -289,7 +289,8 @@ Orchestrate: `src/providers/flow/rpc/generate.ts`
 | Omni, không ref | Prompt (không CDN link) → `YhhmEf` × count → poll media |
 | Omni, 1..`OMNI_MAX_REFS` ảnh | `buildReferencePromptParts` → `MZZa6b` / `abra_r2v_*` → poll media |
 | Omni, > `OMNI_MAX_REFS` ảnh | Lỗi rõ ràng, không cắt bớt |
-| Veo, 1 ảnh | Start frame → `eb1hJf` + model fallback |
+| Veo, 1 ảnh Flow | Start frame → `eb1hJf` + model fallback |
+| Veo, 1 ảnh local | `maseQ` → chờ `as29s` → `MZZa6b` (r2v), vì `eb1hJf` không nhận id upload |
 | Veo, ≥ 2 ảnh | Lỗi rõ ràng |
 | continueFrame, Veo | Frame cuối → `maseQ` → `MZZa6b` / `veo_3_1_r2v_*` (cùng Omni continue; không `eb1hJf`) |
 | continueFrame, Omni | Frame cuối → `maseQ` → `MZZa6b` (frame cuối trước, rồi ảnh tham chiếu) |
