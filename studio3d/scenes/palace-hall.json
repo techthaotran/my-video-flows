@@ -1,0 +1,411 @@
+{
+  "version": 1,
+  "title": "Sảnh cung điện: đi vào phòng trong",
+  "notes": "Dựng từ ảnh refs/palace-hall.jpg (máy ngang tầm mắt 1,6m, khoảng 24mm). Tường sau cách máy khoảng 5,8m, cổng vòm rộng 3,9m cao 4,4m, phòng trong sâu thêm 4,6m - các số này là ước lượng.",
+  "fps": 30,
+  "size": {
+    "width": 1280,
+    "height": 720
+  },
+  "duration": 7,
+  "background": "#1b1d21",
+  "ground": true,
+  "style": "clay",
+  "reference": {
+    "image": "refs/palace-hall.jpg",
+    "camera": "photo",
+    "opacity": 0.5
+  },
+  "environment": {
+    "blocks": [
+      {
+        "id": "wall-back-left",
+        "label": "Tường sau (trái vòm)",
+        "pos": [
+          -4.1,
+          0,
+          -2.8
+        ],
+        "size": [
+          2.2,
+          5.5,
+          0.4
+        ]
+      },
+      {
+        "id": "wall-back-right",
+        "label": "Tường sau (phải vòm)",
+        "pos": [
+          2.63,
+          0,
+          -2.8
+        ],
+        "size": [
+          3.54,
+          5.5,
+          0.4
+        ]
+      },
+      {
+        "id": "arch-header",
+        "label": "Đỉnh vòm",
+        "pos": [
+          -1.07,
+          4.4,
+          -2.8
+        ],
+        "size": [
+          3.86,
+          1.1,
+          0.4
+        ]
+      },
+      {
+        "id": "wall-left",
+        "label": "Tường trái",
+        "pos": [
+          -5.35,
+          0,
+          0.1
+        ],
+        "size": [
+          0.3,
+          5.5,
+          6.2
+        ]
+      },
+      {
+        "id": "wall-right",
+        "label": "Tường phải (cửa sổ)",
+        "pos": [
+          4.55,
+          0,
+          0.1
+        ],
+        "size": [
+          0.3,
+          5.5,
+          6.2
+        ]
+      },
+      {
+        "id": "inner-wall-left",
+        "label": "Tường trái phòng trong",
+        "pos": [
+          -3.15,
+          0,
+          -5.1
+        ],
+        "size": [
+          0.3,
+          4.4,
+          4.6
+        ]
+      },
+      {
+        "id": "inner-wall-right",
+        "label": "Tường phải phòng trong",
+        "pos": [
+          1.0,
+          0,
+          -5.1
+        ],
+        "size": [
+          0.3,
+          4.4,
+          4.6
+        ]
+      },
+      {
+        "id": "inner-wall-back",
+        "label": "Tường cuối phòng trong (cửa sổ)",
+        "pos": [
+          -1.07,
+          0,
+          -7.55
+        ],
+        "size": [
+          4.4,
+          4.4,
+          0.3
+        ]
+      },
+      {
+        "id": "cabinet",
+        "label": "Tủ thấp",
+        "pos": [
+          -4.0,
+          0,
+          -2.3
+        ],
+        "size": [
+          1.1,
+          0.87,
+          0.5
+        ]
+      },
+      {
+        "id": "pedestal",
+        "label": "Bệ đặt bình",
+        "shape": "cylinder",
+        "pos": [
+          -3.5,
+          0,
+          -0.9
+        ],
+        "size": [
+          0.4,
+          1.15,
+          0.4
+        ]
+      },
+      {
+        "id": "console",
+        "label": "Bàn console",
+        "pos": [
+          1.97,
+          0,
+          -2.35
+        ],
+        "size": [
+          0.95,
+          0.8,
+          0.45
+        ]
+      },
+      {
+        "id": "rug",
+        "label": "Thảm",
+        "pos": [
+          0.3,
+          0,
+          -0.3
+        ],
+        "size": [
+          6.5,
+          0.02,
+          4.5
+        ]
+      }
+    ]
+  },
+  "actors": [
+    {
+      "id": "woman",
+      "model": "human",
+      "label": "Nhân vật 1",
+      "height": 1.68,
+      "yaw": 0,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            0.2,
+            0,
+            -0.4
+          ]
+        },
+        {
+          "t": 1,
+          "pos": [
+            0.2,
+            0,
+            -0.4
+          ]
+        },
+        {
+          "t": 4.5,
+          "pos": [
+            -1.1,
+            0,
+            -2.2
+          ],
+          "ease": "easeIn"
+        },
+        {
+          "t": 7,
+          "pos": [
+            -1.1,
+            0,
+            -5.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "man",
+      "model": "human-b",
+      "label": "Nhân vật 2",
+      "height": 1.78,
+      "yaw": -40,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            2.9,
+            0,
+            -2.0
+          ]
+        },
+        {
+          "t": 2.5,
+          "pos": [
+            2.9,
+            0,
+            -2.0
+          ],
+          "clip": "wave"
+        },
+        {
+          "t": 4.2,
+          "pos": [
+            2.9,
+            0,
+            -2.0
+          ],
+          "clip": "idle"
+        }
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": "photo",
+      "label": "Góc ảnh gốc",
+      "focal": 24,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            0,
+            1.6,
+            3
+          ],
+          "lookAt": [
+            0,
+            1.6,
+            -3
+          ]
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "label": "Cận Nhân vật 2",
+      "focal": 70,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            1.0,
+            1.55,
+            0.8
+          ],
+          "lookAt": [
+            2.9,
+            1.5,
+            -2.0
+          ]
+        },
+        {
+          "t": 4.5,
+          "pos": [
+            1.3,
+            1.55,
+            0.3
+          ],
+          "lookAt": [
+            2.9,
+            1.5,
+            -2.0
+          ],
+          "ease": "easeInOut"
+        }
+      ]
+    },
+    {
+      "id": "follow",
+      "label": "Bám Nhân vật 1",
+      "focal": 35,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            0.7,
+            1.65,
+            1.8
+          ],
+          "lookAt": [
+            0.2,
+            1.3,
+            -0.4
+          ]
+        },
+        {
+          "t": 4.5,
+          "pos": [
+            -0.6,
+            1.65,
+            0.3
+          ],
+          "lookAt": [
+            -1.1,
+            1.3,
+            -2.2
+          ],
+          "ease": "easeIn"
+        },
+        {
+          "t": 7,
+          "pos": [
+            -1.0,
+            1.65,
+            -2.9
+          ],
+          "lookAt": [
+            -1.1,
+            1.3,
+            -5.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wide",
+      "label": "Toàn cảnh góc cao",
+      "focal": 18,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [
+            4.0,
+            3.4,
+            2.7
+          ],
+          "lookAt": [
+            -1.0,
+            0.8,
+            -3.0
+          ]
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "t": 0,
+      "camera": "photo",
+      "note": "Góc ảnh gốc, Nhân vật 1 đứng giữa sảnh rồi bắt đầu đi."
+    },
+    {
+      "t": 2.5,
+      "camera": "close",
+      "note": "Cận Nhân vật 2 vẫy tay chào."
+    },
+    {
+      "t": 4,
+      "camera": "follow",
+      "note": "Máy bám sau lưng Nhân vật 1 đi qua cổng vòm vào phòng trong."
+    }
+  ]
+}

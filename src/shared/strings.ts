@@ -158,6 +158,32 @@ export const strings = {
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni tham chiếu (${model}). Bỏ ảnh tham chiếu (Omni text-only) hoặc chọn model Veo.`,
   omniReferenceSubmitFailed: (model: string, detail: string) =>
     `Omni Flash tham chiếu bị từ chối (${model}): ${detail}`,
+  // Omni video edit (jIps6): video tham chiếu chuyển động / góc máy
+  videoRefNeedsOmni: (label: string) =>
+    `[${label}] là video: chỉ Omni Flash nhận video tham chiếu (chỉnh sửa video). Chọn model Omni Flash hoặc bỏ video.`,
+  videoRefNoContinue: (label: string) =>
+    `[${label}] là video tham chiếu nên không nối cảnh trước được (Flow chỉ nhận một video đầu vào). Bỏ nối cảnh hoặc bỏ video.`,
+  videoRefOnlyOne: (n: number) =>
+    `Omni chỉ nhận 1 video tham chiếu mỗi lần tạo (đang nối ${n}). Bỏ bớt video.`,
+  omniEditTooManyRefs: (max: number, n: number) =>
+    `Omni chỉnh sửa video nhận tối đa ${max} tham chiếu tính cả video (đang có ${n}). Bỏ bớt ảnh.`,
+  videoRefTooLong: (label: string, sec: number, max: number) =>
+    `[${label}] dài ${sec.toFixed(1)}s, Omni chỉ nhận tối đa ${max}s video. Cắt clip ngắn lại rồi thử lại.`,
+  videoRefUnknownLength: (label: string) =>
+    `Không đọc được độ dài của [${label}]. Dùng file mp4/mov hợp lệ.`,
+  videoRefMissing: (label: string) =>
+    `[${label}] không có media id Flow cũng không có file local. Chọn lại video cho asset.`,
+  videoRefUploading: (name: string) => `Upload video ${name} lên Flow…`,
+  videoRefUploadFailed: (detail: string) => `Upload video lên Flow thất bại: ${detail}`,
+  videoRefUploadTimeout:
+    'Tab Flow không phản hồi lệnh upload video (tab mở từ trước khi cập nhật extension?). Reload tab flow.google.com rồi chạy lại.',
+  videoRefWaitReady: (round: number) => `Chờ Flow xử lý video đã upload (${round})…`,
+  videoRefNotReady: 'Flow chưa xử lý xong video đã upload. Thử lại sau ít phút.',
+  /** Thay `[Video reference]` trong prompt: video đi qua slot RPC, không phải mảnh ảnh. */
+  videoRefPromptName: 'video tham chiếu',
+  omniEditDenied:
+    'MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Omni chỉnh sửa video (abra_edit). Bỏ video tham chiếu hoặc kiểm tra gói Flow.',
+  omniEditSubmitFailed: (detail: string) => `Omni chỉnh sửa video bị từ chối (abra_edit): ${detail}`,
   veoReferenceDenied: (model: string) =>
     `MODEL_ACCESS_DENIED: tài khoản Flow này không dùng được Veo tham chiếu (${model}).`,
   veoReferenceSubmitFailed: (model: string, detail: string) =>
@@ -497,6 +523,43 @@ export const strings = {
   error: 'Lỗi',
   success: 'Thành công',
   justNow: 'vừa xong',
+
+  // Studio 3D (trang dev, không nằm trong extension)
+  studio3dTitle: 'Studio 3D',
+  studio3dScene: 'Cảnh',
+  studio3dNotes: 'Ghi chú cảnh',
+  studio3dPlay: 'Phát',
+  studio3dPause: 'Dừng',
+  studio3dSectionCameras: 'Góc máy',
+  studio3dSectionScript: 'Kịch bản',
+  studio3dSectionDisplay: 'Hiển thị',
+  studio3dSectionExport: 'Duyệt và xuất',
+  studio3dViewShots: 'Theo shots',
+  studio3dViewPlan: 'Sơ đồ từ trên',
+  studio3dOnAir: 'Đang lên hình',
+  studio3dShotRange: (from: number, to: number) => `${from.toFixed(1)}-${to.toFixed(1)}s`,
+  studio3dNoShots: 'Cảnh chưa có shots, dùng camera đầu tiên suốt cảnh.',
+  studio3dShortcuts: 'Phím cách: phát/dừng · ← →: từng khung · 0-9: chọn góc · P: sơ đồ',
+  studio3dFreeCamera: 'Camera tự do (kéo để xoay)',
+  studio3dShowPaths: 'Máy quay và đường đi',
+  studio3dShowLabels: 'Nhãn nhân vật',
+  studio3dReference: 'Lồng ảnh gốc',
+  studio3dReferenceOpacity: 'Độ mờ',
+  studio3dCameraBadge: (name: string, focal: number) => `${name} · ${Math.round(focal)}mm`,
+  studio3dExportTarget: (name: string) => `Xuất theo: ${name}`,
+  studio3dApprove: 'Tôi đã duyệt cảnh này',
+  studio3dExport: 'Export mp4',
+  studio3dDownloadPlan: 'Tải sơ đồ máy quay (PNG)',
+  studio3dPlanTitle: (title: string, t: number) => `Sơ đồ máy quay · ${title} · t=${t.toFixed(1)}s`,
+  studio3dPlanLegendCamera: (name: string, focal: number, shots: string) => `${name} · ${Math.round(focal)}mm${shots ? ` · lên hình ${shots}` : ''}`,
+  studio3dPlanLegendPath: 'Đường đi nhân vật (mũi tên = điểm cuối)',
+  studio3dPlanLegendUp: 'Phía trên sơ đồ = phía sâu trong ảnh gốc',
+  studio3dExportNeedApprove: 'Tick "đã duyệt" trước khi export',
+  studio3dExporting: (done: number, total: number) => `Đang render ${done}/${total} khung`,
+  studio3dExported: 'Đã export xong',
+  studio3dNoScenes: 'Chưa có file cảnh trong studio3d/scenes',
+  studio3dInvalid: 'Cảnh không hợp lệ:',
+  studio3dWarnings: 'Cảnh báo model:',
 } as const;
 
 export type Strings = typeof strings;

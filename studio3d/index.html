@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studio 3D</title>
+    <style>
+      :root {
+        --bg: #14171c;
+        --panel: #181b21;
+        --card: #1f232a;
+        --card-hover: #262b33;
+        --line: #2a2f37;
+        --text: #e6e9ee;
+        --muted: #8b939e;
+        --accent: #3b6ef5;
+        --live: #ff4d4f;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+      button, select { font: inherit; color: inherit; }
+      select, .btn { padding: 6px 10px; border-radius: 6px; border: 1px solid #3a414c; background: #232830; }
+      .btn { cursor: pointer; }
+      .btn:disabled { opacity: 0.4; cursor: default; }
+      .btn.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+      /* Vùng xem */
+      main { display: flex; flex-direction: column; min-width: 0; padding: 16px; gap: 10px; }
+      #stageWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #0c0e11; border-radius: 8px; }
+      #stageBox { position: relative; line-height: 0; }
+      #stage { display: block; }
+      #refImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: none; }
+      #badge { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 16px); display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.2; padding: 4px 8px; border-radius: 4px; background: rgba(20, 22, 26, 0.8); white-space: nowrap; }
+      #badge span { overflow: hidden; text-overflow: ellipsis; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+      .controls { display: flex; align-items: center; gap: 10px; }
+      #play { min-width: 64px; }
+      #time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+      .hint { font-size: 12px; color: var(--muted); }
+
+      /* Timeline: mỗi shot một đoạn màu theo camera, kéo để tua */
+      #timeline { position: relative; flex: 1; height: 32px; border-radius: 6px; background: var(--card); cursor: pointer; touch-action: none; overflow: hidden; }
+      .seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 6px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; border-right: 1px solid var(--bg); opacity: 0.55; }
+      .seg.active { opacity: 1; }
+      #playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); pointer-events: none; }
+
+      /* Panel */
+      aside { background: var(--panel); border-left: 1px solid var(--line); overflow: auto; display: flex; flex-direction: column; }
+      .panel-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+      .panel-head h1 { font-size: 15px; margin: 0; white-space: nowrap; }
+      .panel-head select { flex: 1; min-width: 0; }
+      section { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+      h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+      #messages:empty { display: none; }
+      #messages { padding: 12px 16px 0; }
+      pre { white-space: pre-wrap; margin: 0 0 8px; padding: 8px; border-radius: 6px; background: var(--card); font: 12px/1.4 system-ui, sans-serif; }
+      .err { color: #ff8a8a; } .warn { color: #ffd28a; }
+
+      /* Thẻ góc máy */
+      .cams { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .cams.portrait { grid-template-columns: repeat(3, 1fr); }
+      .cam { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 8px; border: 2px solid transparent; background: var(--card); text-align: left; cursor: pointer; }
+      .cam:hover { background: var(--card-hover); }
+      .cam.selected { border-color: var(--accent); }
+      .cam canvas { display: block; width: 100%; height: auto; border-radius: 4px; background: #0c0e11; }
+      .cam .thumb { position: relative; line-height: 0; }
+      .cam .live { position: absolute; top: 4px; left: 4px; padding: 1px 5px; border-radius: 3px; background: var(--live); font-size: 10px; line-height: 1.4; font-weight: 600; display: none; }
+      .cam.on-air .live { display: block; }
+      .cam .name { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.25; padding: 0 2px; }
+      .cam .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cam .mm { font-size: 11px; color: var(--muted); padding: 0 2px 2px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* Danh sách shot */
+      .shots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+      .shot { width: 100%; display: grid; grid-template-columns: 4px 1fr; gap: 0 10px; padding: 8px 10px 8px 0; border-radius: 6px; border: 1px solid transparent; background: var(--card); text-align: left; cursor: pointer; }
+      .shot:hover { background: var(--card-hover); }
+      .shot.active { border-color: var(--accent); }
+      .shot .bar { grid-row: span 2; border-radius: 0 3px 3px 0; }
+      .shot .head { display: flex; gap: 8px; font-size: 12px; font-weight: 600; }
+      .shot .range { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .shot .note { font-size: 12px; color: #c3c9d1; }
+      details { font-size: 12px; color: #c3c9d1; }
+      summary { cursor: pointer; color: var(--muted); }
+      #notes { white-space: pre-wrap; margin-top: 6px; }
+
+      /* Công tắc hiển thị */
+      .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+      .toggle input { margin: 0; accent-color: var(--accent); }
+      .sub { display: flex; align-items: center; gap: 8px; padding-left: 24px; }
+      .sub input[type=range] { flex: 1; accent-color: var(--accent); }
+      .sub output { width: 36px; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+      /* Xuất: dính đáy panel để luôn thấy */
+      .export { position: sticky; bottom: 0; margin-top: auto; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 0; }
+      .export .btn { width: 100%; }
+      #status:empty { display: none; }
+      #status { font-size: 12px; color: var(--muted); }
+
+      /* Màn hẹp: panel xuống dưới, vùng xem giữ 65% chiều cao thay vì bị panel chiếm hết */
+      @media (max-width: 800px) {
+        body { grid-template-columns: 1fr; grid-template-rows: 65vh auto; height: auto; }
+        main { padding: 12px 16px; }
+        aside { border-left: 0; border-top: 1px solid var(--line); }
+        .export { position: static; }
+        .hint { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="stageWrap">
+        <div id="stageBox"><canvas id="stage"></canvas><img id="refImg" alt="" /><div id="badge"></div></div>
+      </div>
+      <div class="controls">
+        <button id="play" class="btn"></button>
+        <div id="timeline"><div id="segments"></div><div id="playhead"></div></div>
+        <span id="time"></span>
+      </div>
+      <div id="shortcuts" class="hint"></div>
+    </main>
+    <aside>
+      <div class="panel-head"><h1 id="title"></h1><select id="scenes"></select></div>
+      <div id="messages"></div>
+      <section>
+        <h2 id="hCams"></h2>
+        <div id="cams" class="cams"></div>
+      </section>
+      <section>
+        <h2 id="hScript"></h2>
+        <ol id="shots" class="shots"></ol>
+        <details id="notesBox"><summary id="notesLabel"></summary><div id="notes"></div></details>
+      </section>
+      <section>
+        <h2 id="hDisplay"></h2>
+        <label class="toggle"><input id="labels" type="checkbox" checked /><span id="labelsLabel"></span></label>
+        <label class="toggle"><input id="paths" type="checkbox" /><span id="pathsLabel"></span></label>
+        <label class="toggle"><input id="free" type="checkbox" /><span id="freeLabel"></span></label>
+        <div id="refRow">
+          <label class="toggle"><input id="ref" type="checkbox" /><span id="refLabel"></span></label>
+          <div id="refSub" class="sub">
+            <span id="refOpacityLabel" class="hint"></span>
+            <input id="refOpacity" type="range" min="0" max="100" value="50" />
+            <output id="refOpacityValue"></output>
+          </div>
+        </div>
+      </section>
+      <section class="export">
+        <h2 id="hExport"></h2>
+        <label class="toggle"><input id="approve" type="checkbox" /><span id="approveLabel"></span></label>
+        <button id="export" class="btn primary"></button>
+        <button id="planPng" class="btn"></button>
+        <div id="exportTarget" class="hint"></div>
+        <div id="status"></div>
+      </section>
+    </aside>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

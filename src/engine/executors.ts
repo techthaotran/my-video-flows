@@ -409,7 +409,8 @@ async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<Fl
       FLOW_NO_UPLOAD,
     );
   }
-  if (ref.kind !== 'image' || !ref.blob) return base;
+  // Local image or video (Omni video edit) uploads; audio has no Flow input slot yet.
+  if (ref.kind === 'audio' || !ref.blob) return base;
 
   const sha256 = ref.contentHash ?? (await hashBlobContent(ref.blob));
   ref.contentHash = sha256;
@@ -428,7 +429,7 @@ async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<Fl
   return {
     ...base,
     upload: {
-      name: ref.name ?? 'image.png',
+      name: ref.name ?? (ref.kind === 'video' ? 'video.mp4' : 'image.png'),
       mime: ref.mime ?? ref.blob.type,
       dataBase64: await blobToBase64(ref.blob),
       sha256,

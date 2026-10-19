@@ -1,0 +1,9 @@
+{
+  "models": [
+    { "id": "human", "kind": "character", "height": 1.7, "fallback": { "shape": "humanoid", "color": "#4f7cac" } },
+    { "id": "human-b", "kind": "character", "height": 1.6, "fallback": { "shape": "humanoid", "color": "#c0603f" } },
+    { "id": "table", "kind": "prop", "fallback": { "shape": "box", "size": [1.6, 0.75, 0.8], "color": "#8b6b4a" } },
+    { "id": "crate", "kind": "prop", "fallback": { "shape": "box", "size": [0.6, 0.6, 0.6], "color": "#b08d57" } },
+    { "id": "pillar", "kind": "prop", "fallback": { "shape": "cylinder", "size": [0.5, 3, 0.5], "color": "#aaa" } }
+  ]
+}

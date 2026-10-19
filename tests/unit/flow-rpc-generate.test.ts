@@ -14,6 +14,7 @@ import {
 import { clearLogs, getLogs } from '@/shared/log';
 import { strings } from '@/shared/strings';
 import { CHARACTER_AI_ORIGIN_NOTE } from '@/engine/resolver';
+import { makeMp4, toBase64 } from '../fixtures/media/mp4';
 
 const rpc = vi.fn<(tabId: number, cmd: BatchRpcCmd) => Promise<BatchRpcResult>>();
 
@@ -129,6 +130,11 @@ function fakeFlow(opts: {
         }
         const mediaId = `dddddddd-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
         return { status: 200, text: envelope('MZZa6b', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
+      }
+      case 'jIps6': {
+        submitted.push(((inner(cmd)[0] as unknown[][])[0]!)[2] as string);
+        const mediaId = `eeeeeeee-0000-0000-0000-${String(submitted.length).padStart(12, '0')}`;
+        return { status: 200, text: envelope('jIps6', [null, null, null, [[mediaId, PROJECT, 'wf', 'PENDING']]]) };
       }
       case 'eb1hJf': {
         const model = videoModelOf(cmd);
@@ -443,18 +449,6 @@ describe('generateViaRpc Omni Flash', () => {
     expect(calls).not.toContain('YhhmEf');
   });
 
-  it('rejects video refs for Omni before submit', async () => {
-    const { calls } = fakeFlow({});
-    await expect(
-      run({
-        model: 'Omni Flash',
-        refs: [{ kind: 'video', label: 'Video reference', mediaId: IMAGE_ID }],
-      }),
-    ).rejects.toThrow(/video/);
-    expect(calls).not.toContain('YhhmEf');
-    expect(calls).not.toContain('MZZa6b');
-  });
-
   it('rejects audio refs for Omni before submit', async () => {
     const { calls } = fakeFlow({});
     await expect(
@@ -553,6 +547,197 @@ describe('generateViaRpc Omni Flash', () => {
       refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
     });
     expect(result.medias![0]!.url).toContain(newVideo);
+  });
+});
+
+describe('generateViaRpc Omni video edit (jIps6)', () => {
+  const VIDEO_ID = '99999999-9999-9999-9999-999999999999';
+
+  function editCmd() {
+    return rpc.mock.calls.map((c) => c[1]).find((c) => c.rpcid === 'jIps6');
+  }
+  function editItem(): unknown[] {
+    return (inner(editCmd()!)[0] as unknown[][])[0]!;
+  }
+  function stubVideoFetch(durationSec: number) {
+    const bytes = makeMp4(durationSec);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, blob: async () => new Blob([bytes as BlobPart], { type: 'video/mp4' }) })),
+    );
+  }
+
+  it('Flow video + Character image → one jIps6 with abra_edit, segment from the clip length', async () => {
+    const { calls } = fakeFlow({});
+    stubVideoFetch(8);
+    const send = vi.spyOn(chrome.tabs, 'sendMessage');
+    await run({
+      model: 'Omni Flash',
+      durationSec: 4,
+      prompt: '[Character] đi theo [Video reference], giữ góc máy',
+      refs: [
+        { kind: 'video', label: 'Video reference', mediaId: VIDEO_ID },
+        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+      ],
+    });
+    expect(calls.filter((c) => c === 'jIps6')).toHaveLength(1);
+    expect(calls).not.toContain('MZZa6b');
+    expect(calls).not.toContain('YhhmEf');
+    expect(calls).not.toContain('maseQ');
+    const item = editItem();
+    expect(item[0]).toEqual([null, VIDEO_ID, 0, 192]);
+    expect(item[2]).toBe('abra_edit');
+    expect(item[8]).toEqual([[null, IMAGE_ID]]);
+    const promptText = JSON.stringify(item[1]);
+    expect(promptText).toContain(strings.videoRefPromptName);
+    expect(promptText).not.toContain('[Video reference]');
+    expect(send.mock.calls.some((c) => (c[1] as { type?: string }).type === 'flow.uploadVideo')).toBe(false);
+    send.mockRestore();
+  });
+
+  it('local video uploads once through the content script, then jIps6 with the new id', async () => {
+    const { calls } = fakeFlow({});
+    const send = vi.spyOn(chrome.tabs, 'sendMessage').mockImplementation((async (_tab: number, msg: { type?: string }) =>
+      msg.type === 'flow.uploadVideo' ? { mediaId: VIDEO_ID, durationSec: 4 } : {}) as never);
+    const result = await run({
+      model: 'Omni Flash',
+      prompt: 'Làm như [Video reference]',
+      refs: [
+        {
+          kind: 'video',
+          label: 'Video reference',
+          upload: {
+            name: 'previz.mp4',
+            mime: 'video/mp4',
+            dataBase64: toBase64(makeMp4(4)),
+            sha256: 'sha-previz',
+            nodeId: 'asset-video',
+          },
+        },
+      ],
+    });
+    const uploads = send.mock.calls.filter((c) => (c[1] as { type?: string }).type === 'flow.uploadVideo');
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]![1]).toMatchObject({ projectId: PROJECT, name: 'previz.mp4' });
+    expect(calls).toContain('jIps6');
+    expect(editItem()[0]).toEqual([null, VIDEO_ID, 0, 96]);
+    expect(result.uploads).toEqual([{ nodeId: 'asset-video', mediaId: VIDEO_ID, projectId: PROJECT, sha256: 'sha-previz' }]);
+    send.mockRestore();
+  });
+
+  it('re-injects the content script when the Flow tab lost it, then uploads', async () => {
+    const { calls } = fakeFlow({});
+    const c = globalThis.chrome as unknown as Record<string, Record<string, unknown>>;
+    const savedScripting = c.scripting;
+    const savedManifest = c.runtime!.getManifest;
+    let injected = false;
+    const executeScript = vi.fn(async () => {
+      injected = true;
+      return [];
+    });
+    c.scripting = { executeScript };
+    c.runtime!.getManifest = () => ({
+      version: '0.1.0',
+      content_scripts: [{ matches: ['https://flow.google.com/*'], js: ['src/content/flow/index.ts'] }],
+    });
+    const send = vi.spyOn(chrome.tabs, 'sendMessage').mockImplementation((async (_tab: number, msg: { type?: string }) => {
+      if (msg.type !== 'flow.uploadVideo') return {};
+      if (!injected) throw new Error('Could not establish connection. Receiving end does not exist.');
+      return { mediaId: VIDEO_ID, durationSec: 4 };
+    }) as never);
+    await run({
+      model: 'Omni Flash',
+      refs: [
+        {
+          kind: 'video',
+          label: 'Video reference',
+          upload: { name: 'previz.mp4', mime: 'video/mp4', dataBase64: toBase64(makeMp4(4)) },
+        },
+      ],
+    });
+    expect(executeScript).toHaveBeenCalled();
+    expect(calls).toContain('jIps6');
+    send.mockRestore();
+    c.scripting = savedScripting as never;
+    c.runtime!.getManifest = savedManifest as never;
+  });
+
+  it('fails with a reload hint when the Flow tab never answers the upload', async () => {
+    const { calls } = fakeFlow({});
+    const send = vi.spyOn(chrome.tabs, 'sendMessage').mockImplementation((async (_tab: number, msg: { type?: string }) =>
+      msg.type === 'flow.uploadVideo' ? new Promise(() => undefined) : {}) as never);
+    await expect(
+      run({
+        model: 'Omni Flash',
+        refs: [
+          {
+            kind: 'video',
+            label: 'Video reference',
+            upload: { name: 'previz.mp4', mime: 'video/mp4', dataBase64: toBase64(makeMp4(4)) },
+          },
+        ],
+      }),
+    ).rejects.toThrow(strings.videoRefUploadTimeout);
+    expect(calls).not.toContain('jIps6');
+    send.mockRestore();
+  });
+
+  it('counts the segment in the clip own frames (30 fps Studio 3D export)', async () => {
+    fakeFlow({});
+    const send = vi.spyOn(chrome.tabs, 'sendMessage').mockImplementation((async (_tab: number, msg: { type?: string }) =>
+      msg.type === 'flow.uploadVideo' ? { mediaId: VIDEO_ID, durationSec: 8 } : {}) as never);
+    await run({
+      model: 'Omni Flash',
+      refs: [
+        {
+          kind: 'video',
+          label: 'Video reference',
+          upload: { name: 'previz.mp4', mime: 'video/mp4', dataBase64: toBase64(makeMp4(8, { fps: 30 })) },
+        },
+      ],
+    });
+    expect(editItem()[0]).toEqual([null, VIDEO_ID, 0, 240]);
+    send.mockRestore();
+  });
+
+  it('refuses a local clip longer than 10s before uploading', async () => {
+    const { calls } = fakeFlow({});
+    const send = vi.spyOn(chrome.tabs, 'sendMessage');
+    await expect(
+      run({
+        model: 'Omni Flash',
+        refs: [
+          {
+            kind: 'video',
+            label: 'Video reference',
+            upload: { name: 'long.mp4', mime: 'video/mp4', dataBase64: toBase64(makeMp4(12)) },
+          },
+        ],
+      }),
+    ).rejects.toThrow(strings.videoRefTooLong('Video reference', 12, 10));
+    expect(send.mock.calls.some((c) => (c[1] as { type?: string }).type === 'flow.uploadVideo')).toBe(false);
+    expect(calls).not.toContain('jIps6');
+    send.mockRestore();
+  });
+
+  it('refuses a video ref on Veo, two videos, or video + 5 images before any RPC', async () => {
+    const { calls } = fakeFlow({});
+    const video = { kind: 'video' as const, label: 'Video reference', mediaId: VIDEO_ID };
+    await expect(run({ model: 'Veo 3.1 - Fast', refs: [video] })).rejects.toThrow(
+      strings.videoRefNeedsOmni('Video reference'),
+    );
+    await expect(
+      run({ model: 'Omni Flash', refs: [video, { ...video, label: 'B', mediaId: IMAGE_ID }] }),
+    ).rejects.toThrow(strings.videoRefOnlyOne(2));
+    const images = Array.from({ length: 5 }, (_, i) => ({
+      kind: 'image' as const,
+      label: `R${i}`,
+      mediaId: `aaaaaaaa-bbbb-cccc-dddd-${String(i).padStart(12, '0')}`,
+    }));
+    await expect(run({ model: 'Omni Flash', refs: [video, ...images] })).rejects.toMatchObject({
+      code: 'OMNI_TOO_MANY_REFS',
+    });
+    expect(calls).toEqual([]);
   });
 });
 

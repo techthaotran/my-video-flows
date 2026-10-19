@@ -4,8 +4,21 @@
     {
       "name": "seconder-webapp-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "sec.gui.seconder-webapp-extension", "run", "dev:web"],
+      "runtimeArgs": [
+        "--filter",
+        "sec.gui.seconder-webapp-extension",
+        "run",
+        "dev:web"
+      ],
       "port": 8388
+    },
+    {
+      "name": "studio3d",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "studio3d"
+      ],
+      "port": 5002
     }
   ]
 }

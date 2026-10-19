@@ -1,0 +1,25 @@
+{
+  "_source": {
+    "kind": "flow-ui-capture",
+    "capturedAt": "2026-10-19",
+    "note": "Flow UI composer: Omni 1.1 Flash, Ingredients = one Flow video (8s) + one image, plain prompt, 9:16, x1. Request intercepted before sending (no credits). Media/project/client ids replaced with placeholders, captcha with __CAPTCHA__."
+  },
+  "rpcid": "jIps6",
+  "args": [
+    [
+      [
+        [null, "VIDEO_ID", 0, 192],
+        [null, null, [[["Replace the person in the video with the woman in the image, keep camera and motion"]]]],
+        "abra_edit",
+        1,
+        [null, null, null, null, "CLIENT_UUID_A", "CLIENT_UUID_B"],
+        null,
+        null,
+        null,
+        [[null, "IMAGE_ID"]]
+      ]
+    ],
+    [null, 22, null, null, null, "PROJECT_ID", null, null, null, null, ["__CAPTCHA__", 1]],
+    ["BATCH_UUID", 2]
+  ]
+}

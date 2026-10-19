@@ -3,7 +3,14 @@
  * Runs in the service worker — uses chrome.scripting + captcha bridge.
  */
 
-import type { DriverResult, FlowGeneratePayload, FlowUploadRef } from '@/shared/messaging';
+import type {
+  DriverResult,
+  FlowGeneratePayload,
+  FlowGenerateRef,
+  FlowUploadRef,
+  FlowVideoUploadReply,
+} from '@/shared/messaging';
+import { readMp4VideoInfo, type Mp4VideoInfo } from '@/media/mp4Info';
 import {
   annotateAssetLabels,
   ensureCharacterAiOriginNote,
@@ -14,10 +21,15 @@ import {
   CAPTCHA_IMAGE,
   CAPTCHA_VIDEO,
   FLOW_VIDEO_WIRE_MODEL_STORAGE_KEY,
+  OMNI_EDIT_FPS,
+  OMNI_EDIT_MAX_REFS,
+  OMNI_EDIT_MAX_SEC,
+  OMNI_EDIT_MODEL,
   OMNI_MAX_REFS,
   RPC_GEN_IMAGE,
   RPC_GEN_IMAGE_2K,
   RPC_GEN_VIDEO,
+  RPC_GEN_VIDEO_EDIT,
   RPC_GEN_VIDEO_REFS,
   RPC_GEN_VIDEO_TEXT,
   RPC_MEDIA,
@@ -25,6 +37,8 @@ import {
   RPC_PROJECT_MEDIA,
   RPC_UPLOAD_IMAGE,
   RpcError,
+  editVideoRequest,
+  editVideoSegment,
   extractUuidsFromText,
   extractVideoMediaIdsFromText,
   firstPayload,
@@ -66,6 +80,7 @@ import {
   formatPartsForLog,
 } from '@/providers/flow/rpc/promptParts';
 import { resolveFlowProjectId } from '@/providers/flow/rpc/project';
+import { sendToContent } from '@/providers/contentBridge';
 import { reviveTabIfNeeded, runBatchRpc } from '@/providers/flow/rpc/runner';
 import { createLogger, type Logger } from '@/shared/log';
 import { strings } from '@/shared/strings';
@@ -166,33 +181,58 @@ function cleanPromptForSubmit(prompt: string, ordered: OrderedRef[]): string {
   return ensureCharacterAiOriginNote(annotateAssetLabels(text, refs), refs);
 }
 
+function refLabel(ref: FlowGenerateRef, fallback = 'Asset'): string {
+  return ref.label?.trim() || fallback;
+}
+
 /**
  * Refs that cannot ride a media-id slot must fail before captcha / upload / submit.
  * Omni and Veo scene-continue go through MZZa6b (capped at {@link OMNI_MAX_REFS}).
+ * Omni + one video goes through the video edit RPC (capped at {@link OMNI_EDIT_MAX_REFS}).
  * Plain Veo i2v (`eb1hJf`) accepts exactly one start-frame image.
  */
 function assertRefsSupported(payload: FlowGeneratePayload, kind: 'image' | 'video'): void {
   const refs = payload.refs ?? [];
+  const omni = isOmniFlashModel(payload.model);
+  const continuing = !!payload.continueFrame;
 
   for (const ref of refs) {
     if (ref.kind === 'image') continue;
-    const label = ref.label?.trim() || 'Asset';
-    const kindLabel = ref.kind === 'video' ? 'video' : 'audio';
-    throw driverError('UNKNOWN', strings.refKindUnsupported(label, kindLabel));
+    const label = refLabel(ref);
+    if (ref.kind === 'video' && kind === 'video') {
+      if (!omni) throw driverError('UNKNOWN', strings.videoRefNeedsOmni(label));
+      if (continuing) throw driverError('UNKNOWN', strings.videoRefNoContinue(label));
+      continue;
+    }
+    throw driverError('UNKNOWN', strings.refKindUnsupported(label, ref.kind));
   }
 
   if (kind !== 'video') return;
-  const omni = isOmniFlashModel(payload.model);
-  const continuing = !!payload.continueFrame;
+  const videoRefs = refs.filter((r) => r.kind === 'video');
+  if (videoRefs.length > 1) {
+    throw driverError('UNKNOWN', strings.videoRefOnlyOne(videoRefs.length));
+  }
   const imageRefs = refs.filter((r) => r.kind === 'image' && (r.mediaId || r.upload));
-
-  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
-  if (omni || continuing) {
-    const unique = new Set<string>(continuing ? ['continue:last-frame'] : []);
+  const uniqueImages = (seed: string[]): Set<string> => {
+    const unique = new Set<string>(seed);
     for (const ref of imageRefs) {
       if (ref.mediaId) unique.add(`id:${ref.mediaId}`);
       else if (ref.upload) unique.add(`up:${ref.upload.nodeId ?? ref.upload.sha256 ?? ref.upload.name}`);
     }
+    return unique;
+  };
+
+  if (videoRefs.length) {
+    const total = uniqueImages(['video']).size;
+    if (total > OMNI_EDIT_MAX_REFS) {
+      throw driverError('OMNI_TOO_MANY_REFS', strings.omniEditTooManyRefs(OMNI_EDIT_MAX_REFS, total));
+    }
+    return;
+  }
+
+  // Omni, or Veo continue (MZZa6b — maseQ frames fail eb1hJf with Media not found).
+  if (omni || continuing) {
+    const unique = uniqueImages(continuing ? ['continue:last-frame'] : []);
     if (unique.size > OMNI_MAX_REFS) {
       throw driverError('OMNI_TOO_MANY_REFS', strings.omniTooManyRefs(OMNI_MAX_REFS, unique.size));
     }
@@ -395,7 +435,37 @@ async function uploadImage(
  * Poll as29s for an image URL; [5] / Media not found keep waiting until deadline.
  */
 const UPLOAD_READY_TIMEOUT_MS = 45_000;
+/** Uploaded videos are transcoded (`MEDIA_GENERATION_STATUS_PENDING`) before as29s serves them. */
+const VIDEO_UPLOAD_READY_TIMEOUT_MS = 180_000;
 const UPLOAD_READY_POLL_MS = 2_000;
+/** Upload of a ≤ 30 MB clip; beyond this the Flow tab is not answering. */
+const VIDEO_UPLOAD_TIMEOUT_MS = 180_000;
+
+/** Poll as29s until Flow serves the uploaded media; resolves with its signed urls. */
+async function waitForUploadedMediaReady(
+  tabId: number,
+  mediaId: string,
+  onProgress: Progress,
+  signal: AbortSignal,
+  opts: { timeoutMs: number; message: (round: number) => string; timeoutError: string },
+): Promise<ReturnType<typeof readMediaUrls>> {
+  const deadline = Date.now() + opts.timeoutMs;
+  let round = 0;
+  while (Date.now() < deadline) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    round++;
+    onProgress(22, opts.message(round));
+    try {
+      const { text } = await rpcPayload(tabId, RPC_MEDIA, mediaRequest(mediaId));
+      const urls = readMediaUrls(firstPayload(text, RPC_MEDIA), mediaId);
+      if (urls.image || urls.video) return urls;
+    } catch (e) {
+      if (!isMediaNotReadyRpcError(e) && !isMediaNotFoundError(e)) throw e;
+    }
+    await sleep(UPLOAD_READY_POLL_MS, signal);
+  }
+  throw driverError('UPLOAD_FAILED', opts.timeoutError);
+}
 
 async function waitForUploadedImageReady(
   tabId: number,
@@ -403,25 +473,11 @@ async function waitForUploadedImageReady(
   onProgress: Progress,
   signal: AbortSignal,
 ): Promise<void> {
-  const deadline = Date.now() + UPLOAD_READY_TIMEOUT_MS;
-  let round = 0;
-  while (Date.now() < deadline) {
-    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
-    round++;
-    onProgress(22, `Chờ Flow nhận frame đã upload (${round})…`);
-    try {
-      const { text } = await rpcPayload(tabId, RPC_MEDIA, mediaRequest(mediaId));
-      const urls = readMediaUrls(firstPayload(text, RPC_MEDIA), mediaId);
-      if (urls.image || urls.video) return;
-    } catch (e) {
-      if (!isMediaNotReadyRpcError(e) && !isMediaNotFoundError(e)) throw e;
-    }
-    await sleep(UPLOAD_READY_POLL_MS, signal);
-  }
-  throw driverError(
-    'UPLOAD_FAILED',
-    strings.flowVideoOpFailed('Media not found. — frame upload chưa sẵn sàng trên Flow'),
-  );
+  await waitForUploadedMediaReady(tabId, mediaId, onProgress, signal, {
+    timeoutMs: UPLOAD_READY_TIMEOUT_MS,
+    message: (round) => `Chờ Flow nhận frame đã upload (${round})…`,
+    timeoutError: strings.flowVideoOpFailed('Media not found. — frame upload chưa sẵn sàng trên Flow'),
+  });
 }
 
 async function fetchUrlAsMedia(
@@ -930,6 +986,7 @@ async function findNewProjectVideoId(
  *   (Omni `abra_r2v_*` or Veo `veo_3_1_r2v_*`; maseQ frames fail `eb1hJf`).
  * - Omni Flash text-only → `YhhmEf` / `abra_t2v_*`.
  * - Omni Flash + images → `MZZa6b` / `abra_r2v_*`.
+ * - Omni Flash + one video (± images) → video edit (`jIps6` / `abra_edit`).
  * - Veo → image-to-video (`eb1hJf`) with exactly one start frame.
  */
 async function generateVideoRpc(
@@ -942,6 +999,9 @@ async function generateVideoRpc(
   assertRefsSupported(payload, 'video');
   if (payload.continueFrame) {
     return generateContinuedSceneVideo(tabId, projectId, payload, onProgress, signal);
+  }
+  if (payload.refs?.some((r) => r.kind === 'video')) {
+    return generateOmniEditVideo(tabId, projectId, payload, onProgress, signal);
   }
   if (isOmniFlashModel(payload.model)) {
     return generateOmniFlashVideo(tabId, projectId, payload, onProgress, signal);
@@ -1216,6 +1276,218 @@ async function generateOmniFlashVideo(
       });
     } else {
       onProgress(48, 'Parse response lệch — giữ job trên Flow, sẽ lấy video từ project…');
+      jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
+    }
+  }
+  return settleAndFetchVideos(tabId, jobs, payload.timeoutSec ?? 600, onProgress, signal);
+}
+
+/** The single video ref of an Omni edit, resolved to a Flow media id and its length. */
+interface VideoSource {
+  label: string;
+  mediaId: string;
+  source: 'flow' | 'upload';
+  durationSec: number;
+  /** Frame rate of the clip; the edit segment is counted in its frames. */
+  fps: number;
+}
+
+function assertVideoLength(label: string, durationSec: number | null): number {
+  if (durationSec == null || !(durationSec > 0)) {
+    throw driverError('UNKNOWN', strings.videoRefUnknownLength(label));
+  }
+  // Container rounding (e.g. 10.02s for a 10s render) is not a reason to refuse the clip.
+  if (durationSec > OMNI_EDIT_MAX_SEC + 0.1) {
+    throw driverError('UNKNOWN', strings.videoRefTooLong(label, durationSec, OMNI_EDIT_MAX_SEC));
+  }
+  return durationSec;
+}
+
+/** Clip fps for the edit segment; Flow's own fallback (24) when the file does not say. */
+function fpsOf(info: Mp4VideoInfo | null): number {
+  return info && info.fps > 0 && Number.isFinite(info.fps) ? info.fps : OMNI_EDIT_FPS;
+}
+
+/** Local video → Flow via the content script (Scotty upload, never `maseQ`). */
+async function uploadVideo(
+  tabId: number,
+  projectId: string,
+  upload: FlowUploadRef,
+  onProgress: Progress,
+): Promise<{ mediaId: string; durationSec?: number }> {
+  onProgress(18, strings.videoRefUploading(upload.name));
+  let reply: FlowVideoUploadReply | undefined;
+  try {
+    // A Flow tab opened before the extension update keeps an old content script that never
+    // answers this message: time out instead of hanging the run.
+    reply = await Promise.race([
+      // Re-injects the content script when the tab lost it (extension reloaded).
+      sendToContent<FlowVideoUploadReply | undefined>(tabId, {
+        type: 'flow.uploadVideo',
+        projectId,
+        name: upload.name || 'video.mp4',
+        mime: upload.mime || 'video/mp4',
+        dataBase64: stripDataUrl(upload.dataBase64),
+      }),
+      new Promise<FlowVideoUploadReply>((resolve) =>
+        setTimeout(() => resolve({ error: strings.videoRefUploadTimeout }), VIDEO_UPLOAD_TIMEOUT_MS),
+      ),
+    ]);
+  } catch (e) {
+    throw driverError('UPLOAD_FAILED', strings.videoRefUploadFailed(e instanceof Error ? e.message : String(e)));
+  }
+  if (!reply?.mediaId) {
+    throw driverError('UPLOAD_FAILED', strings.videoRefUploadFailed(reply?.error ?? 'không có phản hồi'));
+  }
+  log.info('Upload video → Flow', { mediaId: reply.mediaId, durationSec: reply.durationSec });
+  return { mediaId: reply.mediaId, durationSec: reply.durationSec };
+}
+
+/**
+ * Flow asset: id as is (never uploaded back), length read from the signed mp4.
+ * Local file: length checked before upload, stored id reused when Flow still knows it,
+ * else uploaded once and remembered on the Asset node. Resolves once Flow serves the video.
+ */
+async function resolveVideoSource(
+  tabId: number,
+  projectId: string,
+  ref: FlowGenerateRef,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<VideoSource> {
+  const label = refLabel(ref, strings.videoRefPromptName);
+  const waitReady = (mediaId: string) =>
+    waitForUploadedMediaReady(tabId, mediaId, onProgress, signal, {
+      timeoutMs: VIDEO_UPLOAD_READY_TIMEOUT_MS,
+      message: strings.videoRefWaitReady,
+      timeoutError: strings.videoRefNotReady,
+    });
+
+  if (ref.mediaId) {
+    const urls = await waitReady(ref.mediaId);
+    if (!urls.video) throw driverError('UNKNOWN', strings.videoRefUnknownLength(label));
+    const clip = await fetchUrlAsMedia(urls.video, 'video');
+    const info = readMp4VideoInfo(b64ToBytes(clip.dataBase64));
+    const durationSec = assertVideoLength(label, info?.durationSec ?? null);
+    return { label, mediaId: ref.mediaId, source: 'flow', durationSec, fps: fpsOf(info) };
+  }
+
+  const upload = ref.upload;
+  if (!upload) throw driverError('UNKNOWN', strings.videoRefMissing(label));
+  const info = readMp4VideoInfo(b64ToBytes(upload.dataBase64));
+  const localSec = info?.durationSec ?? null;
+  if (localSec != null) assertVideoLength(label, localSec);
+  const fps = fpsOf(info);
+
+  const stored = storedUploadId(upload, projectId);
+  if (stored && (await flowKnowsMedia(tabId, stored))) {
+    return { label, mediaId: stored, source: 'upload', durationSec: assertVideoLength(label, localSec), fps };
+  }
+  if (stored) log.warn('Id upload video đã lưu không còn trên Flow - upload lại');
+  const uploaded = await uploadVideo(tabId, projectId, upload, onProgress);
+  if (upload.sha256) upload.uploaded = { mediaId: uploaded.mediaId, projectId, sha256: upload.sha256 };
+  const durationSec = assertVideoLength(label, uploaded.durationSec ?? localSec);
+  await waitReady(uploaded.mediaId);
+  return { label, mediaId: uploaded.mediaId, source: 'upload', durationSec, fps };
+}
+
+/** `[Video reference]` → plain words: the video rides the RPC input slot, not an image part. */
+function replaceVideoLabel(prompt: string, label: string): string {
+  return prompt.split(`[${label}]`).join(strings.videoRefPromptName);
+}
+
+/**
+ * Omni with a video ref: video edit (`jIps6` / `abra_edit`), the Flow UI path for any
+ * ingredient set containing a video. Output length follows the input segment (≤ 10s),
+ * images ride the edit's image-ref slot anchored at their `[Label]`.
+ */
+async function generateOmniEditVideo(
+  tabId: number,
+  projectId: string,
+  payload: FlowGeneratePayload,
+  onProgress: Progress,
+  signal: AbortSignal,
+): Promise<DriverResult> {
+  const videoRef = payload.refs?.find((r) => r.kind === 'video');
+  if (!videoRef) throw driverError('UNKNOWN', strings.videoNeedsStartFrame);
+  const count = Math.max(1, Math.min(4, payload.outputsPerPrompt ?? 1));
+  await dropStaleStoredUploads(tabId, projectId, payload, signal);
+  const video = await resolveVideoSource(tabId, projectId, videoRef, onProgress, signal);
+  const resolved = await resolveRefs(tabId, projectId, payload, onProgress, signal);
+  const prompt = replaceVideoLabel(resolved.prompt, video.label);
+  const { parts, unknownLabels } = buildReferencePromptParts(
+    prompt,
+    resolved.orderedRefs.map((r) => ({ label: r.label, mediaId: r.mediaId })),
+  );
+  if (unknownLabels.length) {
+    log.warn(strings.omniUnknownLabelWarn(unknownLabels.map((l) => `[${l}]`).join(', ')), {
+      unknownLabels,
+    });
+  }
+  const segment = editVideoSegment(video.mediaId, video.durationSec, video.fps);
+  const knownVideos = await listProjectVideoIds(tabId, projectId);
+  const sharedExclude = new Set([...knownVideos, video.mediaId]);
+  const excludeForSalvage = new Set([
+    ...knownVideos,
+    video.mediaId,
+    ...resolved.orderedRefs.map((r) => r.mediaId),
+  ]);
+  const textOnly = parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join('');
+  const submitRefs: SubmitRefInfo[] = [
+    { label: video.label, kind: 'video', source: video.source, mediaId: video.mediaId, role: 'ref' },
+    ...toSubmitRefs(resolved.orderedRefs),
+  ];
+  log.info(`Omni + video → ${RPC_GEN_VIDEO_EDIT} (${OMNI_EDIT_MODEL})`, {
+    video: video.mediaId,
+    durationSec: video.durationSec,
+    fps: video.fps,
+    frames: [segment.startFrame, segment.endFrame],
+    images: resolved.orderedRefs.length,
+  });
+
+  const jobs: { projectId: string; job: VideoJob }[] = [];
+  for (let n = 0; n < count; n++) {
+    if (signal.aborted) throw driverError('UNKNOWN', 'aborted');
+    onProgress(
+      45,
+      count > 1
+        ? `Submit Omni chỉnh sửa video ${n + 1}/${count} (${OMNI_EDIT_MODEL})…`
+        : `Submit Omni chỉnh sửa video (${OMNI_EDIT_MODEL})…`,
+    );
+    const freq = editVideoRequest({
+      video: segment,
+      parts,
+      projectId,
+      aspect: payload.aspectRatio,
+    });
+    logPayload({
+      rpcid: RPC_GEN_VIDEO_EDIT,
+      freq,
+      model: OMNI_EDIT_MODEL,
+      aspect: payload.aspectRatio,
+      durationSec: video.durationSec,
+      prompt: formatPartsForLog(parts),
+      promptForUrlScan: textOnly,
+      refs: submitRefs,
+    });
+    const submitted = await parseOmniSubmitResponse(
+      tabId,
+      projectId,
+      RPC_GEN_VIDEO_EDIT,
+      freq,
+      strings.omniEditDenied,
+      strings.omniEditSubmitFailed,
+      excludeForSalvage,
+    );
+    if (submitted.mediaId) {
+      sharedExclude.add(submitted.mediaId);
+      excludeForSalvage.add(submitted.mediaId);
+      jobs.push({ projectId: submitted.projectId ?? projectId, job: { mediaId: submitted.mediaId } });
+    } else {
+      onProgress(48, 'Parse response lệch - giữ job trên Flow, sẽ lấy video từ project…');
       jobs.push({ projectId, job: { excludeMediaIds: sharedExclude } });
     }
   }

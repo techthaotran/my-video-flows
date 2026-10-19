@@ -6,7 +6,13 @@ import {
   listMedia,
   fetchMedia,
 } from '@/providers/flow/driver';
-import type { SwToContentMessage, ContentToSwMessage, DriverAction } from '@/shared/messaging';
+import { uploadVideoToFlow } from '@/providers/flow/rpc/videoUpload';
+import type {
+  SwToContentMessage,
+  ContentToSwMessage,
+  DriverAction,
+  FlowVideoUploadReply,
+} from '@/shared/messaging';
 
 /**
  * Service worker inject lại file này khi tab mất listener (extension vừa
@@ -103,6 +109,10 @@ function onSwMessage(message: SwToContentMessage | CaptchaMsg | RpcKeepaliveMsg 
       }
 
       const msg = message as SwToContentMessage;
+      if (msg.type === 'flow.uploadVideo') {
+        sendResponse(await uploadVideoFromSw(msg));
+        return;
+      }
       if (msg.type === 'driver.checkAuth') {
         sendResponse({ authenticated: await checkAuth() });
         return;
@@ -161,6 +171,8 @@ function onSwMessage(message: SwToContentMessage | CaptchaMsg | RpcKeepaliveMsg 
         }
         return;
       }
+      // Unknown type (newer SW talking to this script): answer so the caller never hangs.
+      sendResponse({ error: `UNKNOWN_MESSAGE ${String((message as { type?: unknown }).type)}` });
     } catch (e) {
       sendResponse({ ok: false, error: String(e) });
     }
@@ -199,6 +211,25 @@ function requestCaptchaFromMain(
       }),
     );
   });
+}
+
+/** Same-origin upload from the isolated world: page cookies apply, nothing touches MAIN. */
+async function uploadVideoFromSw(
+  msg: Extract<SwToContentMessage, { type: 'flow.uploadVideo' }>,
+): Promise<FlowVideoUploadReply> {
+  try {
+    const bin = atob(msg.dataBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const out = await uploadVideoToFlow(fetch.bind(window), {
+      projectId: msg.projectId,
+      name: msg.name,
+      bytes,
+    });
+    return { mediaId: out.mediaId, durationSec: out.durationSec ?? undefined };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 function requestBatchFromMain(

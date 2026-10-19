@@ -32,12 +32,13 @@
 | i2v lỗi `[13]` | Flow từ chối start frame / lỗi nội bộ — báo ngay, **không tự retry** |
 | r2v lỗi `[5]` | `MZZa6b` trả NOT_FOUND = tài khoản không có nhánh Veo r2v (khác `MODEL_ACCESS_DENIED` gate từng key): bỏ luôn các key `veo_3_1_r2v_*` còn lại, nhảy thẳng sang `abra_r2v_*` |
 | Retry node generate | Mặc định `retry: 0` cho Generate Image/Video |
-| Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref video/audio (Audio voice, Video reference); `entityId` ingredient; extend REST cũ |
+| Video reference | Chỉ Omni: video edit `jIps6` / `abra_edit` (xem mục dưới). Veo + video → lỗi |
+| Không hỗ trợ (tạm) | Veo ≥ 2 ảnh (r2v qua MZZa6b tuỳ chọn); ref audio (Audio voice); `entityId` ingredient; extend REST cũ |
 | Nhiều asset video | Omni ≤ `OMNI_MAX_REFS` ảnh qua `MZZa6b` (mọi label `kind: image`, gồm Background). Veo ≥ 2 ảnh → lỗi (không continue). continueFrame (Omni hoặc Veo) → frame cuối `maseQ` rồi `MZZa6b` (Omni `abra_r2v_*` / Veo `veo_3_1_r2v_*` với fallback chuỗi r2v rồi `abra_r2v_*` nếu tài khoản không có Veo r2v); frame là ảnh đầu `[Cảnh trước]`; **không** `eb1hJf` vì maseQ frame trả "Media not found.". Không dùng link làm dự phòng |
 
 Veo ảnh local: id upload đã lưu mà Flow không còn biết → bỏ id, upload lại (`maseQ`) và thay id mới; id mới phải resolve được (poll `as29s`) rồi mới submit. `eb1hJf` chỉ nhận id do Flow sinh (id `maseQ` báo "Media not found." sau submit), nên start frame là file local đi qua `MZZa6b` (`veo_3_1_r2v_*`, fallback `abra_r2v_*`); start frame là asset Flow vẫn `eb1hJf`.
 
-RPC ids: `ogiZ0b` (image), `SPrCad` (image 2K upscale/download), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload), `mYWVGd` (metadata `primary_media_id`).
+RPC ids: `ogiZ0b` (image), `SPrCad` (image 2K upscale/download), `eb1hJf` (Veo i2v), `YhhmEf` (Omni text), `MZZa6b` (reference-to-video), `jIps6` (Omni video edit), `jwpduf` (poll), `Zzl0ze` (project media), `as29s` (media urls), `maseQ` (upload), `mYWVGd` (metadata `primary_media_id`).
 `WuwhI` = telemetry UI (sự kiện `MEDIA_GENERATION` / ingredients) - **không** tái tạo / không submit.
 Captcha placeholder: `__CAPTCHA__`. Site key: `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV`.
 
@@ -63,6 +64,46 @@ Wire `SPrCad` (đã thay captcha):
 - Response: JPEG base64 inline trong `wrb.fr`; sample **1792×2400** (= 2× `[896, 1200]`), ~662 KB.
 - Watermark: C2PA ghi SynthID **không nhìn thấy**; **không** logo Flow/Google trên ảnh.
   Watermark brand sẵn trên ảnh nguồn (nếu có) vẫn giữ.
+
+### Video reference: Omni video edit (`jIps6`) - capture 2026-10-19
+
+Flow chỉ nhận video làm đầu vào qua chỉnh sửa video của Omni.
+Trong composer, khi Ingredients có video thì request đổi từ `REFERENCES` (`MZZa6b`) sang `EDIT_VIDEO` (`jIps6` = `BatchAsyncGenerateVideoEditVideo`), chỉ dùng video đầu tiên.
+Model duy nhất có capability video (`GetModels` / `HTrJv`): `abra_edit`, tối đa 5 ingredient (r2v: 7), UI báo 20 credit cho clip 8s 720p.
+Veo không có đường nhận video (chỉ Extend cho clip Veo tự tạo, `fZytfe`).
+
+Wire (bắt từ UI, chặn trước khi gửi nên không tốn credit; fixture `tests/fixtures/providers/flow/jips6-edit.json`):
+
+```json
+[[[[null, "<videoId>", 0, 192],
+   [null, null, [[["<prompt text>"]]]],
+   "abra_edit", 1,
+   [null, null, null, null, "<uuid>", "<uuid>"],
+   null, null, null,
+   [[null, "<imageId>"]]]],
+ [null, 22, null, null, null, "<projectId>", null, null, null, null, ["__CAPTCHA__", 1]],
+ ["<uuid>", 2]]
+```
+
+- `item[0]` = video vào: `[null, mediaId, startFrame, endFrame]`, đơn vị là frame **của chính clip** (UI đọc fps của clip, thiếu thì 24), tối đa 10s.
+  Clip Studio 3D 30 fps 8s → 240; gửi 192 thì Flow chỉ lấy 6,4s đầu (đã gặp khi chạy thật).
+- `item[1]` = structured prompt giống `MZZa6b`; `item[8]` = ảnh tham chiếu `[[null, id], …]`.
+  App neo mọi ảnh tại `[Label]` (UI có thể gửi ảnh không neo); `[Video reference]` thay bằng chữ vì video không phải mảnh ảnh.
+- Độ dài clip ra theo đoạn video (UI: "Length based on ingredient"), không có thời lượng trong payload.
+- Response / poll giống `MZZa6b` (`readTextVideoSubmit` + `jwpduf`): đã chạy thật qua extension 2026-10-19 (upload → `jIps6` → poll → clip).
+  Video thử quay người thật bị `PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`; previz ma-nơ-canh Studio 3D + `[Character]` ra clip đúng dáng đứng, bước tới và máy đẩy vào.
+
+Upload video local (không phải `maseQ`; asset Flow vẫn **không** upload lại) - Scotty resumable cùng origin, chạy trong content script (`rpc/videoUpload.ts`, message `flow.uploadVideo`):
+
+| Bước | Request | Ghi chú |
+|---|---|---|
+| start | `POST /upload/v1/flow/upload/video/{projectId}` | `X-Goog-Upload-Protocol: resumable`, `X-Goog-Upload-Command: start`, `X-Goog-Upload-Header-Content-Length`, `Slug` (tên file); trả header `X-Goog-Upload-URL` |
+| finalize | `POST <X-Goog-Upload-URL>` + bytes | `X-Goog-Upload-Command: upload, finalize`, `X-Goog-Upload-Offset: 0` |
+
+- Response finalize (fixture `video-upload-finalize.json`): `mediaId`, `media.video.dimensions.length` (`"4s"`), trạng thái `MEDIA_GENERATION_STATUS_PENDING` → chờ `as29s` trả URL rồi mới submit.
+- UI Flow cho upload ≤ 60s / 1 GB, cắt về ≤ 30s; tuỳ chọn header `x-trim-start` / `x-trim-end` (ms). App không cắt: clip > 10s báo lỗi trước khi upload.
+- Lần đầu upload video trong UI, Flow hỏi "Rights to use this video"; upload qua app không đi qua hộp thoại này.
+- Độ dài và fps lấy từ track video trong `moov` (`mdhd` + `stsz`, `src/media/mp4Info.ts`): file local trước khi upload, asset Flow sau khi tải bản ký `as29s`.
 
 ### Nguồn capture MZZa6b
 
@@ -97,6 +138,7 @@ Wire `SPrCad` (đã thay captcha):
 |---|---|
 | `rpc/batch.ts` | Envelope build/parse (`referenceVideoRequest`, `omniReferenceVideoModel`) |
 | `rpc/promptParts.ts` | `buildReferencePromptParts` — neo `[Label]` → mảnh image |
+| `rpc/videoUpload.ts` | Upload video local (Scotty) - chạy trong content script qua message `flow.uploadVideo` |
 | `rpc/payloadLog.ts` | `describeSubmit` / `sanitizeFreq` trước khi gửi |
 | `rpc/captcha.ts` | SW → content → MAIN grecaptcha |
 | `rpc/runner.ts` | `runBatchRpc` via MAIN `executeScript` |
@@ -113,9 +155,10 @@ Wire `SPrCad` (đã thay captcha):
 4. Video Veo với đúng 1 ảnh start frame (i2v).
 5. Character + Outfit (asset Flow) → Prompt → Omni: `MZZa6b`, `abra_r2v_*`, `item[1]` = 2 id, không `maseQ`, đúng mặt/outfit.
 6. Character + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`.
-7. Omni > `OMNI_MAX_REFS` ảnh / Veo + 2 ảnh / Omni + video asset: lỗi rõ, không submit.
+7. Omni > `OMNI_MAX_REFS` ảnh / Veo + 2 ảnh / Veo + video / Omni + 2 video / video > 10s: lỗi rõ, không submit.
 8. Scene tiếp (Veo hoặc Omni, + Character/Outfit tùy chọn): `maseQ` frame cuối + `MZZa6b` (`veo_3_1_r2v_*` / `abra_r2v_*`); `item[1]` = frame cuối rồi Character/Outfit/Background. Không `eb1hJf`.
 9. Workflow cũ có link trong prompt: link khớp asset → `[Label]`; link lạ → lỗi.
+10. Omni + Video reference (file local ≤ 10s) + Character: `flow.uploadVideo` một lần, chờ `as29s`, rồi `jIps6` (`abra_edit`); `wireMediaIds` = video rồi ảnh; clip ra theo chuyển động/góc máy của video.
 
 ### Kiểm chứng live Omni refs (plan 7.2)
 

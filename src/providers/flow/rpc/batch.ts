@@ -137,6 +137,25 @@ export const RPC_GEN_VIDEO_TEXT = 'YhhmEf';
  */
 export const RPC_GEN_VIDEO_REFS = 'MZZa6b';
 
+/**
+ * Omni video edit (`jIps6` = `BatchAsyncGenerateVideoEditVideo`): the one way Flow takes a
+ * video as input (motion / camera reference, v2v). Captured from the Flow UI 2026-10-19:
+ * any video among the ingredients switches the composer to this RPC with `abra_edit`;
+ * only the first video is used. Image refs ride item[8] with the MZZa6b element shape.
+ */
+export const RPC_GEN_VIDEO_EDIT = 'jIps6';
+/** Only `GetModels` key with the video-input capability (20). Output length follows the segment. */
+export const OMNI_EDIT_MODEL = 'abra_edit';
+/** `abra_edit` max ingredients from `GetModels` (r2v keys say 7). Counted with the video. */
+export const OMNI_EDIT_MAX_REFS = 5;
+/** Longest input segment Omni edits; longer clips must be cut before upload. */
+export const OMNI_EDIT_MAX_SEC = 10;
+/**
+ * Segment bounds travel as frame numbers of the input clip. The Flow UI uses the clip's
+ * own fps and falls back to 24 (Flow renders); a 30 fps clip at 24 loses its last 20%.
+ */
+export const OMNI_EDIT_FPS = 24;
+
 export const OMNI_FLASH_DURATIONS = [4, 6, 8, 10] as const;
 /** Max unique image media ids per Omni r2v submit (FlowKit fork docs; verify live). */
 export const OMNI_MAX_REFS = 7;
@@ -528,9 +547,31 @@ function uniqueInOrder(ids: string[]): string[] {
 }
 
 /**
+ * Invariants shared by MZZa6b and jIps6 structured prompts: no adjacent text parts,
+ * no empty text, each mediaId once in image parts. Returns `[[null, id], …]` in
+ * first-appearance order (the image-ref list the RPC expects).
+ */
+function imageRefList(rpcid: string, parts: PromptPart[]): unknown[][] {
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]!;
+    if (p.type === 'text') {
+      if (!p.text) throw new FlowBatchError(`${rpcid}: empty text part`);
+      if (i > 0 && parts[i - 1]!.type === 'text') {
+        throw new FlowBatchError(`${rpcid}: adjacent text parts must be merged`);
+      }
+    }
+  }
+  const imageParts = parts.filter((p): p is Extract<PromptPart, { type: 'image' }> => p.type === 'image');
+  const mediaIds = imageParts.map((p) => p.mediaId);
+  if (new Set(mediaIds).size !== mediaIds.length) {
+    throw new FlowBatchError(`${rpcid}: duplicate mediaId in image parts`);
+  }
+  return uniqueInOrder(mediaIds).map((id) => [null, id]);
+}
+
+/**
  * Omni / Veo reference-to-video submit (`MZZa6b`).
- * Invariants: no adjacent text parts, no empty text, each mediaId once in image parts,
- * `item[1]` lists those media ids in first-appearance order.
+ * `item[1]` lists the image media ids in first-appearance order.
  */
 export function referenceVideoRequest(opts: {
   parts: PromptPart[];
@@ -538,34 +579,64 @@ export function referenceVideoRequest(opts: {
   aspect?: string | number;
   model: string;
 }): string {
-  const parts = opts.parts;
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i]!;
-    if (p.type === 'text') {
-      if (!p.text) throw new FlowBatchError('MZZa6b: empty text part');
-      if (i > 0 && parts[i - 1]!.type === 'text') {
-        throw new FlowBatchError('MZZa6b: adjacent text parts must be merged');
-      }
-    }
-  }
-  const imageParts = parts.filter((p): p is Extract<PromptPart, { type: 'image' }> => p.type === 'image');
-  const mediaIds = imageParts.map((p) => p.mediaId);
-  if (new Set(mediaIds).size !== mediaIds.length) {
-    throw new FlowBatchError('MZZa6b: duplicate mediaId in image parts');
-  }
-  const refs = uniqueInOrder(mediaIds).map((id) => [null, id]);
-  if (refs.length !== mediaIds.length) {
-    throw new FlowBatchError('MZZa6b: item[1] must match image parts in order');
-  }
   const item = [
-    structuredPromptBlock(parts),
-    refs,
+    structuredPromptBlock(opts.parts),
+    imageRefList(RPC_GEN_VIDEO_REFS, opts.parts),
     opts.model,
     resolveVideoAspect(opts.aspect),
     null,
     [null, null, null, null, clientUuid(), clientUuid()],
   ];
   return buildEnvelope(RPC_GEN_VIDEO_REFS, [[item], context(opts.projectId), [clientUuid(), 2]]);
+}
+
+/** Input video segment for {@link editVideoRequest}, in frames of the input clip. */
+export interface EditVideoSource {
+  mediaId: string;
+  startFrame: number;
+  endFrame: number;
+}
+
+/** Frame bounds for a clip of `durationSec` at `fps`, capped at {@link OMNI_EDIT_MAX_SEC}. */
+export function editVideoSegment(
+  mediaId: string,
+  durationSec: number,
+  fps: number = OMNI_EDIT_FPS,
+): EditVideoSource {
+  const sec = Math.min(Math.max(durationSec, 0), OMNI_EDIT_MAX_SEC);
+  return { mediaId, startFrame: 0, endFrame: Math.round(sec * fps) };
+}
+
+/**
+ * Omni video edit submit (`jIps6`), wire captured from the Flow UI:
+ * `[[null, videoId, startFrame, endFrame], prompt, "abra_edit", aspect, meta, null, null, null, imageRefs]`.
+ */
+export function editVideoRequest(opts: {
+  video: EditVideoSource;
+  parts: PromptPart[];
+  projectId: string;
+  aspect?: string | number;
+}): string {
+  const { mediaId, startFrame, endFrame } = opts.video;
+  if (!(endFrame > startFrame) || startFrame < 0) {
+    throw new FlowBatchError(`${RPC_GEN_VIDEO_EDIT}: invalid segment ${startFrame}-${endFrame}`);
+  }
+  const refs = imageRefList(RPC_GEN_VIDEO_EDIT, opts.parts);
+  if (refs.some((r) => r[1] === mediaId)) {
+    throw new FlowBatchError(`${RPC_GEN_VIDEO_EDIT}: video id also listed as image ref`);
+  }
+  const item = [
+    [null, mediaId, startFrame, endFrame],
+    structuredPromptBlock(opts.parts),
+    OMNI_EDIT_MODEL,
+    resolveVideoAspect(opts.aspect),
+    [null, null, null, null, clientUuid(), clientUuid()],
+    null,
+    null,
+    null,
+    refs,
+  ];
+  return buildEnvelope(RPC_GEN_VIDEO_EDIT, [[item], context(opts.projectId), [clientUuid(), 2]]);
 }
 
 /** `[?, ?, ?, [[mediaId, projectId, workflowId, status, …]]]` — the media id is known at submit. */

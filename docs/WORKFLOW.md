@@ -213,7 +213,11 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
 - **Omni + ảnh:** structured prompt neo ảnh tại `[Label]` → `MZZa6b` / `abra_r2v_*` (tối đa `OMNI_MAX_REFS`).
   Mọi label `kind: image` (Character, Outfit, Background, …) đều neo media id như nhau.
 - **Veo:** đúng 1 ảnh = start frame → `eb1hJf`; ≥ 2 ảnh → lỗi
-- **Audio / Video reference:** nối vào Generate Video → lỗi rõ (`refKindUnsupported`); mô tả chữ `[Audio voice]: …` trong prompt vẫn được.
+- **Omni + Video reference:** đúng 1 video (Flow asset hoặc file local) → chỉnh sửa video `jIps6` / `abra_edit`: Flow theo chuyển động và góc máy của video, ảnh tham chiếu neo tại `[Label]` như `MZZa6b`.
+  Video tối đa 10s (dài hơn → lỗi, không tự cắt), tổng tham chiếu tính cả video ≤ `OMNI_EDIT_MAX_REFS` (5); độ dài clip ra theo video, bỏ qua thời lượng của node.
+  Video local upload một lần (Scotty, không phải `maseQ`) rồi lưu id trên node Asset như ảnh.
+  Veo + video, nối cảnh trước + video, hoặc ≥ 2 video → lỗi rõ trước khi gửi.
+- **Audio:** nối vào Generate Video → lỗi rõ (`refKindUnsupported`); mô tả chữ `[Audio voice]: …` trong prompt vẫn được.
 - **Kéo dài / scene tiếp:** video → Prompt (cắt frame cuối, offscreen) → Generate Video → driver upload frame → Veo i2v hoặc Omni `MZZa6b`.
   Veo: Character/Outfit/Background giữ `[Label]` + mô tả trong prompt, **không** gửi media id (slot start frame đã dùng cho frame cuối).
   Omni: frame cuối là ảnh đầu tiên `[Cảnh trước]`, sau đó các ảnh tham chiếu (tính vào `OMNI_MAX_REFS`).
@@ -250,6 +254,7 @@ Generate **không click** nút Generate trên DOM. DOM chỉ dùng cho auth, dia
 | `RPC_GEN_VIDEO` | `eb1hJf` | Veo image-to-video |
 | `RPC_GEN_VIDEO_TEXT` | `YhhmEf` | Omni Flash text-to-video |
 | `RPC_GEN_VIDEO_REFS` | `MZZa6b` | Omni (và Veo r2v) reference-to-video — ảnh neo trong structured prompt |
+| `RPC_GEN_VIDEO_EDIT` | `jIps6` | Omni chỉnh sửa video (`abra_edit`): 1 video đầu vào + ảnh tham chiếu |
 | `RPC_UPLOAD_IMAGE` | `maseQ` | Upload ảnh local → media id |
 | `RPC_OPERATION` | `jwpduf` | Poll trạng thái Veo |
 | `RPC_PROJECT_MEDIA` | `Zzl0ze` | Liệt kê media project |

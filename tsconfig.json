@@ -22,6 +22,6 @@
     },
     "types": ["chrome", "vite/client", "node"]
   },
-  "include": ["src", "tests", "manifest.config.ts", "vite.config.ts"],
+  "include": ["src", "tests", "studio3d/*.ts", "manifest.config.ts", "vite.config.ts", "vite.studio3d.config.ts"],
   "exclude": ["scripts"]
 }

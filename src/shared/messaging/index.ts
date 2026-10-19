@@ -94,7 +94,25 @@ export type SwToContentMessage =
   | { type: 'driver.status'; requestId: string }
   | { type: 'driver.checkAuth' }
   | { type: 'driver.capabilities' }
-  | { type: 'driver.diagnose' };
+  | { type: 'driver.diagnose' }
+  /**
+   * Upload a local video to the open Flow project (Scotty resumable, same origin).
+   * Not `maseQ`: Flow takes videos only through this endpoint. Reply: {@link FlowVideoUploadReply}.
+   */
+  | {
+      type: 'flow.uploadVideo';
+      projectId: string;
+      name: string;
+      mime: string;
+      dataBase64: string;
+    };
+
+export interface FlowVideoUploadReply {
+  mediaId?: string;
+  /** Length Flow read from the file (`media.video.dimensions.length`), when reported. */
+  durationSec?: number;
+  error?: string;
+}
 
 export type ContentToSwMessage =
   | { type: 'driver.result'; requestId: string; ok: true; result: DriverResult }

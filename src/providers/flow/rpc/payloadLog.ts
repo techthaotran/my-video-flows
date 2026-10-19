@@ -9,6 +9,7 @@ import {
   RPC_GEN_IMAGE,
   RPC_GEN_IMAGE_2K,
   RPC_GEN_VIDEO,
+  RPC_GEN_VIDEO_EDIT,
   RPC_GEN_VIDEO_REFS,
   RPC_GEN_VIDEO_TEXT,
   RPC_UPLOAD_IMAGE,
@@ -164,6 +165,7 @@ export function extractWireMediaIds(rpcid: string, freqOrInner: string | unknown
   if (rpcid === RPC_GEN_VIDEO) return wireIdsFromVideoRequest(inner);
   if (rpcid === RPC_GEN_VIDEO_TEXT) return [];
   if (rpcid === RPC_GEN_VIDEO_REFS) return wireIdsFromReferenceVideoRequest(inner);
+  if (rpcid === RPC_GEN_VIDEO_EDIT) return wireIdsFromEditVideoRequest(inner);
   if (rpcid === RPC_UPLOAD_IMAGE) return [];
   return wireIdsGeneric(inner);
 }
@@ -174,12 +176,15 @@ function wireIdsFromImage2kRequest(inner: unknown): string[] {
   return [inner[0]];
 }
 
-/** Image-part media ids inside MZZa6b structured prompt (item[0]). */
-export function extractAnchoredMediaIds(freqOrInner: string | unknown): string[] {
+/** Image-part media ids inside the structured prompt: MZZa6b item[0], jIps6 item[1]. */
+export function extractAnchoredMediaIds(
+  freqOrInner: string | unknown,
+  rpcid: string = RPC_GEN_VIDEO_REFS,
+): string[] {
   const inner = typeof freqOrInner === 'string' ? decodeFreqInner(freqOrInner) : freqOrInner;
   const item = referenceVideoItem(inner);
   if (!item) return [];
-  const block = item[0];
+  const block = item[rpcid === RPC_GEN_VIDEO_EDIT ? 1 : 0];
   if (!Array.isArray(block) || !Array.isArray(block[2]) || !Array.isArray(block[2][0])) return [];
   const parts = block[2][0] as unknown[];
   const ids: string[] = [];
@@ -237,9 +242,11 @@ function wireIdsFromVideoRequest(inner: unknown): string[] {
 
 function wireIdsFromReferenceVideoRequest(inner: unknown): string[] {
   // item[1] = [[null, mediaId], …]
-  const item = referenceVideoItem(inner);
-  if (!item) return [];
-  const refs = item[1];
+  return idsFromRefList(referenceVideoItem(inner)?.[1]);
+}
+
+/** `[[null, mediaId], …]` → ids in order, deduped. */
+function idsFromRefList(refs: unknown): string[] {
   if (!Array.isArray(refs)) return [];
   const ids: string[] = [];
   for (const ref of refs) {
@@ -247,6 +254,24 @@ function wireIdsFromReferenceVideoRequest(inner: unknown): string[] {
       if (!ids.includes(ref[1])) ids.push(ref[1]);
     }
   }
+  return ids;
+}
+
+/** Video ids in the jIps6 input slot (item[0][1]). */
+export function extractEditVideoSourceIds(freqOrInner: string | unknown): string[] {
+  const inner = typeof freqOrInner === 'string' ? decodeFreqInner(freqOrInner) : freqOrInner;
+  const source = referenceVideoItem(inner)?.[0];
+  return Array.isArray(source) && typeof source[1] === 'string' && UUID_RE.test(source[1])
+    ? [source[1]]
+    : [];
+}
+
+/** jIps6: input video (item[0][1]) then image refs (item[8]). */
+function wireIdsFromEditVideoRequest(inner: unknown): string[] {
+  const item = referenceVideoItem(inner);
+  if (!item) return [];
+  const ids = extractEditVideoSourceIds(inner);
+  for (const id of idsFromRefList(item[8])) if (!ids.includes(id)) ids.push(id);
   return ids;
 }
 
@@ -305,16 +330,19 @@ export function describeSubmit(input: DescribeSubmitInput): DescribeSubmitResult
     freq: sanitizeFreq(input.freq),
   };
 
-  if (input.rpcid === RPC_GEN_VIDEO_REFS) {
-    result.anchoredMediaIds = extractAnchoredMediaIds(input.freq);
-    if (!sameIdList(result.anchoredMediaIds, wireMediaIds)) {
+  if (input.rpcid === RPC_GEN_VIDEO_REFS || input.rpcid === RPC_GEN_VIDEO_EDIT) {
+    result.anchoredMediaIds = extractAnchoredMediaIds(input.freq, input.rpcid);
+    // jIps6: the input video sits outside the prompt; compare only the image-ref list.
+    const videoIds = input.rpcid === RPC_GEN_VIDEO_EDIT ? extractEditVideoSourceIds(input.freq) : [];
+    const imageWireIds = wireMediaIds.filter((id) => !videoIds.includes(id));
+    if (!sameIdList(result.anchoredMediaIds, imageWireIds)) {
       // Surface as missing so logPayload refuses submit.
       for (const id of result.anchoredMediaIds) {
         if (!wireSet.has(id) && !missingRefs.some((r) => r.mediaId === id)) {
           missingRefs.push({ kind: 'image', source: 'flow', mediaId: id, label: 'anchored≠item[1]' });
         }
       }
-      for (const id of wireMediaIds) {
+      for (const id of imageWireIds) {
         if (!result.anchoredMediaIds.includes(id) && !missingRefs.some((r) => r.mediaId === id)) {
           missingRefs.push({ kind: 'image', source: 'flow', mediaId: id, label: 'item[1]≠anchored' });
         }

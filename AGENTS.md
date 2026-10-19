@@ -29,6 +29,7 @@ If you see one, even if it is not caused by what you are working on right now, s
 | Test | `pnpm test` (Vitest + jsdom + fake-indexeddb) |
 | Typecheck | `pnpm typecheck` |
 | Build / release | `pnpm build` / `pnpm release` (zip vào `release/`) |
+| Studio 3D (dev, port 5002) | `pnpm studio3d`, kiểm cảnh `pnpm studio3d:check`, xuất workflow Flow `pnpm studio3d:flow <cảnh> --previz <mp4>` - quy trình tạo video: skill `tao-video`, `docs/STUDIO3D.md` |
 
 Trước khi báo xong: chạy `pnpm typecheck` và `pnpm test`. Dùng `pnpm`, không dùng npm/yarn.
 
@@ -56,7 +57,7 @@ Tài liệu sâu (đọc khi chạm vào phần đó): `docs/WORKFLOW.md` (node,
 
 ## Quy tắc bắt buộc
 
-1. **Phạm vi đã chốt:** chỉ tab Workflow; provider chỉ `flow` | `gemini` (node `mergeVideo` xử lý local, không phải provider); không cloud/share/backend; không gói/hạn mức. Không thêm tính năng ngoài phạm vi khi chưa được hỏi.
+1. **Phạm vi đã chốt:** extension chỉ tab Workflow (Studio 3D là trang dev riêng, không đóng gói vào extension); provider chỉ `flow` | `gemini` (node `mergeVideo` xử lý local, không phải provider); không cloud/share/backend; không gói/hạn mức. Không thêm tính năng ngoài phạm vi khi chưa được hỏi.
 2. **UI chỉ tiếng Việt, mọi chuỗi hiển thị qua `strings.ts`.** Không hardcode text trong component, không thêm thư viện i18n.
 3. **Đổi shape dữ liệu đã lưu → tăng `SCHEMA_VERSION` + thêm nhánh trong `migrateWorkflow`.** Workflow cũ trong IndexedDB và file `.xflow.zip/.xflow.json` phải vẫn load được.
 4. **Thêm message mới → khai báo trong union ở `shared/messaging`** trước, rồi mới xử lý ở SW/content. Không gửi message không có type.

@@ -13,3 +13,9 @@ release
 .playwright-cli
 test-features
 output
+# Ảnh bối cảnh cá nhân của Studio 3D
+studio3d/public/refs/*
+!studio3d/public/refs/.gitkeep
+
+# Workflow Flow xuất từ Studio 3D (chứa ảnh cá nhân)
+studio3d/flows/*.xflow.zip

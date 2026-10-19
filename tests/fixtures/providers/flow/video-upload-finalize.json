@@ -1,0 +1,32 @@
+{
+  "_source": {
+    "kind": "flow-ui-capture",
+    "capturedAt": "2026-10-19",
+    "note": "Response body of the Scotty finalize step (POST X-Goog-Upload-URL, 'upload, finalize') after the Flow UI uploaded a 4s 406x720 mp4. Ids replaced with placeholders."
+  },
+  "mediaId": "MEDIA_ID",
+  "media": {
+    "name": "MEDIA_ID",
+    "projectId": "PROJECT_ID",
+    "workflowId": "WORKFLOW_ID",
+    "mediaMetadata": {
+      "createTime": "2026-10-19T10:03:02.742158Z",
+      "requestData": { "clientPlatform": "CLIENT_PLATFORM_WEB" },
+      "mediaStatus": { "mediaGenerationStatus": "MEDIA_GENERATION_STATUS_PENDING" },
+      "visibility": "PRIVATE"
+    },
+    "video": {
+      "dimensions": { "width": 406, "height": 720, "length": "4s" },
+      "userUploadedVideo": { "encodedVideo": "" }
+    }
+  },
+  "workflow": {
+    "name": "WORKFLOW_ID",
+    "metadata": {
+      "displayName": "previz-test-4s",
+      "createTime": "2026-10-19T10:03:02.742158Z",
+      "primaryMediaId": "MEDIA_ID"
+    },
+    "projectId": "PROJECT_ID"
+  }
+}
