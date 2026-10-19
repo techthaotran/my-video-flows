@@ -13,7 +13,7 @@ import type {
 import { readMp4VideoInfo, type Mp4VideoInfo } from '@/media/mp4Info';
 import {
   annotateAssetLabels,
-  ensureCharacterAiOriginNote,
+  ensureModelAiOriginNote,
   stripFlowMediaUrls,
   type AssetRef,
 } from '@/engine/resolver';
@@ -157,7 +157,7 @@ function veoSubmitLogRefs(
           label: strings.continueStartFrameLabel,
           role: 'startFrame',
         };
-  // Continue scene: wire has only the last-frame upload; Character/Outfit stay in prompt text.
+  // Continue scene: wire has only the last-frame upload; Model/Outfit stay in prompt text.
   if (fromContinuation) return [start];
   const extras = toSubmitRefs(
     orderedRefs.filter((r) => r.mediaId !== sourceMediaId),
@@ -178,7 +178,7 @@ function cleanPromptForSubmit(prompt: string, ordered: OrderedRef[]): string {
   const refs = toAssetRefs(ordered);
   const { text, orphanUrls } = stripFlowMediaUrls(prompt, refs);
   if (orphanUrls.length) throw driverError('UNKNOWN', strings.flowPromptOrphanUrl);
-  return ensureCharacterAiOriginNote(annotateAssetLabels(text, refs), refs);
+  return ensureModelAiOriginNote(annotateAssetLabels(text, refs), refs);
 }
 
 function refLabel(ref: FlowGenerateRef, fallback = 'Asset'): string {
@@ -1029,7 +1029,7 @@ async function uploadLastFrame(
 
 /**
  * Scene continue for Omni and Veo: last frame rides `MZZa6b` as the first image,
- * followed by Character/Outfit/Background media ids.
+ * followed by Model/Outfit/Background media ids.
  * Veo i2v (`eb1hJf`) answers "Media not found." for maseQ uploads, so continue
  * never goes through it. Veo r2v keys are plan-gated — try a fallback chain, then
  * Omni `abra_r2v_*` when the account has no Veo reference access.

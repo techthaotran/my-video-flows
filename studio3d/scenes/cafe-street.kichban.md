@@ -52,7 +52,7 @@ Sửa prompt thì sửa trong file cảnh rồi chạy lại `pnpm studio3d:flow
 
 ```
 Video dọc 9:16 dài 8 giây, một cảnh quay liền không cắt, phong cách thời trang thực tế.
-Diễn biến: [Character] đứng trên vỉa hè, vén tóc ra sau tai và mỉm cười nhìn máy; sau đó bước 2-3 bước thong thả về phía máy rồi dừng lại; cuối clip đứng yên, đầu ngón tay chạm nhẹ hàng nút ngọc trên áo.
+Diễn biến: [Model] đứng trên vỉa hè, vén tóc ra sau tai và mỉm cười nhìn máy; sau đó bước 2-3 bước thong thả về phía máy rồi dừng lại; cuối clip đứng yên, đầu ngón tay chạm nhẹ hàng nút ngọc trên áo.
 Máy quay: ống 50mm, ngang hông. Đầu clip đẩy vào chậm; khi người mẫu bước tới thì máy lùi theo, luôn thấy trọn người; cuối clip máy đẩy vào tới khung từ thắt lưng trở lên, thấy rõ cổ tim, hàng nút ngọc và chấm bi.
 ```
 
@@ -60,7 +60,7 @@ Máy quay: ống 50mm, ngang hông. Đầu clip đẩy vào chậm; khi người
 
 ```
 Video dọc 9:16 dài 8 giây, một cảnh quay liền không cắt, phong cách thời trang thực tế.
-Diễn biến: [Character] đứng nghiêng nhẹ, gió làm tà áo xẻ và ống quần rộng lay động; sau đó đi khoảng một mét về phía dãy ghế mây và bàn tròn, quay lại nhìn máy, cười tươi và vẫy tay chào.
+Diễn biến: [Model] đứng nghiêng nhẹ, gió làm tà áo xẻ và ống quần rộng lay động; sau đó đi khoảng một mét về phía dãy ghế mây và bàn tròn, quay lại nhìn máy, cười tươi và vẫy tay chào.
 Máy quay: ống 35mm. Máy đi vòng mượt từ phía trước sang bên phải người mẫu ở ngang hông, rồi lùi ra và nâng lên ngang tầm mắt để thấy cả hiên quán, ghế mây, cây xanh; cuối clip đẩy vào nhẹ về phía người mẫu đang vẫy tay.
 ```
 

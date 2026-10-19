@@ -115,7 +115,7 @@ Validate thêm: tương thích port type, `maxConnections`, không tạo cycle.
 - File local: `accept` gồm cả MIME lẫn đuôi (`MEDIA_ACCEPT`), và `kind` suy ra bằng `mediaKindOf` — MIME trước, đuôi file sau. Chrome trả `file.type` rỗng cho `.mp3` trên máy thiếu mapping, đoán theo mặc định sẽ biến mp3 thành ảnh và node xuất sai cổng.
 - Chọn file audio ở node đang mang label ảnh/video → label tự chuyển sang `Audio voice` (chỉ một label audio nên không mơ hồ). Ảnh/video có nhiều label nên giữ nguyên lựa chọn của người dùng.
 
-- `assetLabel`: Outfit | Background | Character | Video reference | Video expand | Audio voice
+- `assetLabel`: Outfit | Background | Model | Video reference | Video expand | Audio voice
 - `kind`: image | video | audio
 - `source`: `local` | `flow`
 - Flow: chỉ giữ `flowMediaId` (+ `flowPreviewUrl` preview) — **không** download/re-upload khi run
@@ -202,7 +202,7 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
 ### 2.7 Graph mẫu
 
 ```
-[Asset: Character]  ──image──┐
+[Asset: Model]  ──image──┐
 [Asset: Outfit]     ──image──┼──► [Prompt] ──text(+refs)──► [Generate Video]
 [Asset: Background] ──image──┤     ▲                              │
                                  │                              ▼
@@ -211,7 +211,7 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
 
 - **Omni Flash text-only:** prompt thuần → `YhhmEf` / `abra_t2v_*`
 - **Omni + ảnh:** structured prompt neo ảnh tại `[Label]` → `MZZa6b` / `abra_r2v_*` (tối đa `OMNI_MAX_REFS`).
-  Mọi label `kind: image` (Character, Outfit, Background, …) đều neo media id như nhau.
+  Mọi label `kind: image` (Model, Outfit, Background, …) đều neo media id như nhau.
 - **Veo:** đúng 1 ảnh = start frame → `eb1hJf`; ≥ 2 ảnh → lỗi
 - **Omni + Video reference:** đúng 1 video (Flow asset hoặc file local) → chỉnh sửa video `jIps6` / `abra_edit`: Flow theo chuyển động và góc máy của video, ảnh tham chiếu neo tại `[Label]` như `MZZa6b`.
   Video tối đa 10s (dài hơn → lỗi, không tự cắt), tổng tham chiếu tính cả video ≤ `OMNI_EDIT_MAX_REFS` (5); độ dài clip ra theo video, bỏ qua thời lượng của node.
@@ -219,7 +219,7 @@ Media id gửi generate vẫn đi qua slot RPC; URL Flow trong prompt cũ khớp
   Veo + video, nối cảnh trước + video, hoặc ≥ 2 video → lỗi rõ trước khi gửi.
 - **Audio:** nối vào Generate Video → lỗi rõ (`refKindUnsupported`); mô tả chữ `[Audio voice]: …` trong prompt vẫn được.
 - **Kéo dài / scene tiếp:** video → Prompt (cắt frame cuối, offscreen) → Generate Video → driver upload frame → Veo i2v hoặc Omni `MZZa6b`.
-  Veo: Character/Outfit/Background giữ `[Label]` + mô tả trong prompt, **không** gửi media id (slot start frame đã dùng cho frame cuối).
+  Veo: Model/Outfit/Background giữ `[Label]` + mô tả trong prompt, **không** gửi media id (slot start frame đã dùng cho frame cuối).
   Omni: frame cuối là ảnh đầu tiên `[Cảnh trước]`, sau đó các ảnh tham chiếu (tính vào `OMNI_MAX_REFS`).
 - **Cache frame cuối:** Prompt nhận video lưu frame cuối vào assets và gắn `continueFrameAssetId` trên chính Prompt.
   Xoá liên kết Generate Video → Prompt thì Prompt vẫn hiện frame đã lưu và chuyển tiếp nó; bấm × trên thumbnail để tạo cảnh mới.

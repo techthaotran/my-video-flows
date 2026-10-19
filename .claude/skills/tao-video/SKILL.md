@@ -16,7 +16,7 @@ Kết quả cuối của skill: file `studio3d/flows/<slug>.xflow.zip` có previ
 Cần đủ trước khi làm (thiếu thì hỏi một lần, gộp các câu hỏi):
 
 - Ảnh bối cảnh, hoặc mô tả ý tưởng bối cảnh.
-- Ảnh người mẫu mặc sản phẩm (sẽ là `[Character]`).
+- Ảnh người mẫu mặc sản phẩm (sẽ là `[Model]`).
   Ưu tiên ảnh đã gen bằng Flow/Gemini hoặc ảnh lookbook; ảnh người thật có thể nhận diện dễ bị Flow chặn (lọc người nổi tiếng).
 - Sản phẩm: tên, màu, chất liệu, chi tiết cần khoe (nút, cổ, tà...).
   Không bịa chất liệu hay giá; để `[Giá]` nếu chưa có.
@@ -43,8 +43,8 @@ Làm theo skill `studio3d-scene` (đọc `.claude/skills/studio3d-scene/SKILL.md
 
 - `size` 720x1280 cho video dọc (hoặc theo tỉ lệ ảnh bối cảnh khi chỉ cần previz ngang).
 - Mỗi clip của kịch bản là đúng một `shot` (`t` = giây bắt đầu clip), camera riêng cho shot đó.
-- Mỗi shot có `note` (một câu) và `prompt`: diễn biến + máy quay, dùng `[Character]`, tả đúng như previz.
-- Khối `flow`: `character` = ảnh người mẫu ở bước 1, `characterPrompt` bắt đầu bằng `[Character]:` (người mẫu + trang phục thật chi tiết), `common` (giữ nguyên trang phục; bối cảnh; ánh sáng), `model: "Omni Flash"`, `resolution: 720`.
+- Mỗi shot có `note` (một câu) và `prompt`: diễn biến + máy quay, dùng `[Model]`, tả đúng như previz.
+- Khối `flow`: `character` = ảnh người mẫu ở bước 1, `characterPrompt` bắt đầu bằng `[Model]:` (người mẫu + trang phục thật chi tiết), `common` (giữ nguyên trang phục; bối cảnh; ánh sáng), `model: "Omni Flash"`, `resolution: 720`.
 
 Chạy `pnpm studio3d:check studio3d/scenes/<slug>.json`, sửa hết `LỖI`, xử lý `CẢNH BÁO` đi xuyên khối.
 

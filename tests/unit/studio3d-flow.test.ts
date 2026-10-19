@@ -17,7 +17,7 @@ beforeEach(async () => {
 
 const flow = {
   character: 'refs/x.png',
-  characterPrompt: '[Character]: cô gái áo hồng.',
+  characterPrompt: '[Model]: cô gái áo hồng.',
   common: ['Giữ nguyên trang phục.'],
 };
 
@@ -26,7 +26,7 @@ const scene = SceneSchema.parse({
   ...demo,
   size: { width: 720, height: 1280 },
   flow,
-  shots: demo.shots.map((s, i) => ({ ...s, prompt: `[Character] làm việc ${i + 1}.` })),
+  shots: demo.shots.map((s, i) => ({ ...s, prompt: `[Model] làm việc ${i + 1}.` })),
 });
 
 const IMAGE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7, 8]);
@@ -57,11 +57,11 @@ async function zipOf(now: number, opts: { previz?: boolean } = {}): Promise<{ fi
 }
 
 describe('studio3d flowWorkflow', () => {
-  it('báo thiếu flow, thiếu prompt, thiếu [Character]', () => {
+  it('báo thiếu flow, thiếu prompt, thiếu [Model]', () => {
     expect(flowProblems(SceneSchema.parse(demo))).toHaveLength(1);
     const noPrompt = SceneSchema.parse({ ...demo, flow: { ...flow, characterPrompt: 'cô gái' } });
     expect(flowProblems(noPrompt)).toEqual([
-      'flow.characterPrompt phải có [Character] để neo ảnh người mẫu',
+      'flow.characterPrompt phải có [Model] để neo ảnh người mẫu',
       'Shot 1: thiếu prompt',
       'Shot 2: thiếu prompt',
       'Shot 3: thiếu prompt',
@@ -82,10 +82,10 @@ describe('studio3d flowWorkflow', () => {
     expect(sceneAspectRatio(SceneSchema.parse(demo))).toBe('16:9');
     expect(clipPrompt(scene, 1).split('\n')).toEqual([
       'Video dọc 9:16 dài 4 giây, một cảnh quay liền không cắt.',
-      '[Character] làm việc 2.',
+      '[Model] làm việc 2.',
       'Giữ nguyên trang phục.',
       '',
-      '[Character]: cô gái áo hồng.',
+      '[Model]: cô gái áo hồng.',
     ]);
   });
 
@@ -126,7 +126,7 @@ describe('studio3d flowWorkflow', () => {
     const lines = clipPrompt(scene, 1, { previz: true }).split('\n');
     expect(lines[0]).toBe('Video dọc 9:16 dài 2 giây, một cảnh quay liền không cắt.');
     expect(lines[1]).toContain(`[${PREVIZ_LABEL}]`);
-    expect(lines).toContain('[Character] làm việc 2.');
+    expect(lines).toContain('[Model] làm việc 2.');
   });
 
   it('previz: chỉ Omni, đủ một clip cho mỗi shot', () => {

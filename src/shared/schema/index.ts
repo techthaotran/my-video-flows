@@ -6,8 +6,10 @@ import { z } from 'zod';
  * v5: thêm node `mergeVideo` - node type mới, dữ liệu node cũ giữ nguyên shape.
  * v6: Prompt `reusePrompt`/`forwardRefs`/`reuseHash`, preset fashion*, ảnh `IMAGE_RESOLUTIONS`, Output.workflowId.
  * v7: Asset `uploaded*` (id upload Flow của ảnh local), Prompt `systemPrompt`/`outputEdited` - field optional/default.
+ * v8: Prompt fashionScene bật `forwardRefs`.
+ * v9: nhãn asset `Character` đổi thành `Model`; `[Character]` trong prompt đổi thành `[Model]`.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 export const FORMAT_VERSION = 1;
 
 export const PortTypeSchema = z.enum(['text', 'image', 'video', 'audio', 'any']);
@@ -29,7 +31,7 @@ export type NodeType = z.infer<typeof NodeTypeSchema>;
 export const ASSET_LABELS = [
   'Outfit',
   'Background',
-  'Character',
+  'Model',
   'Video reference',
   'Video expand',
   'Audio voice',
@@ -105,7 +107,7 @@ export const WorkflowSettingsSchema = z.object({
 export const AssetNodeDataSchema = z.object({
   assetId: z.string().optional(),
   kind: z.enum(['image', 'video', 'audio']).optional(),
-  assetLabel: AssetLabelSchema.default('Character'),
+  assetLabel: AssetLabelSchema.default('Model'),
   slug: z.string().optional(),
   mime: z.string().optional(),
   missing: z.boolean().optional(),
@@ -452,7 +454,7 @@ function migrateNode(n: Record<string, unknown>): Record<string, unknown> {
           ? 'Video reference'
           : kind === 'audio'
             ? 'Audio voice'
-            : 'Character';
+            : 'Model';
     return {
       ...n,
       type: 'asset',
@@ -590,6 +592,9 @@ export function migrateWorkflow(raw: unknown): Workflow {
   if (fromVersion < 8 && Array.isArray(current.nodes)) {
     current.nodes = (current.nodes as Record<string, unknown>[]).map(enableSceneForwardRefs);
   }
+  if (fromVersion < 9 && Array.isArray(current.nodes)) {
+    current.nodes = (current.nodes as Record<string, unknown>[]).map(renameCharacterLabel);
+  }
   // Remap legacy edge handles if needed - keep as-is
   return WorkflowSchema.parse({
     ...current,
@@ -603,6 +608,25 @@ function enableSceneForwardRefs(node: Record<string, unknown>): Record<string, u
   const data = node.data as Record<string, unknown> | undefined;
   if (node.type !== 'prompt' || data?.preset !== 'fashionScene') return node;
   return { ...node, data: { ...data, forwardRefs: true } };
+}
+
+const LEGACY_MODEL_LABEL = 'Character';
+const LEGACY_MODEL_TAG = /\[Character\]/g;
+/** Field chữ có thể chứa `[Label]`: prompt/instruction của Prompt và Generate, nội dung Note. */
+const LABEL_TEXT_FIELDS = ['instruction', 'formattedOutput', 'systemPrompt', 'prompt', 'content'] as const;
+
+/** v8 → v9: asset `Character` thành `Model`, `[Character]` trong chữ thành `[Model]`. */
+function renameCharacterLabel(node: Record<string, unknown>): Record<string, unknown> {
+  const data = node.data as Record<string, unknown> | undefined;
+  if (!data) return node;
+  const next = { ...data };
+  if (next.assetLabel === LEGACY_MODEL_LABEL) next.assetLabel = 'Model';
+  for (const field of LABEL_TEXT_FIELDS) {
+    const value = next[field];
+    if (typeof value === 'string') next[field] = value.replace(LEGACY_MODEL_TAG, '[Model]');
+  }
+  const label = node.label === LEGACY_MODEL_LABEL ? 'Model' : node.label;
+  return { ...node, label, data: next };
 }
 
 /** Nâng cấp workflow đã lưu trong IndexedDB (không đi qua import). */

@@ -30,7 +30,7 @@ const START = '11111111-1111-1111-1111-111111111111';
 describe('payloadLog extractWireMediaIds', () => {
   it('reads ref media ids from imageRequest (ogiZ0b)', () => {
     const freq = imageRequest({
-      prompt: '[Character] waves',
+      prompt: '[Model] waves',
       projectId: PROJECT,
       model: 'NARWHAL',
       refMediaIds: [CHAR, OUTFIT],
@@ -62,7 +62,7 @@ describe('payloadLog extractWireMediaIds', () => {
     const freq = referenceVideoRequest({
       parts: [
         { type: 'text', text: 'hi ' },
-        { type: 'image', mediaId: CHAR, name: 'Character' },
+        { type: 'image', mediaId: CHAR, name: 'Model' },
         { type: 'text', text: ' and ' },
         { type: 'image', mediaId: OUTFIT, name: 'Outfit' },
       ],
@@ -78,7 +78,7 @@ describe('payloadLog extractWireMediaIds', () => {
 describe('describeSubmit', () => {
   it('flags Omni + 2 refs that never reach the wire (current YhhmEf)', () => {
     const prompt =
-      `[Character] wears [Outfit]\n\n` +
+      `[Model] wears [Outfit]\n\n` +
       `https://flow-content.google/image/${CHAR}\n` +
       `https://flow-content.google/image/${OUTFIT}`;
     const freq = textVideoRequest({
@@ -93,14 +93,14 @@ describe('describeSubmit', () => {
       model: 'abra_t2v_8s',
       prompt,
       refs: [
-        { label: 'Character', kind: 'image', source: 'flow', mediaId: CHAR },
+        { label: 'Model', kind: 'image', source: 'flow', mediaId: CHAR },
         { label: 'Outfit', kind: 'image', source: 'flow', mediaId: OUTFIT },
       ],
     });
     expect(d.wireMediaIds).toEqual([]);
     expect(d.missingRefs).toHaveLength(2);
     expect(d.urlsInPrompt).toHaveLength(2);
-    expect(d.labelsInPrompt).toEqual(['Character', 'Outfit']);
+    expect(d.labelsInPrompt).toEqual(['Model', 'Outfit']);
     expect(summarizeSubmit(d)).toContain('ref 0/2 vào wire, 2 link');
   });
 

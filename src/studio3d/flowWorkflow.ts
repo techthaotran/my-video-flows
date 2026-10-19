@@ -1,6 +1,6 @@
 /**
  * Dựng workflow Google Flow (định dạng import .xflow.zip của extension) từ một cảnh Studio 3D:
- * một Asset Character (ảnh người mẫu đóng gói kèm), mỗi shot một nhánh Prompt -> Generate Video,
+ * một Asset Model (ảnh người mẫu đóng gói kèm), mỗi shot một nhánh Prompt -> Generate Video,
  * ghép bằng Merge Video rồi Auto Download.
  * Có previz (video mô hình trắng cắt theo shot) thì mỗi clip thêm Asset `Video reference` nối thẳng vào
  * Generate Video: Omni chỉnh sửa video theo chuyển động và góc máy của previz.
@@ -53,11 +53,11 @@ const PREVIZ_TAG = `[${PREVIZ_LABEL}]`;
 /** Dòng dẫn đầu prompt khi clip có previz: chỉ rõ video là tham chiếu chuyển động, không phải hình. */
 const PREVIZ_LEAD = [
   `Dùng ${PREVIZ_TAG} (mô hình trắng dựng 3D) làm tham chiếu chuyển động và góc máy: giữ đúng đường đi, tư thế, nhịp bước, vị trí và chuyển động máy quay, khung hình theo từng giây.`,
-  'Thay ma-nơ-canh bằng [Character] thật, thay các khối xám bằng bối cảnh thật. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
+  'Thay ma-nơ-canh bằng [Model] thật, thay các khối xám bằng bối cảnh thật. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
   '',
 ];
 
-const CHARACTER_TAG = '[Character]';
+const MODEL_TAG = '[Model]';
 /** Shot dài hơn thời lượng chọn được ít hơn mức này thì vẫn chấp nhận (sai số làm tròn) */
 const DURATION_TOLERANCE = 0.05;
 const APP_VERSION = '0.1.0';
@@ -70,8 +70,8 @@ export function flowProblems(scene: SceneDef, opts: { previz?: boolean } = {}): 
   if (opts.previz && !isOmniFlashModel(scene.flow.model)) {
     problems.push(`flow.model là "${scene.flow.model}": chỉ Omni Flash nhận video previz làm tham chiếu`);
   }
-  if (!scene.flow.characterPrompt.includes(CHARACTER_TAG)) {
-    problems.push(`flow.characterPrompt phải có ${CHARACTER_TAG} để neo ảnh người mẫu`);
+  if (!scene.flow.characterPrompt.includes(MODEL_TAG)) {
+    problems.push(`flow.characterPrompt phải có ${MODEL_TAG} để neo ảnh người mẫu`);
   }
   if (scene.shots.length === 0) problems.push('Cảnh chưa có shots: mỗi shot là một clip Flow');
   scene.shots.forEach((shot, i) => {
@@ -170,7 +170,7 @@ export function buildFlowPackage(
       position: { x: 40, y: LAYOUT.top + ((spans.length - 1) * row) / 2 },
       data: {
         kind: 'image',
-        assetLabel: 'Character',
+        assetLabel: 'Model',
         slug: 'character',
         source: 'local',
         sha256: image.sha256,

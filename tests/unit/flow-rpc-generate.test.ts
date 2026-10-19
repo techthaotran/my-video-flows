@@ -13,7 +13,7 @@ import {
 } from '@/providers/flow/rpc/batch';
 import { clearLogs, getLogs } from '@/shared/log';
 import { strings } from '@/shared/strings';
-import { CHARACTER_AI_ORIGIN_NOTE } from '@/engine/resolver';
+import { MODEL_AI_ORIGIN_NOTE } from '@/engine/resolver';
 import { makeMp4, toBase64 } from '../fixtures/media/mp4';
 
 const rpc = vi.fn<(tabId: number, cmd: BatchRpcCmd) => Promise<BatchRpcResult>>();
@@ -382,9 +382,9 @@ describe('generateViaRpc Omni Flash', () => {
       mode: 'ingredients-to-video',
       durationSec: 4,
       outputsPerPrompt: 2,
-      prompt: `[Character] with [Outfit]`,
+      prompt: `[Model] with [Outfit]`,
       refs: [
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Model', mediaId: IMAGE_ID },
         { kind: 'image', label: 'Outfit', mediaId: outfit },
       ],
     });
@@ -411,11 +411,11 @@ describe('generateViaRpc Omni Flash', () => {
     await run({
       model: 'Omni Flash',
       durationSec: 8,
-      prompt: '[Character] walks',
+      prompt: '[Model] walks',
       refs: [
         {
           kind: 'image',
-          label: 'Character',
+          label: 'Model',
           upload: {
             name: 'face.jpg',
             mime: 'image/jpeg',
@@ -461,15 +461,15 @@ describe('generateViaRpc Omni Flash', () => {
     expect(calls).not.toContain('MZZa6b');
   });
 
-  it('Omni Flash with Character + Background Flow images goes through MZZa6b', async () => {
+  it('Omni Flash with Model + Background Flow images goes through MZZa6b', async () => {
     const background = '33333333-3333-3333-3333-333333333333';
     const { calls } = fakeFlow({});
     await run({
       model: 'Omni Flash',
       durationSec: 4,
-      prompt: '[Character] walks in [Background]',
+      prompt: '[Model] walks in [Background]',
       refs: [
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Model', mediaId: IMAGE_ID },
         { kind: 'image', label: 'Background', mediaId: background },
       ],
     });
@@ -543,8 +543,8 @@ describe('generateViaRpc Omni Flash', () => {
     const result = await run({
       model: 'Omni Flash',
       durationSec: 4,
-      prompt: '[Character] walks',
-      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+      prompt: '[Model] walks',
+      refs: [{ kind: 'image', label: 'Model', mediaId: IMAGE_ID }],
     });
     expect(result.medias![0]!.url).toContain(newVideo);
   });
@@ -567,17 +567,17 @@ describe('generateViaRpc Omni video edit (jIps6)', () => {
     );
   }
 
-  it('Flow video + Character image → one jIps6 with abra_edit, segment from the clip length', async () => {
+  it('Flow video + Model image → one jIps6 with abra_edit, segment from the clip length', async () => {
     const { calls } = fakeFlow({});
     stubVideoFetch(8);
     const send = vi.spyOn(chrome.tabs, 'sendMessage');
     await run({
       model: 'Omni Flash',
       durationSec: 4,
-      prompt: '[Character] đi theo [Video reference], giữ góc máy',
+      prompt: '[Model] đi theo [Video reference], giữ góc máy',
       refs: [
         { kind: 'video', label: 'Video reference', mediaId: VIDEO_ID },
-        { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+        { kind: 'image', label: 'Model', mediaId: IMAGE_ID },
       ],
     });
     expect(calls.filter((c) => c === 'jIps6')).toHaveLength(1);
@@ -755,13 +755,13 @@ describe('generateViaRpc references', () => {
       if (cmd.rpcid === 'eb1hJf') sources.push(sourceOf(cmd));
       return base(tab, cmd);
     });
-    await run({ model: 'Veo 3.1 Lite', refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }] });
+    await run({ model: 'Veo 3.1 Lite', refs: [{ kind: 'image', label: 'Model', mediaId: IMAGE_ID }] });
     expect(calls).not.toContain('maseQ');
     expect(calls).not.toContain('ogiZ0b');
     expect(sources).toEqual([IMAGE_ID]);
     const refs = payloadLogRefs('eb1hJf');
     expect(refs[0]).toMatchObject({
-      label: 'Character',
+      label: 'Model',
       mediaId: IMAGE_ID,
       role: 'startFrame',
       source: 'flow',
@@ -792,9 +792,9 @@ describe('generateViaRpc references', () => {
     const payload = {
       mode: 'text-to-image',
       model: 'Nano Banana 2',
-      prompt: '[Outfit] on [Character]',
+      prompt: '[Outfit] on [Model]',
       refs: [
-        { kind: 'image', label: 'Character', mediaId: '33333333-3333-3333-3333-333333333333' },
+        { kind: 'image', label: 'Model', mediaId: '33333333-3333-3333-3333-333333333333' },
         { kind: 'image', label: 'Outfit', upload: { name: 'o.png', mime: 'image/png', dataBase64: 'aGVsbG8=', sha256: 'sha-o', nodeId: 'asset-o' } },
       ],
     };
@@ -806,9 +806,9 @@ describe('generateViaRpc references', () => {
     expect((item[2] as unknown[][]).map((r) => r[0])).toEqual(['33333333-3333-3333-3333-333333333333', IMAGE_ID]);
     const prompt = (item[8] as string[][][])[0]![0]![0]!;
     expect(prompt).toBe(
-      '[Outfit] on [Character]\n\n' +
+      '[Outfit] on [Model]\n\n' +
         'Danh sách tham chiếu\n' +
-        `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId 33333333-3333-3333-3333-333333333333\n\n` +
+        `[Model]: ${MODEL_AI_ORIGIN_NOTE}. mediaId 33333333-3333-3333-3333-333333333333\n\n` +
         `[Outfit]: mediaId ${IMAGE_ID}`,
     );
     expect(prompt).not.toContain('flow-content.google');
@@ -821,7 +821,7 @@ describe('generateViaRpc references', () => {
       run({
         model: 'Veo 3.1 Lite',
         refs: [
-          { kind: 'image', label: 'Character', mediaId: IMAGE_ID },
+          { kind: 'image', label: 'Model', mediaId: IMAGE_ID },
           { kind: 'image', label: 'Outfit', mediaId: second },
         ],
       }),
@@ -835,7 +835,7 @@ describe('generateViaRpc references', () => {
       run({
         model: 'Veo 3.1 Lite',
         prompt: 'https://flow-content.google/image/99999999-9999-9999-9999-999999999999 alone',
-        refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+        refs: [{ kind: 'image', label: 'Model', mediaId: IMAGE_ID }],
       }),
     ).rejects.toThrow(/link Flow không gắn asset/);
   });
@@ -854,12 +854,12 @@ describe('generateViaRpc references', () => {
     await run({
       model: 'Veo 3.1 Lite',
       prompt: `https://flow-content.google/image/${IMAGE_ID} walks`,
-      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+      refs: [{ kind: 'image', label: 'Model', mediaId: IMAGE_ID }],
     });
     expect(prompts[0]).toBe(
-      '[Character] walks\n\n' +
+      '[Model] walks\n\n' +
         'Danh sách tham chiếu\n' +
-        `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId ${IMAGE_ID}`,
+        `[Model]: ${MODEL_AI_ORIGIN_NOTE}. mediaId ${IMAGE_ID}`,
     );
     expect(calls).toContain('eb1hJf');
   });
@@ -877,9 +877,9 @@ describe('generateViaRpc references', () => {
       mode: 'continue-video',
       durationSec: 4,
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] mặc [Outfit] trong [Background]',
+      prompt: '[Model] mặc [Outfit] trong [Background]',
       refs: [
-        { kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' },
+        { kind: 'image', label: 'Model', mediaId: '44444444-4444-4444-4444-444444444444' },
         { kind: 'image', label: 'Outfit', mediaId: '55555555-5555-5555-5555-555555555555' },
         { kind: 'image', label: 'Background', mediaId: BG },
       ],
@@ -943,8 +943,8 @@ describe('generateViaRpc references', () => {
     });
     const promise = run({
       model: 'Veo 3.1 Lite',
-      prompt: '[Character] walks',
-      refs: [{ kind: 'image', label: 'Character', mediaId: IMAGE_ID }],
+      prompt: '[Model] walks',
+      refs: [{ kind: 'image', label: 'Model', mediaId: IMAGE_ID }],
       timeoutSec: 600,
     });
     promise.catch(() => undefined);
@@ -969,9 +969,9 @@ describe('generateViaRpc references', () => {
       model: 'Veo 3.1 Lite',
       mode: 'continue-video',
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] mặc [Outfit] bước tiếp.\n\nDanh sách tham chiếu\n[Character]: cô gái\n\n[Outfit]: áo nâu',
+      prompt: '[Model] mặc [Outfit] bước tiếp.\n\nDanh sách tham chiếu\n[Model]: cô gái\n\n[Outfit]: áo nâu',
       refs: [
-        { kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' },
+        { kind: 'image', label: 'Model', mediaId: '44444444-4444-4444-4444-444444444444' },
         { kind: 'image', label: 'Outfit', mediaId: outfit },
       ],
     });
@@ -994,7 +994,7 @@ describe('generateViaRpc references', () => {
     });
     expect(refs.map((r) => r.label)).toEqual([
       strings.continueFrameRefLabel,
-      'Character',
+      'Model',
       'Outfit',
     ]);
   });
@@ -1009,8 +1009,8 @@ describe('generateViaRpc references', () => {
       mode: 'continue-video',
       durationSec: 4,
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] bước tiếp',
-      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+      prompt: '[Model] bước tiếp',
+      refs: [{ kind: 'image', label: 'Model', mediaId: '44444444-4444-4444-4444-444444444444' }],
     });
     expect(calls).toContain('MZZa6b');
     expect(calls).not.toContain('eb1hJf');
@@ -1026,8 +1026,8 @@ describe('generateViaRpc references', () => {
       mode: 'continue-video',
       durationSec: 4,
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] bước tiếp',
-      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+      prompt: '[Model] bước tiếp',
+      refs: [{ kind: 'image', label: 'Model', mediaId: '44444444-4444-4444-4444-444444444444' }],
     });
     expect(calls).toContain('MZZa6b');
     // One Veo r2v probe is enough — NOT_FOUND rules out the whole branch.
@@ -1042,28 +1042,28 @@ describe('generateViaRpc references', () => {
       mode: 'continue-video',
       durationSec: 4,
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] bước tiếp',
-      refs: [{ kind: 'image', label: 'Character', mediaId: '44444444-4444-4444-4444-444444444444' }],
+      prompt: '[Model] bước tiếp',
+      refs: [{ kind: 'image', label: 'Model', mediaId: '44444444-4444-4444-4444-444444444444' }],
     });
     await expect(promise).rejects.toThrow(/abra_r2v_4s/);
   });
 
-  it('uploads local Character with Veo continue (MZZa6b; not eb1hJf)', async () => {
+  it('uploads local Model with Veo continue (MZZa6b; not eb1hJf)', async () => {
     const { calls } = fakeFlow({});
     await run({
       model: 'Veo 3.1 Lite',
       mode: 'continue-video',
       continueFrame: { mime: 'image/jpeg', dataBase64: 'bGFzdC1mcmFtZQ==' },
-      prompt: '[Character] bước tiếp',
+      prompt: '[Model] bước tiếp',
       refs: [
         {
           kind: 'image',
-          label: 'Character',
+          label: 'Model',
           upload: { name: 'c.png', mime: 'image/png', dataBase64: 'aGVsbG8=', sha256: 'sha-c', nodeId: 'asset-c' },
         },
       ],
     });
-    // Frame + Character both go through maseQ; submit is MZZa6b (mock reuses one media id).
+    // Frame + Model both go through maseQ; submit is MZZa6b (mock reuses one media id).
     expect(calls.filter((c) => c === 'maseQ')).toHaveLength(2);
     expect(calls).toContain('MZZa6b');
     expect(calls).not.toContain('eb1hJf');

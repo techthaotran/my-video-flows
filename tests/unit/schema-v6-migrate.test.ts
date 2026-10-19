@@ -106,7 +106,7 @@ describe('schema v6 migrate', () => {
           id: 'a1',
           type: 'asset',
           position: { x: 0, y: 0 },
-          data: { kind: 'image', assetLabel: 'Character', assetId: 'x' },
+          data: { kind: 'image', assetLabel: 'Model', assetId: 'x' },
         },
         {
           id: 'p1',

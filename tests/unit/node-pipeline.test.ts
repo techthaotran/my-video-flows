@@ -84,15 +84,15 @@ describe('prompt node', () => {
   it('keeps [Label] tags, appends descriptions without URLs, and concatenates upstream prompts', async () => {
     const wf = createEmptyWorkflow('w');
     wf.nodes = [
-      flowAsset('char', 'Character', CHARACTER),
+      flowAsset('char', 'Model', CHARACTER),
       flowAsset('outfit', 'Outfit', OUTFIT),
       node('p1', 'prompt', {
         preset: 'custom',
-        instruction: '[Character]: Cô gái Đông Á.\n\nScene 1: [Character] walks in.',
+        instruction: '[Model]: Cô gái Đông Á.\n\nScene 1: [Model] walks in.',
       }),
       node('p2', 'prompt', {
         preset: 'custom',
-        instruction: '[Outfit]: Áo blazer.\n\nScene 2: [Character] wears [Outfit]. [Background] stays.',
+        instruction: '[Outfit]: Áo blazer.\n\nScene 2: [Model] wears [Outfit]. [Background] stays.',
       }),
     ];
     wf.edges = [
@@ -104,11 +104,11 @@ describe('prompt node', () => {
     const { outputs } = await runGraph(wf, ['char', 'outfit', 'p1', 'p2']);
     const [text, ...forwarded] = outputs.get('p2')!;
     expect(text!.text).toBe(
-      `Scene 2: [Character] wears [Outfit]. [Background] stays.\n\n` +
-        `Scene 1: [Character] walks in.\n\n` +
+      `Scene 2: [Model] wears [Outfit]. [Background] stays.\n\n` +
+        `Scene 1: [Model] walks in.\n\n` +
         `Danh sách tham chiếu\n` +
         `[Outfit]: Áo blazer. · mediaId ${OUTFIT}\n\n` +
-        `[Character]: Cô gái Đông Á. · mediaId ${CHARACTER}`,
+        `[Model]: Cô gái Đông Á. · mediaId ${CHARACTER}`,
     );
     expect(text!.text).not.toContain('flow-content.google');
     expect(text!.text).not.toContain('Tham khảo');
@@ -124,8 +124,8 @@ describe('generate node', () => {
   it('references Flow assets by media id and never uploads them', async () => {
     const wf = createEmptyWorkflow('w');
     wf.nodes = [
-      flowAsset('char', 'Character', CHARACTER),
-      node('p', 'prompt', { preset: 'custom', instruction: '[Character] dances' }),
+      flowAsset('char', 'Model', CHARACTER),
+      node('p', 'prompt', { preset: 'custom', instruction: '[Model] dances' }),
       node('g', 'generateImage', { model: 'Nano Banana 2', aspectRatio: '9:16', count: 1 }),
     ];
     wf.edges = [edge('char', 'out:image', 'p', 'in:image', 'image'), edge('p', 'out:text', 'g', 'in:text', 'text')];
@@ -135,19 +135,19 @@ describe('generate node', () => {
     });
     const payload = calls[0]!.payload as FlowGeneratePayload;
     expect(payload?.prompt).toBe(
-      '[Character] dances\n\n' +
+      '[Model] dances\n\n' +
         'Danh sách tham chiếu\n' +
-        `[Character]: mediaId ${CHARACTER}`,
+        `[Model]: mediaId ${CHARACTER}`,
     );
     expect(payload?.prompt).not.toContain('flow-content.google');
-    expect(payload?.refs).toEqual([{ kind: 'image', label: 'Character', mediaId: CHARACTER }]);
+    expect(payload?.refs).toEqual([{ kind: 'image', label: 'Model', mediaId: CHARACTER }]);
     expect(outputs.get('g')![0]!.flowMediaId).toBe('new-image');
   });
 
   it('refuses a Google Flow asset that lost its media id instead of uploading it', async () => {
     const wf = createEmptyWorkflow('w');
     wf.nodes = [
-      node('char', 'asset', { assetLabel: 'Character', kind: 'image', source: 'flow', assetId: 'local-1' }),
+      node('char', 'asset', { assetLabel: 'Model', kind: 'image', source: 'flow', assetId: 'local-1' }),
     ];
     await expect(
       runGraph(wf, ['char'], { blobs: { 'local-1': new Blob(['png'], { type: 'image/png' }) } }),
@@ -179,8 +179,8 @@ describe('generate node', () => {
   it('uploads a local asset with a per-run cache key and leaves its [Label] for the driver', async () => {
     const wf = createEmptyWorkflow('w');
     wf.nodes = [
-      node('char', 'asset', { assetLabel: 'Character', kind: 'image', source: 'local', assetId: 'local-1' }),
-      node('p', 'prompt', { preset: 'custom', instruction: '[Character] dances' }),
+      node('char', 'asset', { assetLabel: 'Model', kind: 'image', source: 'local', assetId: 'local-1' }),
+      node('p', 'prompt', { preset: 'custom', instruction: '[Model] dances' }),
       node('g', 'generateVideo', { model: 'Veo 3.1 Lite', aspectRatio: '9:16', count: 1 }),
     ];
     wf.edges = [edge('char', 'out:image', 'p', 'in:image', 'image'), edge('p', 'out:text', 'g', 'in:text', 'text')];
@@ -189,10 +189,10 @@ describe('generate node', () => {
       blobs: { 'local-1': new Blob(['png'], { type: 'image/png' }) },
     });
     const payload = calls[0]!.payload as FlowGeneratePayload;
-    expect(payload.prompt).toBe('[Character] dances');
+    expect(payload.prompt).toBe('[Model] dances');
     expect(payload.refs?.[0]).toMatchObject({
       kind: 'image',
-      label: 'Character',
+      label: 'Model',
       upload: { mime: 'image/png', nodeId: 'char' },
     });
     expect(payload.refs?.[0]?.upload?.sha256).toBeTruthy();
@@ -308,12 +308,12 @@ describe('schema v3', () => {
       workspaceId: 'w',
       name: 't',
       schemaVersion: 2,
-      nodes: [{ id: 't', type: 'text', position: { x: 0, y: 0 }, data: { content: 'hello [Character]' } }],
+      nodes: [{ id: 't', type: 'text', position: { x: 0, y: 0 }, data: { content: 'hello [Model]' } }],
       edges: [],
       createdAt: 1,
       updatedAt: 1,
     });
-    expect(wf.nodes[0]).toMatchObject({ type: 'prompt', data: { preset: 'custom', instruction: 'hello [Character]' } });
+    expect(wf.nodes[0]).toMatchObject({ type: 'prompt', data: { preset: 'custom', instruction: 'hello [Model]' } });
   });
 });
 

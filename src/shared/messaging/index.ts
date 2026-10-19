@@ -156,7 +156,7 @@ export interface FlowMediaItem {
 
 export interface FlowGenerateRef {
   kind: 'image' | 'video' | 'audio';
-  /** Label asset ([Character]…) — giữ trong prompt; media id đi qua slot RPC. */
+  /** Label asset ([Model]…) — giữ trong prompt; media id đi qua slot RPC. */
   label?: string;
   /** Media đã có trên Flow: dùng thẳng, không upload. */
   mediaId?: string;

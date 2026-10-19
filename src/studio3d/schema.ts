@@ -66,7 +66,7 @@ const Shot = z.object({
   /** Mô tả ngắn shot này (hiện trong danh sách kịch bản để duyệt) */
   note: z.string().optional(),
   /**
-   * Prompt Google Flow cho clip của shot này (diễn biến + máy quay), dùng `[Character]` để neo ảnh người mẫu.
+   * Prompt Google Flow cho clip của shot này (diễn biến + máy quay), dùng `[Model]` để neo ảnh người mẫu.
    * Dòng tiêu đề (tỉ lệ, thời lượng) và phần chung trong `flow` được ghép thêm khi xuất workflow.
    */
   prompt: z.string().optional(),
@@ -100,9 +100,9 @@ export type Reference = z.infer<typeof Reference>;
 
 /** Thiết lập xuất workflow Google Flow cho extension (`pnpm studio3d:flow`) */
 const FlowSettings = z.object({
-  /** Ảnh người mẫu dưới `studio3d/public/`, đóng gói vào .xflow.zip làm Asset Character */
+  /** Ảnh người mẫu dưới `studio3d/public/`, đóng gói vào .xflow.zip làm Asset Model */
   character: z.string().min(1),
-  /** Mô tả người mẫu và trang phục, bắt đầu bằng `[Character]:` - ghép vào cuối mọi prompt */
+  /** Mô tả người mẫu và trang phục, bắt đầu bằng `[Model]:` - ghép vào cuối mọi prompt */
   characterPrompt: z.string().min(1),
   /** Các dòng chung ghép sau prompt của shot (giữ trang phục, bối cảnh, ánh sáng...) */
   common: z.array(z.string()).default([]),

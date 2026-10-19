@@ -51,7 +51,7 @@ function imagePayload(upload: FlowUploadRef): FlowGeneratePayload {
     aspectRatio: '9:16',
     outputsPerPrompt: 1,
     resolution: '1K',
-    refs: [{ kind: 'image', label: 'Character', upload }],
+    refs: [{ kind: 'image', label: 'Model', upload }],
   };
 }
 
@@ -187,9 +187,9 @@ describe('Flow local upload reuse (uploaded*)', () => {
       {
         mode: 'frames-to-video',
         model: 'Omni Flash',
-        prompt: '[Character] walks',
+        prompt: '[Model] walks',
         durationSec: 4,
-        refs: [{ kind: 'image', label: 'Character', upload }],
+        refs: [{ kind: 'image', label: 'Model', upload }],
       },
       () => undefined,
       new AbortController().signal,

@@ -81,8 +81,8 @@ Xem ảnh và ghi ra (trong suy nghĩ, không cần ghi file):
 Làm trọn quy trình tạo video theo skill `tao-video` (`.claude/skills/tao-video/SKILL.md`).
 Phần thuộc file cảnh:
 
-- Thêm khối `flow` vào cảnh: `character` (ảnh người mẫu dưới `studio3d/public/`), `characterPrompt` bắt đầu bằng `[Character]:` (tả người mẫu và trang phục thật chi tiết), `common` (giữ nguyên trang phục, bối cảnh, ánh sáng), `model: "Omni Flash"`.
-- Mỗi shot thêm `prompt`: diễn biến và máy quay (ống kính, hướng máy chạy), dùng `[Character]`.
+- Thêm khối `flow` vào cảnh: `character` (ảnh người mẫu dưới `studio3d/public/`), `characterPrompt` bắt đầu bằng `[Model]:` (tả người mẫu và trang phục thật chi tiết), `common` (giữ nguyên trang phục, bối cảnh, ánh sáng), `model: "Omni Flash"`.
+- Mỗi shot thêm `prompt`: diễn biến và máy quay (ống kính, hướng máy chạy), dùng `[Model]`.
   Mỗi shot là một clip Flow 4-10 giây, quay liền không cắt, một camera; kịch bản ngắn thì gộp thành ít shot dài (ví dụ 2 x 8 giây).
 - Sau khi người dùng duyệt và export previz "Theo shots" (tắt nhãn nhân vật): `pnpm studio3d:flow studio3d/scenes/<slug>.json --previz <mp4>`.
 

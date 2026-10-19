@@ -1,7 +1,7 @@
 import type { Template } from '@/shared/schema';
 import { SCHEMA_VERSION } from '@/shared/schema';
 
-/** Built-in: Character + Outfit → Prompt → Omni Flash (media id slots, no CDN links). */
+/** Built-in: Model + Outfit → Prompt → Omni Flash (media id slots, no CDN links). */
 export function getSeedTemplates(): Template[] {
   const now = Date.now();
   return [
@@ -9,7 +9,7 @@ export function getSeedTemplates(): Template[] {
       id: 'tpl-character-outfit-omni',
       name: 'Nhân vật + trang phục → Omni Flash',
       description:
-        'Asset Character + Outfit (có sẵn trên Flow) → Prompt giữ [Label] và mô tả → Generate Video Omni Flash neo ảnh trong structured prompt (MZZa6b).',
+        'Asset Model + Outfit (có sẵn trên Flow) → Prompt giữ [Label] và mô tả → Generate Video Omni Flash neo ảnh trong structured prompt (MZZa6b).',
       category: 'character',
       tags: ['flow', 'omni', 'character'],
       builtIn: true,
@@ -27,7 +27,7 @@ export function getSeedTemplates(): Template[] {
             position: { x: 40, y: 40 },
             data: {
               content:
-                'Chọn 2 ảnh có sẵn trên Google Flow cho Character và Outfit. Đặt [Label] đúng chỗ neo ảnh trong câu. Omni Flash gửi MZZa6b (abra_r2v_*) với media id — không dán link Flow.',
+                'Chọn 2 ảnh có sẵn trên Google Flow cho Model và Outfit. Đặt [Label] đúng chỗ neo ảnh trong câu. Omni Flash gửi MZZa6b (abra_r2v_*) với media id — không dán link Flow.',
               color: '#1e3a5f',
               fontSize: 13,
             },
@@ -36,11 +36,11 @@ export function getSeedTemplates(): Template[] {
             id: 'asset-character',
             type: 'asset',
             slug: 'character',
-            label: 'Character',
+            label: 'Model',
             position: { x: 40, y: 160 },
             data: {
               kind: 'image',
-              assetLabel: 'Character',
+              assetLabel: 'Model',
               slug: 'character',
               source: 'flow',
             },
@@ -69,11 +69,11 @@ export function getSeedTemplates(): Template[] {
               preset: 'custom',
               instruction:
                 'Video dọc 9:16 dài 4 giây, phong cách quay thực tế.\n' +
-                '[Character] mặc [Outfit] đi bộ về phía máy quay trên con phố đầy nắng, khẽ mỉm cười.\n' +
+                '[Model] mặc [Outfit] đi bộ về phía máy quay trên con phố đầy nắng, khẽ mỉm cười.\n' +
                 'Giữ nguyên gương mặt, kiểu tóc và từng chi tiết trang phục như ảnh tham chiếu; không thêm, bớt hay đổi màu quần áo và phụ kiện.\n' +
                 'Góc máy: toàn thân đến trung cảnh, máy lùi chậm.\n' +
                 'Ánh sáng: nắng tự nhiên buổi sáng, mềm.\n\n' +
-                '[Character]: Cô gái Đông Á 20-25 tuổi, mặt trái xoan, da sáng, tóc đen thẳng ngang vai.\n\n' +
+                '[Model]: Cô gái Đông Á 20-25 tuổi, mặt trái xoan, da sáng, tóc đen thẳng ngang vai.\n\n' +
                 '[Outfit]: Áo blazer linen màu kem dáng rộng, áo ba lỗ trắng, quần jeans ống rộng, sneaker trắng.',
               outputFormat: 'plain',
               newChat: true,
@@ -197,7 +197,7 @@ export function getSeedTemplates(): Template[] {
             position: { x: 40, y: 380 },
             data: {
               kind: 'image',
-              assetLabel: 'Character',
+              assetLabel: 'Model',
               slug: 'model',
               source: 'local',
             },

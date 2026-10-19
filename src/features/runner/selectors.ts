@@ -90,7 +90,7 @@ function promptRefsForGenerate(wf: Workflow, generateId: string, byId: Map<strin
 
 function toAssetSlot(n: WorkflowNode): RunnerAssetSlot {
   const data = n.data as Record<string, unknown>;
-  const label = (data.assetLabel as AssetLabel | undefined) ?? 'Character';
+  const label = (data.assetLabel as AssetLabel | undefined) ?? 'Model';
   const kind =
     (data.kind as 'image' | 'video' | 'audio' | undefined) ?? defaultKindForLabel(label);
   return {

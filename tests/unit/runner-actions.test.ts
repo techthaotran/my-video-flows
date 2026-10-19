@@ -23,7 +23,7 @@ function node(id: string, type: WorkflowNode['type'], data: Record<string, unkno
 describe('runner actions', () => {
   it('chon file sai loai bi tu choi, node khong doi', async () => {
     const wf = createEmptyWorkflow('ws');
-    wf.nodes = [node('a', 'asset', { assetLabel: 'Character', kind: 'image', assetId: 'old' })];
+    wf.nodes = [node('a', 'asset', { assetLabel: 'Model', kind: 'image', assetId: 'old' })];
     await workflowRepo.save(wf);
 
     const errors: string[] = [];
@@ -31,7 +31,7 @@ describe('runner actions', () => {
 
     const slot: RunnerAssetSlot = {
       nodeId: 'a',
-      label: 'Character',
+      label: 'Model',
       kind: 'image',
       assetId: 'old',
       missing: false,
@@ -46,12 +46,12 @@ describe('runner actions', () => {
 
   it('chon dung loai ghi patch', async () => {
     const wf = createEmptyWorkflow('ws');
-    wf.nodes = [node('a', 'asset', { assetLabel: 'Character', kind: 'image' })];
+    wf.nodes = [node('a', 'asset', { assetLabel: 'Model', kind: 'image' })];
     await workflowRepo.save(wf);
 
     const slot: RunnerAssetSlot = {
       nodeId: 'a',
-      label: 'Character',
+      label: 'Model',
       kind: 'image',
       missing: false,
     };

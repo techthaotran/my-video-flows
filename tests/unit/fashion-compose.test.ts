@@ -127,20 +127,20 @@ describe('composeFashionPrompt - chỉnh sửa ảnh bối cảnh', () => {
   it('có ảnh bối cảnh: mở đầu bằng lệnh sửa ảnh, gán vai trò đúng nhãn thật', () => {
     const prompt = composeFashionPrompt([scene, outfit, model], {
       scene: ['Background'],
-      model: ['Character'],
+      model: ['Model'],
       outfit: ['Áo mới'],
     });
     const first = prompt.split('\n')[0]!;
     expect(first).toContain('Chỉnh sửa ảnh [Background]');
     expect(first).toContain('giữ nguyên tư thế, dáng người, tóc, màu da, phụ kiện');
-    expect(prompt).toContain('Thay khuôn mặt bằng khuôn mặt trong [Character] (chỉ lấy nét mặt và phong cách biểu cảm; màu da giữ theo [Background]');
+    expect(prompt).toContain('Thay khuôn mặt bằng khuôn mặt trong [Model] (chỉ lấy nét mặt và phong cách biểu cảm; màu da giữ theo [Background]');
     expect(prompt).toContain('Thay áo và quần bằng đúng bộ trang phục trong [Áo mới]');
     expect(prompt).toContain('Không giữ lại khuôn mặt và quần áo của người trong [Background]');
     expect(prompt).not.toContain('Ảnh thời trang editorial');
   });
 
   it('không có ảnh bối cảnh: giữ cách tạo ảnh mới', () => {
-    const prompt = composeFashionPrompt([scene, model], { model: ['Character'] });
+    const prompt = composeFashionPrompt([scene, model], { model: ['Model'] });
     expect(prompt.startsWith('Ảnh thời trang editorial')).toBe(true);
     expect(prompt).not.toContain('Chỉnh sửa ảnh');
   });

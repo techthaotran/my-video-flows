@@ -92,7 +92,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: rec.id,
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'scene.png',
             source: 'local',
@@ -138,7 +138,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: 'old-scene',
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'scene.png',
             source: 'local',
@@ -153,7 +153,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: 'old-model',
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'model.png',
             source: 'local',
@@ -287,7 +287,7 @@ describe('transfer hash remap', () => {
           position: { x: 100, y: 0 },
           data: {
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             source: 'flow',
             flowMediaId: 'flow-media-b',
           },
@@ -344,7 +344,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: 'foreign-id',
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'scene.png',
             source: 'local',
@@ -398,7 +398,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: foreignId,
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'scene.png',
             source: 'local',
@@ -464,7 +464,7 @@ describe('transfer hash remap', () => {
           data: {
             assetId: 'legacy-local-id',
             kind: 'image',
-            assetLabel: 'Character',
+            assetLabel: 'Model',
             mime: 'image/png',
             originalName: 'old.png',
             source: 'local',
@@ -519,7 +519,7 @@ describe('transfer hash remap', () => {
         data: {
           assetId: asset.id,
           kind: 'image',
-          assetLabel: 'Character',
+          assetLabel: 'Model',
           source: 'local',
           uploadedMediaId: 'media-should-strip',
           uploadedProjectId: 'project-should-strip',

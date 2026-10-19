@@ -167,7 +167,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             className={NODE_TEXTAREA_CLASS}
             value={(data.data.content as string) ?? ''}
             onChange={(e) => updateNodeData(id, { content: e.target.value })}
-            placeholder="Nội dung… hỗ trợ [Character], @slug"
+            placeholder="Nội dung… hỗ trợ [Model], @slug"
           />
         )}
         {data.nodeType === 'prompt' && (
@@ -410,7 +410,7 @@ function PromptBody({
         className={NODE_TEXTAREA_CLASS}
         value={instruction}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="vd: [Character] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
+        placeholder="vd: [Model] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
       />
       {unresolved.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -451,7 +451,7 @@ function AssetBody({
   data: Record<string, unknown>;
   onChange: (d: Record<string, unknown>) => void;
 }) {
-  const label = (data.assetLabel as AssetLabel) || 'Character';
+  const label = (data.assetLabel as AssetLabel) || 'Model';
   const kind = (data.kind as 'image' | 'video' | 'audio') || defaultKindForLabel(label);
   const flowMediaId = data.flowMediaId as string | undefined;
   const [localUrl, setLocalUrl] = useState<string | null>(null);
