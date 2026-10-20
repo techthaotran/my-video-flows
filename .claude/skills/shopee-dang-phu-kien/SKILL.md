@@ -1,6 +1,6 @@
 ---
 name: shopee-dang-phu-kien
-description: Nhận ảnh tham khảo (người mẫu + dáng + bối cảnh + ánh sáng) và ảnh áo của người dùng, phân tích ảnh tham khảo rồi trả về DUY NHẤT prompt tiếng Việt cho Gemini/Flow để tạo lại ảnh đó với người mẫu mặc áo mới, đúng khung hình ảnh Shopee (người nửa trái, cao hơn 80% khung, góc dưới trái trống).
+description: Nhận ảnh tham khảo (người mẫu + dáng + bối cảnh + ánh sáng) và ảnh áo của người dùng, phân tích ảnh tham khảo rồi trả về DUY NHẤT prompt tiếng Việt cho Gemini/Flow để tạo lại ảnh đó với người mẫu mặc áo mới, có sức hút kéo click (khung chặt mặt và áo to, dáng động, ánh mắt nhìn ống kính, ánh sáng trong trẻo, nền xoá phông bổ trợ màu áo), đúng khung hình ảnh bìa Shopee (người mẫu bên trái, cột phải trống cho thẻ chữ, góc dưới trái trống).
 ---
 
 # Prompt ảnh Shopee từ ảnh tham khảo + ảnh áo
@@ -10,6 +10,20 @@ description: Nhận ảnh tham khảo (người mẫu + dáng + bối cảnh + �
 - **Đầu ra:** chỉ prompt, mỗi ảnh tham khảo một prompt trong một khối code. Không viết thêm phân tích dài, không giải thích. Chỉ thêm tối đa 1-2 dòng lưu ý khi thiếu thông tin hoặc có giả định cần người dùng kiểm tra.
 - Ảnh tham khảo quyết định **nhân vật, dáng, phụ kiện, bối cảnh, máy ảnh, ánh sáng**. Ảnh áo quyết định **trang phục**.
 - Nếu người dùng gửi thêm ảnh nhân vật riêng (`@nhanvat`), dòng đầu dùng `@nhanvat` thay cho nhân vật trong ảnh tham khảo.
+
+## Sức hút (mặc định bật)
+Ảnh phải kéo được click khi hiện ở ô 188px trong danh sách tìm kiếm Shopee, như ảnh mẫu kiểu shop thời trang lớn (người mẫu to, tươi, sáng, nền vườn xoá phông).
+Ảnh tham khảo chỉ cho dáng, phụ kiện, bối cảnh; năm điểm dưới đây ghi đè ảnh tham khảo khi ảnh tham khảo yếu hơn.
+Bỏ mục này khi người dùng nói "giữ đúng như ảnh tham khảo".
+
+1. **Khung chặt, chủ thể to:** mặc định từ đầu tới ngang hông hoặc ngang gối, người mẫu chiếm khoảng 60-65% bề ngang khung bên trái, đầu cách mép trên 30-80px trên canvas 1200. Mặt và áo phải to, rõ ở ô nhỏ. Toàn thân chỉ dùng khi người dùng yêu cầu hoặc cần khoe quần/giày.
+2. **Dáng động có điểm nhấn:** thân xoay 3/4, đầu nghiêng nhẹ, một tay làm động tác tự nhiên gần mặt hoặc tóc (vuốt tóc, chạm vành nón, giữ lọn tóc) hoặc cầm phụ kiện; tay kia thả lỏng. Tay không che mặt, cổ áo, hàng nút.
+3. **Ánh mắt và biểu cảm:** nhìn thẳng ống kính, ánh mắt sáng có catchlight, nụ cười nhẹ tự nhiên (môi hé hoặc khép, không cười toe), vẻ tươi tắn gần gũi.
+4. **Ánh sáng trong trẻo:** ánh sáng ban ngày tự nhiên mềm khuếch tán, sáng xiên nhẹ phía trước, phơi sáng hơi cao, da sáng trong có kết cấu thật, tông màu tươi sạch, không u tối, không ám vàng.
+5. **Nền nhoè rất mạnh, có chiều sâu, bổ trợ áo:** ống kính 85mm f/1.4, nền nhoè rất mạnh và mờ dần theo khoảng cách (vườn cây xanh, hiên nhà, tường sáng), màu nền tương phản nhẹ với áo (áo trắng/pastel trên nền xanh lá; áo đỏ/cam/vàng trên nền xanh hoặc kem). Áo và mặt nét căng, nền tách hẳn chủ thể.
+
+Phụ kiện nên kể chuyện theo bối cảnh (giỏ cói hoặc túi cói ở vườn, quạt ở hiên, ly cà phê ở quán), vẫn tối đa 1 món và không chói hơn áo.
+Chữ trên ảnh bìa (số màu, tên màu, size) không nhờ Flow vẽ: thêm sau bằng skill `shopee-anh-bia-thoi-trang` (thẻ chữ và thẻ "MÀU CÓ SẴN").
 
 ## Quy trình
 1. Xem kỹ ảnh tham khảo, rút ra từng mục dưới đây (không bịa thứ không thấy).
@@ -22,16 +36,17 @@ description: Nhận ảnh tham khảo (người mẫu + dáng + bối cảnh + �
 |---|---|
 | Dáng | Đứng/bước/ngồi, vị trí hai tay, hướng đầu và mắt, biểu cảm, hướng xoay thân |
 | Phụ kiện | Món cầm tay hoặc đeo (túi, quạt, ly, hoa, nón...), tay nào cầm, vị trí |
-| Bối cảnh | Địa điểm, vật dụng, màu chủ đạo của nền, mức xoá phông |
+| Bối cảnh | Địa điểm, vật dụng, màu chủ đạo của nền (mức mờ của nền luôn theo quy tắc Nền mờ, không theo ảnh tham khảo) |
 | Máy ảnh | Tiêu cự ước lượng (35/50/70/85mm), khẩu, độ cao máy (ngang mắt/ngực/eo), kiểu khung (toàn thân/tới gối/nửa thân) |
-| Ánh sáng | Hướng sáng, độ cứng/mềm, nhiệt độ màu ước lượng, có ngược sáng hay hắt sáng không |
+| Ánh sáng | Hướng sáng, độ cứng/mềm, có ngược sáng hay hắt sáng không (chỉ để chọn hướng sáng; độ mờ nền và kiểu ánh sáng theo mặc định bên dưới) |
 
 Tham chiếu ước lượng:
-- Toàn thân: 70-85mm, f/4-5.6, máy ngang hông (thấp, kéo dài chân; máy ngang eo trở lên làm chân ngắn).
-- Tới ngang gối hoặc nửa thân dưới: 70-85mm, f/2.8-4, máy ngang ngực.
-- Nửa thân: 85mm, f/2.0-2.8, máy ngang mắt.
+- Mặc định (Sức hút): từ đầu tới ngang hông hoặc ngang gối, 85mm, f/1.4, máy ngang ngực.
+- Toàn thân: 70-85mm, f/2.8 (nền vẫn ghi nhoè rất mạnh), máy ngang hông (thấp, kéo dài chân; máy ngang eo trở lên làm chân ngắn).
+- Tới ngang gối hoặc nửa thân dưới: 85mm, f/1.4, máy ngang ngực.
+- Nửa thân: 85mm, f/1.4, máy ngang mắt.
 - Không dùng góc rộng dưới 50mm; tay giơ cao thì 70-85mm.
-- Giờ vàng ấm khoảng 4500-5500K; ngày mềm khuếch tán khoảng 5500-6000K; trong nhà đèn vàng khoảng 3500-4500K.
+- Không ghi nhiệt độ màu (K), nắng chiều/giờ vàng hay viền sáng (rim light) vào prompt: ánh sáng mặc định là ánh sáng ban ngày mềm khuếch tán. Ảnh tham khảo có nắng gắt hoặc giờ vàng thì đổi sang ánh sáng mặc định.
 
 ## Quy tắc khi viết prompt
 **Trang phục**
@@ -51,7 +66,7 @@ Tham chiếu ước lượng:
 **Dáng và phụ kiện**
 - Giữ dáng của ảnh tham khảo nhưng sửa nếu che mất điểm chính của áo (hoa văn lớn ở vạt, hàng nút, cổ, đường eo): dời tay hoặc phụ kiện sang bên.
 - Mỗi ảnh tối đa 1 phụ kiện cầm tay. Phụ kiện phải tôn áo, không chói hơn áo.
-- Phụ kiện cầm tay đặt ở tay phải của ảnh (phía chừa trống), không thả xuống góc dưới trái.
+- Phụ kiện cầm tay nằm gọn trong vùng người mẫu (khoảng 60-65% bên trái khung), không lấn sang cột phải trống (chỗ thẻ chữ ảnh bìa), không thả xuống góc dưới trái.
 - Xoá mọi chữ, logo, thương hiệu, số điện thoại trên phụ kiện và nền.
 - Luôn thêm "bàn tay tự nhiên, năm ngón rõ ràng".
 - **Tránh từ dễ bị bộ lọc Google Flow chặn** (lỗi "might violate our policies"): không ghi "thương hiệu" hay tên hãng, đặt "không chữ, không logo" là đủ; dùng "ngang gối", "ngang hông" thay cho "ngang đùi"; "đặt nhẹ bên eo" thay cho "chống eo". Prompt có túi xách, quai, hoa thêu giữ mô tả ngắn, không thêm chi tiết hiệu. Khi Flow báo lỗi: bỏ lần lượt từng dòng nghi ngờ (phụ kiện trước, rồi khung hình) và chạy lại.
@@ -59,23 +74,49 @@ Tham chiếu ước lượng:
 **Tỉ lệ chân (khung toàn thân)**
 - Chân hay bị ngắn khi máy đặt ngang eo hoặc ngực và ống kính ngắn. Với khung toàn thân: máy ngang hông (thấp), ống kính 70-85mm, thêm dòng "Tỉ lệ" vào prompt: `Tỉ lệ cơ thể thon cao khoảng 8 đầu, đôi chân dài, chiều dài chân khoảng 55% chiều cao cơ thể, quần lưng cao kéo dài chân, không méo tỉ lệ.`
 - Khung chỉ tới ngang gối thì không cần dòng Tỉ lệ (chân không lộ hết).
-- Khung **nửa chân đi lên** (từ đầu tới giữa ống quần, khoảng nửa chiều dài chân): ghi "từ đầu tới giữa ống quần, khoảng nửa chiều dài chân, không lộ giày", ống kính 85mm, f/3.2, máy ngang ngực. Bỏ dòng Quần chỉ ghi giày. Người vẫn cao hơn 80% khung, đầu cách mép trên 40-120px.
+- Khung **nửa chân đi lên** (từ đầu tới giữa ống quần, khoảng nửa chiều dài chân): ghi "từ đầu tới giữa ống quần, khoảng nửa chiều dài chân, không lộ giày", ống kính 85mm, f/1.4, máy ngang ngực. Bỏ dòng Quần chỉ ghi giày. Người vẫn cao hơn 80% khung, đầu cách mép trên 40-120px.
 
 **Khung hình bắt buộc (khớp ảnh bìa Shopee)**
-- Tỉ lệ 1:1, người mẫu nằm nửa TRÁI khung, nửa phải để trống nền đơn giản.
-- Người cao hơn 80% chiều cao khung, đầu cách mép trên khoảng 40-120px trên canvas 1200.
+- Tỉ lệ 1:1 (hoặc 3:4 khi người dùng cần), người mẫu bên TRÁI chiếm khoảng 60-65% bề ngang; cột phải khoảng 35% để trống nền xoá phông đơn giản (chỗ đặt thẻ chữ của ảnh bìa), không có tay, túi, tóc lấn sang.
+- Người cao hơn 80% chiều cao khung, đầu cách mép trên khoảng 30-80px trên canvas 1200 (khung toàn thân: 40-120px).
+- Mặt nằm khoảng 30-45% bề ngang tính từ mép trái, không lọt vào góc trên trái (nhãn "Yêu thích" của Shopee che vùng x 0-30%, y 8-18% khung).
 - Góc dưới bên TRÁI không có vật thể hay phụ kiện (vùng nhãn Shopee).
 - Không chữ, logo, watermark, số điện thoại, biển hiệu, viền; nền không có người khác.
 - Khung hình này ghi đè khung hình của ảnh tham khảo; chỉ giữ kiểu khung (toàn thân/tới gối/nửa thân) nếu vẫn đạt các điều kiện trên.
 
+**Nền mờ làm nổi người mẫu và áo (bắt buộc, kể cả khi bỏ mục Sức hút)**
+- Mọi prompt có dòng `Nền:` riêng. Nền phía sau luôn nhoè rất mạnh (độ sâu trường ảnh cực nông như f/1.4, bokeh mịn), mờ dần theo khoảng cách để tạo chiều sâu nhiều lớp: chỉ còn mảng màu, không nhận ra hình khối hay đường nét nào cạnh tranh với áo.
+- Người mẫu và áo nét căng từ tóc tới gấu áo; ranh giới người và nền rõ, không có viền mờ hay quầng sáng quanh người.
+- Nền dịu hơn chủ thể: độ bão hoà và độ tương phản của nền thấp hơn áo, không có mảng màu chói, không có vật sáng hơn mặt. Màu nền tương phản nhẹ với màu áo (xem mục Sức hút, điểm 5).
+- Ảnh tham khảo có nền rõ nét (phố, quán, nội thất nhiều đồ): vẫn giữ địa điểm nhưng làm nhoè rất mạnh như trên.
+- Ống kính 85mm f/1.4, người mẫu đứng cách nền xa khoảng 6-8m để nền nhoè tự nhiên và có chiều sâu; khung toàn thân dùng f/2.8 nhưng vẫn ghi nền nhoè rất mạnh.
+
 **Ánh sáng và màu**
-- Hướng sáng giữ như ảnh tham khảo, thêm hắt sáng mềm cho mặt và áo.
+- Hướng sáng giữ như ảnh tham khảo, thêm hắt sáng mềm cho mặt và áo. Ảnh tham khảo tối, ám vàng hoặc trong nhà thiếu sáng: đổi sang ánh sáng trong trẻo của mục Sức hút.
 - Luôn ghi "giữ đúng màu và hoa văn của áo, không ám màu, không cháy sáng".
 - Áo nhiều hoa văn hoặc màu đậm: tránh ngược sáng mạnh, ưu tiên sáng xiên.
 
+## Khí chất (mặc định bật)
+Mỗi prompt có một dòng `Khí chất:` để nhân vật có hồn, có chiều sâu. Bỏ dòng này khi người dùng nói "không cần khí chất".
+Khí chất đến từ sự tiết chế: ánh mắt có hồn, biểu cảm thật, dáng vững thả lỏng; không nhồi trang sức, không tạo dáng gượng.
+Chọn một tông theo ý người dùng; không nêu thì dùng **tông 0** (đi cùng mục Sức hút). Tông 1-3 khi người dùng muốn sang, lạnh hoặc hoài cổ. Chi tiết tông 1-3 và cách chấm kết quả: skill `khi-chat-sang-trong`.
+
+| Tông | Từ khoá | Ánh mắt, biểu cảm | Dáng |
+|---|---|---|---|
+| 0. Tươi sáng cuốn hút (mặc định) | tươi tắn, rạng rỡ, duyên dáng, gần gũi | nhìn thẳng ống kính, mắt sáng, nụ cười nhẹ môi hé, có thể thấy chút răng trên | thân xoay 3/4, đầu nghiêng nhẹ, một tay chạm tóc hoặc phụ kiện gần mặt |
+| 1. Quý phái thanh nhã | thanh lịch, điềm đạm, kiêu hãnh kín đáo | nhìn ống kính hơi trầm hoặc lệch nhẹ, khoé môi cong rất nhẹ, môi khép | vai mở, cằm hơi nâng, cổ dài, dồn trọng lượng một chân |
+| 2. Sang trọng lạnh | sang trọng, quyền quý, tự tin sắc sảo | nhìn thẳng ống kính, gần như không cười | thân thẳng, hơi ngả vai, đứng tĩnh |
+| 3. Hoài cổ ấm áp | mộc mạc, ấm áp, duyên dáng truyền thống | nhìn xa hoặc nhìn xuống nhẹ, cười thoáng | nghiêng người nhẹ, tay chạm vạt áo hoặc lọn tóc |
+
+- Khí chất **ghi đè biểu cảm và hướng mắt** của ảnh tham khảo (kể cả nụ cười rộng); vẫn giữ dáng, phụ kiện, bối cảnh, máy ảnh. Khuôn mặt không đổi.
+- Dòng `Khí chất:` ghi từ khoá, ánh mắt có catchlight rõ, biểu cảm theo tông (tông 1-3: tiết chế, không lộ răng; tông 0: cười nhẹ tự nhiên, không cười toe), dáng theo tông, da thật thấy lỗ chân lông nhẹ.
+- Ánh sáng tông 1-3: mềm có hướng, xiên một bên, tạo khối sáng tối nhẹ trên mặt. Tông 0: ánh sáng trong trẻo của mục Sức hút. Mọi tông: nền xoá phông để nhân vật tách nền, cột phải khung trống, đơn giản.
+- Thêm vào dòng cuối của prompt: `Tránh: mắt vô hồn, mặt cứng, dáng gượng, cười gượng, da nhựa hay sứ, vẻ hoàn hảo giả tạo, tay chân cứng hoặc lơ lửng.`
+- Khí chất không đổi trang phục, màu hay hoa văn áo; vẫn giữ quy tắc `@ao`.
+
 ## Phụ kiện: túi, giày và quạt
 Ba bảng ảnh catalog trong `references/phu-kien/` (`tui-xach.webp`, `giay-cao-got.webp`, `quat-gap.webp`) dùng để chọn kiểu khi người dùng không chỉ định, hoặc chỉ nói chung ("túi xách", "giày cao gót").
-Trong prompt chỉ mô tả **dáng, chất liệu, màu**; không ghi tên thương hiệu (Louis Vuitton, Prada, Chanel, Jacquemus, Dior...), không chữ, không logo, không charm có chữ.
+<!-- Trong prompt chỉ mô tả **dáng, chất liệu, màu**; không ghi tên thương hiệu (Louis Vuitton, Prada, Chanel, Jacquemus, Dior...), không chữ, không logo, không charm có chữ. -->
 
 **Túi** (chọn 1, màu hợp áo: áo đậm hoặc nhiều hoa văn thì túi trắng/kem/đen trơn, áo pastel thì túi kem, trắng, xanh pastel hoặc đen):
 | Kiểu | Mô tả để ghi vào prompt | Cách cầm |
@@ -115,7 +156,7 @@ Trong prompt chỉ mô tả **dáng, chất liệu, màu**; không ghi tên thư
 | Quạt mai đỏ nền kem | Mặt kem, cành mai đỏ nét đơn giản, nan tre | Áo trơn, áo xanh |
 | Quạt giấy trúc mực nhạt | Mặt giấy ngà vẽ trúc xám, nan nâu đậm | Áo màu tươi, hoa nhỏ |
 - Chọn quạt tương phản nhưng không chói hơn áo: áo nhiều hoa văn thì chọn quạt trơn hoặc tranh mực nhạt; áo trơn thì quạt hoa đẹp hợp tông.
-- Cầm bằng **tay phải của ảnh** (phía chừa trống), quạt **gấp một nửa hoặc xoè nhẹ** ngang hông hoặc ngang ngực, không che mặt, không che hàng nút và vạt giữa áo.
+- Cầm trong vùng người mẫu, không lấn sang cột phải trống, quạt **gấp một nửa hoặc xoè nhẹ** ngang hông hoặc ngang ngực, không che mặt, không che hàng nút và vạt giữa áo.
 - Kích cỡ vừa tay (xoè khoảng 25-30cm), không quá to so với thân người.
 - Xoá mọi chữ, chữ thư pháp, con dấu trên mặt quạt: ghi "mặt quạt chỉ có hoa hoặc nét vẽ, không chữ, không con dấu, không logo".
 - Bàn tay cầm quạt: "năm ngón rõ ràng, cầm chuôi quạt tự nhiên".
@@ -125,14 +166,18 @@ Trong prompt chỉ mô tả **dáng, chất liệu, màu**; không ghi tên thư
 Giữ nguyên nhân vật như ảnh tham khảo: @thamkhao
 Khuôn mặt: giữ đúng khuôn mặt như ảnh tham khảo, [mô tả dáng mặt, mày, mắt, mũi, môi, da, tóc], không làm mịn da quá mức, không biến dạng khuôn mặt, khuôn mặt nhất quán.
 Trang phục: thay toàn bộ trang phục bằng @ao
-Quần: ống rộng suông lưng cao [trắng / đen] vải thun dày đục màu, không trong suốt, không xuyên thấu, rũ dài chạm mắt cá, xăng đan quai trong suốt đế gỗ (bỏ dòng này nếu ảnh áo đã có quần hoặc là váy).
+Quần: ống rộng suông lưng cao [trắng / đen] vải thun dày đục màu, không trong suốt, không xuyên thấu, rũ dài chạm mắt cá, xăng đan quai trong suốt đế gỗ (bỏ phần giày khi khung không lộ chân; bỏ cả dòng nếu ảnh áo đã có quần hoặc là váy).
 Dáng: [dáng rút từ ảnh tham khảo, đã chỉnh nếu che áo], tham chiếu tư thế như ảnh tham khảo. Bàn tay tự nhiên, năm ngón rõ ràng.
-Phụ kiện: [1 phụ kiện từ ảnh tham khảo, tay phải của ảnh, không chữ/logo] (bỏ dòng này nếu ảnh tham khảo không có).
-Bối cảnh: [địa điểm, vật dụng, tông màu, mức xoá phông, không chữ/biển hiệu/người khác].
-Máy ảnh: ống kính [..]mm, f/[..], máy [ngang mắt/ngực/hông], không méo góc rộng.
-Ánh sáng: [hướng, độ mềm, nhiệt độ màu], hắt sáng mềm cho mặt và áo, giữ đúng màu và hoa văn của áo, không ám màu, không cháy sáng.
-Khung hình 1:1, người mẫu bên TRÁI, [toàn thân / từ đầu tới ngang gối], cao hơn 80% chiều cao khung, nửa phải để trống nền đơn giản, góc dưới bên trái không có vật thể.
+Khí chất: [từ khoá tông], ánh mắt có hồn, catchlight rõ, [ánh mắt và biểu cảm theo tông], [dáng theo tông], da thật thấy lỗ chân lông nhẹ (bỏ dòng này nếu người dùng không cần khí chất).
+Sức hút: người mẫu to rõ chiếm khoảng 60-65% bề ngang khung, nhìn thẳng ống kính, nụ cười nhẹ tự nhiên, thân xoay 3/4 đầu nghiêng nhẹ, [động tác tay gần mặt hoặc tóc / cầm phụ kiện], áo và mặt nét căng, tông màu tươi sáng trong trẻo (bỏ dòng này nếu người dùng muốn giữ đúng ảnh tham khảo).
+Phụ kiện: [1 phụ kiện từ ảnh tham khảo hoặc hợp bối cảnh, nằm trong vùng người mẫu, không lấn cột phải, không chữ/logo] (bỏ dòng này nếu ảnh tham khảo không có).
+Bối cảnh: [địa điểm, vật dụng, tông màu, không chữ/biển hiệu/người khác].
+Nền: độ sâu trường ảnh cực nông như chụp f/1.4, nền phía sau nhoè rất mạnh, mờ dần theo khoảng cách tạo chiều sâu nhiều lớp, chỉ còn mảng [màu nền tương phản nhẹ với áo] và bokeh mịn, không nhận ra hình khối hay đường nét nào, người mẫu đứng cách nền xa khoảng 6-8m; nền dịu hơn áo về độ bão hoà và tương phản, không mảng chói; người mẫu và áo nét căng, tách hẳn khỏi nền, không viền mờ hay quầng sáng quanh người.
+Máy ảnh: ống kính 85mm, f/1.4 (toàn thân f/2.8), máy [ngang ngực / ngang hông khi toàn thân], không méo góc rộng.
+Ánh sáng: ánh sáng ban ngày tự nhiên mềm khuếch tán, sáng xiên nhẹ phía [trước bên trái / theo ảnh tham khảo], hắt sáng mềm cho mặt và áo, phơi sáng hơi cao, giữ đúng màu và hoa văn của áo, không ám màu, không cháy sáng.
+Khung hình 1:1, người mẫu bên TRÁI chiếm khoảng 60-65% bề ngang, [từ đầu tới ngang hông / tới ngang gối / toàn thân], cao hơn 80% chiều cao khung, đầu cách mép trên một khoảng nhỏ, mặt lệch vào giữa khung (khoảng 30-45% bề ngang từ trái), cột phải khoảng 35% để trống nền xoá phông đơn giản, góc dưới bên trái không có vật thể.
 Không chữ, không logo, không watermark, không số điện thoại, không biển hiệu, không người khác.
+Tránh: mắt vô hồn, mặt cứng, dáng gượng, cười gượng, da nhựa hay sứ, vẻ hoàn hảo giả tạo, tay chân cứng hoặc lơ lửng (bỏ dòng này nếu không cần khí chất).
 ```
 Nếu có `@nhanvat`, dòng đầu: `Giữ nguyên nhân vật như ảnh tham chiếu: @nhanvat`, và dòng Dáng/Bối cảnh/Máy ảnh/Ánh sáng vẫn lấy từ `@thamkhao`.
 
@@ -145,6 +190,7 @@ Nếu có `@nhanvat`, dòng đầu: `Giữ nguyên nhân vật như ảnh tham c
 `phu-kien/`: catalog túi xách, giày cao gót và quạt gấp (xem mục Phụ kiện: túi, giày và quạt).
 `nguoi-mau-1/`: 12 ảnh dáng mẫu của người mẫu 1 (áo kiểu + quần, 01-12).
 `nguoi-mau-2/`: 15 ảnh dáng mẫu của người mẫu 2 (áo dài cách tân/sườn xám, 13-27).
+`nguoi-mau-3/`: 1 ảnh dáng mẫu của người mẫu 3 (áo kiểu + quần, cafe ngoài trời, 28-vuot-toc-cam-clutch). Tóc đen dài thẳng rẽ ngôi giữa, khác tóc gợn sóng của người mẫu 1.
 Dùng được làm `@thamkhao` khi người dùng chưa có ảnh tham khảo; chọn folder theo người mẫu người dùng muốn (hoặc theo loại áo của `@ao`).
-Mỗi folder là một người mẫu: khi người dùng chỉ định "người mẫu 1" hoặc "người mẫu 2", chọn `@thamkhao` trong folder đó và giữ đúng khuôn mặt của người trong ảnh.
+Mỗi folder là một người mẫu: khi người dùng chỉ định "người mẫu 1", "người mẫu 2" hoặc "người mẫu 3", chọn `@thamkhao` trong folder đó và giữ đúng khuôn mặt của người trong ảnh.
 Khi người dùng chỉ lấy dáng thì không bắt khuôn mặt; chỉ lấy dáng, phụ kiện và cách chụp.
