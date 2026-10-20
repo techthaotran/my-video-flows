@@ -22,6 +22,7 @@ config = {
               {"ratio": "3:4", "out": "a-3x4.jpg", "crop": [l, t], "crop_w": 1100}],   # 3:4 -> 1200x1600, crop height = crop_w*4/3
             "extend_right": 500, "fill_box": [x0, y0, x1, y1],   # optional (product): widen the photo to the right with surface texture copied from an empty box
             "logo": [x0, y0, x1, y1],      # optional: owner's own logo to remove from the photo
+            "protect": [[x0, y0, x1, y1]], # optional: props the person mask misses (flowers, fan, bag), source px; cards keep clear of them
             "recolor": {"ref": "ref.jpg", "ref_box": [x0,y0,x1,y1], "shirt_box": [x0,y0,x1,y1]}  # optional
            }]
 }
@@ -449,9 +450,12 @@ if __name__ == '__main__':
         if job.get('logo'):
             img = remove_logo(img, job['logo'], job.get('logo_fill', 'inpaint'))
         p = product_mask(img, job.get('mask_thr', 24)) if job.get('subject') == 'product' else person_mask(img)
+        keep = p.copy()                      # subject mask for layout and background softening: the person plus props the segmenter dropped
+        for x0, y0, x1, y1 in job.get('protect', []):
+            keep[y0:y1, x0:x1] = 1
         if job.get('recolor'):
             img = recolor_shirt(img, p, job['recolor'])
-        res = soften_background(img, p, job.get('soften', 0.55))
+        res = soften_background(img, keep, job.get('soften', 0.55))   # props count as subject: a white flower must not be dimmed as glare
         if job.get('face'):
             res = enhance_face(res, job['face'])
         H, W = img.shape[:2]
@@ -466,6 +470,6 @@ if __name__ == '__main__':
             l, t = o.get('crop') or [W - cw, 0]
             l = max(0, min(l, W - cw)); t = max(0, min(t, H - chh))
             photo = pil.crop((l, t, l + cw, t + chh))
-            img_out = compose(photo, p[t:t + chh, l:l + cw], 1200 * den // num)
+            img_out = compose(photo, keep[t:t + chh, l:l + cw], 1200 * den // num)
             img_out.save(f"{out}/{o['out']}", quality=92, subsampling=0, optimize=True)
             print(o['out'], img_out.size)
