@@ -9,6 +9,7 @@
 
 import {
   ASPECT_RATIOS,
+  AUDIO_ASSET_LABEL,
   FORMAT_VERSION,
   SCHEMA_VERSION,
   VIDEO_DURATIONS,
@@ -38,6 +39,15 @@ export interface FlowPrevizClip {
   originalName: string;
 }
 
+/** Nhạc nền đã đọc từ đĩa (mp3/m4a/wav) */
+export interface FlowAudio {
+  sha256: string;
+  mime: string;
+  size: number;
+  originalName: string;
+  ext: string;
+}
+
 export interface FlowPackage {
   manifest: ExportManifest;
   workflow: Workflow;
@@ -45,6 +55,8 @@ export interface FlowPackage {
   imagePath: string;
   /** Đường dẫn từng clip previz trong zip, theo thứ tự shot (rỗng khi không có previz) */
   previzPaths: string[];
+  /** Đường dẫn nhạc nền trong zip, nếu có */
+  audioPath?: string;
 }
 
 /** Nhãn asset của clip previz; Omni chỉ nhận video tham chiếu qua chỉnh sửa video (tối đa 10s). */
@@ -53,7 +65,7 @@ const PREVIZ_TAG = `[${PREVIZ_LABEL}]`;
 /** Dòng dẫn đầu prompt khi clip có previz: chỉ rõ video là tham chiếu chuyển động, không phải hình. */
 const PREVIZ_LEAD = [
   `Dùng ${PREVIZ_TAG} (mô hình trắng dựng 3D) làm tham chiếu chuyển động và góc máy: giữ đúng đường đi, tư thế, nhịp bước, vị trí và chuyển động máy quay, khung hình theo từng giây.`,
-  'Thay ma-nơ-canh bằng [Model] thật, thay các khối xám bằng bối cảnh thật. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
+  'Thay ma-nơ-canh bằng [Model] (người mẫu hư cấu do AI, fictional stock model, không phải người thật, không giống người nổi tiếng). Thay các khối xám bằng bối cảnh photoreal. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
   '',
 ];
 
@@ -130,6 +142,7 @@ export function buildFlowPackage(
   image: FlowImage,
   now: number,
   previz: FlowPrevizClip[] = [],
+  audio?: FlowAudio,
 ): FlowPackage {
   const withPreviz = previz.length > 0;
   // Mỗi clip có thêm node previz dưới Prompt nên hàng cao hơn.
@@ -158,7 +171,9 @@ export function buildFlowPackage(
           withPreviz
             ? 'Ảnh người mẫu và clip previz từng shot đã có sẵn: Omni theo chuyển động, góc máy của previz. Bấm Generate trên từng clip, ưng hết thì bấm Ghép video.'
             : 'Ảnh người mẫu đã có sẵn. Bấm Generate trên từng clip, ưng hết thì bấm Ghép video (không tốn thêm lượt Flow).',
-          'Chữ trên màn hình thêm trong CapCut. Lời thoại: thêm Asset Audio voice (mp3) nối vào node ghép.',
+          audio
+            ? 'Nhạc nền đã tách từ video gốc và nối vào node ghép (thay tiếng của clip). Chữ trên màn hình thêm trong CapCut.'
+            : 'Chữ trên màn hình thêm trong CapCut. Lời thoại: thêm Asset Audio voice (mp3) nối vào node ghép.',
         ].join('\n'),
       },
     },
@@ -268,6 +283,33 @@ export function buildFlowPackage(
     },
   );
   edges.push({ id: 'e-download', source: 'merge', sourceHandle: 'out:video', target: 'download', targetHandle: 'in:any', type: 'video' });
+  const audioPath = audio ? `assets/${audio.sha256}${audio.ext}` : undefined;
+  if (audio && audioPath) {
+    nodes.push({
+      id: 'asset-audio',
+      type: 'asset',
+      slug: 'nhac',
+      label: 'Nhạc nền',
+      position: { x: LAYOUT.merge, y: middle + 220 },
+      data: {
+        kind: 'audio',
+        assetLabel: AUDIO_ASSET_LABEL,
+        slug: 'nhac',
+        source: 'local',
+        sha256: audio.sha256,
+        mime: audio.mime,
+        originalName: audio.originalName,
+      },
+    });
+    edges.push({
+      id: 'e-audio-merge',
+      source: 'asset-audio',
+      sourceHandle: 'out:audio',
+      target: 'merge',
+      targetHandle: 'in:audio',
+      type: 'audio',
+    });
+  }
 
   const workflow: Workflow = {
     id,
@@ -301,8 +343,11 @@ export function buildFlowPackage(
         path: previzPaths[i],
         originalName: clip.originalName,
       })),
+      ...(audio && audioPath
+        ? [{ sha256: audio.sha256, mime: audio.mime, size: audio.size, path: audioPath, originalName: audio.originalName }]
+        : []),
     ],
     includes: { assets: true, outputs: false, runs: false },
   };
-  return { manifest, workflow, imagePath, previzPaths };
+  return { manifest, workflow, imagePath, previzPaths, audioPath };
 }

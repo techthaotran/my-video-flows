@@ -24,6 +24,7 @@
 | Captcha | MAIN-world `grecaptcha.enterprise` (`IMAGE_GENERATION` / `VIDEO_GENERATION`). Trang Flow ghi đè `execute` thành action `extension_hijack_detected`; mint phải giữ action thật, không thì submit trả `PUBLIC_ERROR_UNUSUAL_ACTIVITY`. |
 | POST | `chrome.scripting.executeScript({ world: 'MAIN' })` → `/_/AiSandboxAngularFrontend/data/batchexecute` với cookie + `at` (`WIZ_global_data.SNlM0e`) |
 | Image | upload refs local nếu có (`maseQ`) → `ogiZ0b` → URL inline → base64. Asset Flow **không** upload lại |
+| Upload ảnh local | JPEG/PNG ≤ 1,2MB và cạnh ≤ 1536px gửi nguyên file gốc; ảnh lớn hơn hoặc định dạng khác mới vẽ lại thành JPEG (`canUploadOriginal`). Upload xong node Asset ảnh thành asset Flow trên id đó (`source: flow`, `flowMediaId` = `uploadedMediaId`), vẫn giữ file local để xem trước, gửi Gemini và đóng gói khi xuất; xuất `.xflow` trả node về file local |
 | Video | **Không** tạo ảnh trung gian (`ogiZ0b`). Prompt **không** chứa link CDN. Omni text → `YhhmEf`. Omni + ảnh → `MZZa6b` (ảnh neo trong structured prompt). Veo → đúng 1 start frame → `eb1hJf` → poll… |
 | Text-only video | Omni Flash (`abra_t2v_*`). Veo không có start frame → lỗi (không tự gen ảnh) |
 | Asset Flow | Chỉ `flowMediaId` trong slot RPC / mảnh image. Mất id → `FLOW_ASSET_NO_UPLOAD`, **không bao giờ** `maseQ` |
@@ -154,7 +155,7 @@ Upload video local (không phải `maseQ`; asset Flow vẫn **không** upload l�
 3. Omni Flash text-only: `YhhmEf`, không ảnh Nano Banana mới.
 4. Video Veo với đúng 1 ảnh start frame (i2v).
 5. Model + Outfit (asset Flow) → Prompt → Omni: `MZZa6b`, `abra_r2v_*`, `item[1]` = 2 id, không `maseQ`, đúng mặt/outfit.
-6. Model + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`.
+6. Model + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`; lần sau node đã thành asset Flow, không `maseQ`.
 7. Omni > `OMNI_MAX_REFS` ảnh / Veo + 2 ảnh / Veo + video / Omni + 2 video / video > 10s: lỗi rõ, không submit.
 8. Scene tiếp (Veo hoặc Omni, + Model/Outfit tùy chọn): `maseQ` frame cuối + `MZZa6b` (`veo_3_1_r2v_*` / `abra_r2v_*`); `item[1]` = frame cuối rồi Model/Outfit/Background. Không `eb1hJf`.
 9. Workflow cũ có link trong prompt: link khớp asset → `[Label]`; link lạ → lỗi.

@@ -17,7 +17,13 @@ import { SceneSchema, type SceneDef } from '../src/studio3d/schema';
 import { buildFlowPackage, flowProblems, type FlowPrevizClip } from '../src/studio3d/flowWorkflow';
 import { shotSpans } from '../src/studio3d/timeline';
 
-const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+const IMAGE_MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+const AUDIO_MIME: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.wav': 'audio/wav',
+};
 
 /** Lệch độ dài cho phép giữa file previz và cảnh (làm tròn khung cuối khi encode). */
 const PREVIZ_TOLERANCE_SEC = 0.15;
@@ -27,13 +33,22 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function parseArgs(argv: string[]): { sceneFile?: string; previzFile?: string } {
-  const out: { sceneFile?: string; previzFile?: string } = {};
+function parseArgs(argv: string[]): { sceneFile?: string; previzFile?: string; audioFile?: string } {
+  const out: { sceneFile?: string; previzFile?: string; audioFile?: string } = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--previz') out.previzFile = argv[++i];
+    else if (argv[i] === '--audio') out.audioFile = argv[++i];
     else if (!out.sceneFile) out.sceneFile = argv[i];
   }
   return out;
+}
+
+/** Đọc file nhạc đã tách sẵn (mp3/m4a/wav/aac). */
+function loadAudio(file: string): { bytes: Buffer; mime: string; ext: string; originalName: string } {
+  const ext = extname(file).toLowerCase();
+  const mime = AUDIO_MIME[ext];
+  if (!mime) fail(`nhạc phải là mp3, m4a, wav hoặc aac (${basename(file)})`);
+  return { bytes: readFileSync(file), mime, ext, originalName: basename(file) };
 }
 
 /** Cắt previz cả cảnh thành từng shot (encode lại để cắt đúng khung, bỏ tiếng). */
@@ -80,9 +95,9 @@ function cutPreviz(scene: SceneDef, file: string, slug: string): { clips: FlowPr
 }
 
 const root = resolve(import.meta.dirname, '..');
-const { sceneFile, previzFile } = parseArgs(process.argv.slice(2));
+const { sceneFile, previzFile, audioFile } = parseArgs(process.argv.slice(2));
 if (!sceneFile) {
-  console.log('Cách dùng: pnpm studio3d:flow studio3d/scenes/<cảnh>.json [--previz <mp4 export Theo shots>]');
+  console.log('Cách dùng: pnpm studio3d:flow studio3d/scenes/<cảnh>.json [--previz <mp4 export Theo shots>] [--audio <mp3|m4a>]');
   process.exit(1);
 }
 
@@ -96,7 +111,7 @@ if (problems.length > 0) {
 
 const imageFile = join(root, 'studio3d/public', scene.flow!.character);
 const ext = extname(imageFile).toLowerCase();
-const mime = MIME[ext];
+const mime = IMAGE_MIME[ext];
 if (!mime) {
   console.log(`LỖI: ảnh người mẫu phải là jpg, png hoặc webp (${scene.flow!.character})`);
   process.exit(1);
@@ -110,12 +125,27 @@ try {
 }
 
 const previz = previzFile ? cutPreviz(scene, resolve(previzFile), slug) : { clips: [], bytes: [] };
+let audioBytes: Buffer | undefined;
+const audio = audioFile
+  ? (() => {
+      const loaded = loadAudio(resolve(audioFile));
+      audioBytes = loaded.bytes;
+      return {
+        sha256: createHash('sha256').update(loaded.bytes).digest('hex'),
+        mime: loaded.mime,
+        size: loaded.bytes.length,
+        originalName: loaded.originalName,
+        ext: loaded.ext,
+      };
+    })()
+  : undefined;
 const sha256 = createHash('sha256').update(bytes).digest('hex');
 const pkg = buildFlowPackage(
   scene,
   { sha256, mime, size: bytes.length, originalName: basename(imageFile), ext: ext === '.jpeg' ? '.jpg' : ext },
   Date.now(),
   previz.clips,
+  audio,
 );
 const zip = zipSync(
   {
@@ -123,6 +153,7 @@ const zip = zipSync(
     [pkg.manifest.workflows[0].path]: strToU8(JSON.stringify(pkg.workflow, null, 2)),
     [pkg.imagePath]: new Uint8Array(bytes),
     ...Object.fromEntries(pkg.previzPaths.map((path, i) => [path, previz.bytes[i]!])),
+    ...(pkg.audioPath && audioBytes ? { [pkg.audioPath]: new Uint8Array(audioBytes) } : {}),
   },
   { level: 6 },
 );
@@ -135,3 +166,4 @@ const clips = pkg.workflow.nodes.filter((n) => n.type === 'generateVideo');
 console.log(`Đã xuất ${outFile.replace(root + '/', '')}`);
 console.log(`${clips.length} clip: ${clips.map((n) => `${n.label} ${n.data.durationSec}s`).join(', ')}`);
 console.log(previzFile ? `Có previz: mỗi clip nối 1 Asset "Video reference" (Omni chỉnh sửa video theo previz)` : 'Không có previz: góc máy chỉ đi qua chữ trong prompt');
+console.log(audio ? `Có nhạc nền: Asset "Audio voice" nối vào node ghép (${audio.originalName})` : 'Không có nhạc nền');

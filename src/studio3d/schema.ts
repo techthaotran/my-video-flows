@@ -18,7 +18,7 @@ const Ease = z.enum(EASES);
 const ActorKey = z.object({
   t: z.number().min(0),
   pos: Vec3,
-  /** Tên clip animation (idle, walk, run, wave...). Bỏ trống = tự chọn walk khi đang di chuyển, idle khi đứng. */
+  /** Tên clip animation (idle, walk, run, wave, sit...). Bỏ trống = tự chọn walk khi đang đi, idle khi đứng. */
   clip: z.string().optional(),
   ease: Ease.optional(),
 });

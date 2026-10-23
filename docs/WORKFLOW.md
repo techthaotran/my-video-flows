@@ -167,7 +167,7 @@ Khi `gatherInputs`, mỗi giá trị có `role`:
 | `continuation` | Generate Video | Scene trước → cắt frame cuối khi kéo dài (I2V) |
 
 - Asset Flow: `flowMediaId` + `fromFlow: true` → **không** `maseQ`
-- Asset local: upload một lần / run (cache theo `cacheKey`)
+- Asset local: ảnh upload một lần rồi node thành asset Flow trên id vừa upload (giữ file local); video chỉ lưu id upload
 
 Prompt giữ `[Label]` trần trong narrative; khối `[Label]: mô tả` gom xuống `Danh sách tham chiếu` (`annotateAssetLabels`).
 Asset đã có `flowMediaId` hiện `mediaId {uuid}` trên dòng tham chiếu (không nhúng URL CDN).

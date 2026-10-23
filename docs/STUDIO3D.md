@@ -75,7 +75,7 @@ Quy ước đặt toạ độ khi dựng từ ảnh: xem skill `studio3d-scene`.
 - `actors[]`: nhân vật hoặc vật thể. `model` là id trong manifest, `label` là nhãn hiện trên đầu.
   `keys[]` là các mốc `{ t, pos, clip?, ease? }`, tăng dần theo `t`.
   Nhân vật tự quay theo hướng đi.
-  `clip` bỏ trống thì tự chọn `walk` khi đang đi, `idle` khi đứng.
+  `clip` bỏ trống thì tự chọn `walk` khi đang đi, `idle` khi đứng; ma-nơ-canh khối còn có `wave` và `sit` (ngồi, chân duỗi trước).
 - `cameras[]`: nhiều góc camera, mỗi góc `{ id, label?, focal?, fov?, keys[] }` với key `{ t, pos, lookAt, focal?, fov?, ease? }`.
   `focal` là tiêu cự tương đương full-frame (mm), ưu tiên hơn `fov`, và được nội suy theo mm.
   Khung dọc (9:16) tính theo cạnh cảm biến 36mm cho khớp cách hiểu tiêu cự của điện thoại.
@@ -136,6 +136,7 @@ Import trong side panel của extension là có ngay ảnh người mẫu, previ
   Script kiểm độ dài khớp cảnh (lệch tối đa 0,15 giây), cắt từng shot bằng `ffmpeg` (encode lại để cắt đúng khung, bỏ tiếng) rồi gắn mỗi đoạn làm Asset `Video reference` nối thẳng vào Generate Video của clip đó.
   Cần `ffmpeg` (`brew install ffmpeg`) và `flow.model` là Omni.
 - Prompt gửi Flow = dòng tiêu đề tự sinh (tỉ lệ, thời lượng) + (có previz: hai dòng dẫn "dùng `[Video reference]` làm tham chiếu chuyển động và góc máy, thay ma-nơ-canh bằng `[Model]`") + `prompt` của shot + `common` + `characterPrompt`.
+- `--audio <mp3|m4a|wav>`: file nhạc đã tách sẵn. Node ghép tự nạp (Asset Audio voice, thay tiếng clip).
 - Workflow: Asset Model -> Prompt -> Generate Video cho từng clip (+ Asset previz -> Generate Video), rồi Merge Video -> Auto Download; `retry: 0`.
 - Không có previz: bố cục và góc máy chỉ đi qua chữ trong prompt (Omni dùng ảnh tham chiếu `MZZa6b`).
 - Logic ở `src/studio3d/flowWorkflow.ts` (có test import thật qua `parseImportFile`/`commitImport`), cắt previz ở `scripts/studio3d-flow.ts`.

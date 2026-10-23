@@ -543,4 +543,41 @@ describe('transfer hash remap', () => {
     expect(data.sha256).toBe(hash);
     expect(data.assetId).toBe(asset.id);
   });
+
+  it('export trả asset Flow từ file local về file local (media id gắn với tài khoản)', async () => {
+    const ws = await workspaceRepo.ensureDefault();
+    const hash = await hashOf(10);
+    const asset = await assetRepo.put(pngBlob(10), 'model.png', 'wf-conv');
+
+    const wf = createEmptyWorkflow(ws.id, 'upload-convert');
+    wf.id = 'wf-conv';
+    wf.schemaVersion = SCHEMA_VERSION;
+    wf.nodes = [
+      {
+        id: 'a1',
+        type: 'asset',
+        position: { x: 0, y: 0 },
+        data: {
+          assetId: asset.id,
+          kind: 'image',
+          assetLabel: 'Model',
+          source: 'flow',
+          flowMediaId: 'up-media',
+          uploadedMediaId: 'up-media',
+          uploadedProjectId: 'project-1',
+          uploadedSha256: hash,
+        },
+      },
+    ];
+    await workflowRepo.save(wf);
+
+    const result = await exportWorkflows({ workflowIds: [wf.id], includeAssets: false, format: 'json' });
+    const raw = JSON.parse(await result.blob.text()) as { workflowsData: Workflow[] };
+    const data = raw.workflowsData[0]!.nodes[0]!.data as Record<string, unknown>;
+    expect(data.source).toBe('local');
+    expect(data.flowMediaId).toBeUndefined();
+    expect(data.uploadedMediaId).toBeUndefined();
+    expect(data.sha256).toBe(hash);
+    expect(data.assetId).toBe(asset.id);
+  });
 });

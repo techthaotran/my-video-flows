@@ -265,20 +265,53 @@ function bytesToB64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-/** Shrink images before maseQ — large base64 breaks messaging / Flow rejects huge bodies. */
+const UPLOAD_MAX_EDGE = 1536;
+const UPLOAD_MAX_BYTES = 1_200_000; // ~1.2MB raw → ~1.6MB base64
+/** Định dạng Flow nhận nguyên file khi upload ảnh. */
+const UPLOAD_ORIGINAL_MIMES = new Set(['image/jpeg', 'image/png']);
+
+/**
+ * Ảnh đủ nhỏ thì gửi nguyên file gốc (giữ đúng byte, không vẽ lại qua canvas);
+ * chỉ ảnh quá lớn hoặc định dạng lạ mới bị nén lại thành JPEG.
+ */
+export function canUploadOriginal(img: {
+  mime: string;
+  bytes: number;
+  width: number;
+  height: number;
+}): boolean {
+  return (
+    UPLOAD_ORIGINAL_MIMES.has(img.mime.toLowerCase()) &&
+    img.bytes <= UPLOAD_MAX_BYTES &&
+    Math.max(img.width, img.height) <= UPLOAD_MAX_EDGE
+  );
+}
+
+/** Ảnh lớn được thu nhỏ trước maseQ — base64 quá lớn làm vỡ messaging / Flow từ chối. */
 async function compressForUpload(img: {
   name: string;
   mime: string;
   dataBase64: string;
 }): Promise<{ name: string; mime: string; dataBase64: string }> {
-  const maxEdge = 1536;
-  const maxBytes = 1_200_000; // ~1.2MB raw → ~1.6MB base64
+  const maxEdge = UPLOAD_MAX_EDGE;
+  const maxBytes = UPLOAD_MAX_BYTES;
   try {
     const bytes = b64ToBytes(img.dataBase64);
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
     const blob = new Blob([copy.buffer], { type: img.mime || 'image/jpeg' });
     const bitmap = await createImageBitmap(blob);
+    if (
+      canUploadOriginal({
+        mime: blob.type,
+        bytes: bytes.byteLength,
+        width: bitmap.width,
+        height: bitmap.height,
+      })
+    ) {
+      bitmap.close();
+      return { ...img, mime: blob.type, dataBase64: stripDataUrl(img.dataBase64) };
+    }
     const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
     const w = Math.max(1, Math.round(bitmap.width * scale));
     const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -404,7 +437,7 @@ async function uploadImage(
   img: { name: string; mime: string; dataBase64: string },
   onProgress: Progress,
 ): Promise<string> {
-  onProgress(18, `Nén & upload ${img.name}…`);
+  onProgress(18, strings.imageRefUploading(img.name));
   const compressed = await compressForUpload(img);
   const freq = uploadRequest({
     imageB64: compressed.dataBase64,

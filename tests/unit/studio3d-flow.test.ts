@@ -5,7 +5,7 @@ import { db } from '@/storage/db';
 import { commitImport, parseImportFile } from '@/storage/transfer';
 import { getNodePorts } from '@/nodes/registry';
 import { isValidConnection } from '@/nodes/ports';
-import { VIDEO_DURATIONS, type NodeType } from '@/shared/schema';
+import { AUDIO_ASSET_LABEL, VIDEO_DURATIONS, type NodeType } from '@/shared/schema';
 import { sha256 } from '@/shared/utils';
 import { SceneSchema } from '@/studio3d/schema';
 import { buildFlowPackage, clipDuration, clipPrompt, flowProblems, PREVIZ_LABEL, sceneAspectRatio } from '@/studio3d/flowWorkflow';
@@ -33,8 +33,9 @@ const IMAGE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7, 8]);
 
 /** Ba đoạn previz giả (nội dung khác nhau để sha khác nhau) */
 const PREVIZ = [1, 2, 3].map((n) => new Uint8Array([0, 0, 0, 8, 0x66, 0x74, 0x79, 0x70, n]));
+const AUDIO = new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]);
 
-async function zipOf(now: number, opts: { previz?: boolean } = {}): Promise<{ file: File; workflowId: string }> {
+async function zipOf(now: number, opts: { previz?: boolean; audio?: boolean } = {}): Promise<{ file: File; workflowId: string }> {
   const blob = new Blob([IMAGE.slice()], { type: 'image/png' });
   const sha = await sha256(blob);
   const clips = opts.previz
@@ -46,12 +47,28 @@ async function zipOf(now: number, opts: { previz?: boolean } = {}): Promise<{ fi
         })),
       )
     : [];
-  const pkg = buildFlowPackage(scene, { sha256: sha, mime: 'image/png', size: IMAGE.length, originalName: 'x.png', ext: '.png' }, now, clips);
+  const audio = opts.audio
+    ? {
+        sha256: await sha256(new Blob([AUDIO.slice()], { type: 'audio/mpeg' })),
+        mime: 'audio/mpeg',
+        size: AUDIO.length,
+        originalName: 'nhac.mp3',
+        ext: '.mp3',
+      }
+    : undefined;
+  const pkg = buildFlowPackage(
+    scene,
+    { sha256: sha, mime: 'image/png', size: IMAGE.length, originalName: 'x.png', ext: '.png' },
+    now,
+    clips,
+    audio,
+  );
   const zip = zipSync({
     'manifest.json': strToU8(JSON.stringify(pkg.manifest)),
     [pkg.manifest.workflows[0].path]: strToU8(JSON.stringify(pkg.workflow)),
     [pkg.imagePath]: IMAGE.slice(),
     ...Object.fromEntries(pkg.previzPaths.map((path, i) => [path, PREVIZ[i]!.slice()])),
+    ...(pkg.audioPath ? { [pkg.audioPath]: AUDIO.slice() } : {}),
   });
   return { file: new File([zip.slice()], 'scene.xflow.zip', { type: 'application/zip' }), workflowId: pkg.workflow.id };
 }
@@ -170,5 +187,20 @@ describe('studio3d flowWorkflow', () => {
       expect(videos).toHaveLength(1);
       expect(videos[0]!.data).toMatchObject({ kind: 'video', assetLabel: PREVIZ_LABEL, missing: false });
     }
+  });
+
+  it('audio: zip import được, node ghép nhận đúng một Asset Audio voice', async () => {
+    const { file } = await zipOf(1_700_000_000_000, { audio: true });
+    const preview = await parseImportFile(file);
+    expect(preview.items[0].warnings).toEqual([]);
+    expect(preview.assetBlobs.size).toBe(2);
+
+    const [wf] = await commitImport({ preview, targetWorkspaceId: 'ws-1', dupStrategy: 'copy' });
+    const audio = wf.nodes.find((n) => n.id === 'asset-audio')!;
+    expect(audio.data).toMatchObject({ kind: 'audio', assetLabel: AUDIO_ASSET_LABEL, missing: false });
+    expect(audio.data.assetId).toBeTruthy();
+    const toMerge = wf.edges.filter((e) => e.target === 'merge' && e.targetHandle === 'in:audio');
+    expect(toMerge).toHaveLength(1);
+    expect(toMerge[0]).toMatchObject({ source: 'asset-audio', sourceHandle: 'out:audio', type: 'audio' });
   });
 });

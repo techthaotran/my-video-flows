@@ -1,3 +1,5 @@
+import type { FlowUploadedAssetPatch, FlowUploadedIds } from '@/shared/messaging';
+
 /**
  * Nhận dạng loại media của một file người dùng chọn từ máy.
  *
@@ -68,6 +70,19 @@ export function mediaKindOf(file: { type?: string; name?: string }): MediaKind |
  * Patch data cho node Asset khi chọn file local.
  * Xoá tham chiếu Flow để không bị dùng lại id cũ.
  */
+/**
+ * Ảnh local vừa upload lên Flow: node Asset chuyển thành asset Flow (dùng media id như ảnh
+ * chọn từ Flow, không upload lại), vẫn giữ file local để xem trước và đóng gói khi xuất file.
+ */
+export function uploadedFlowAssetPatch(ids: FlowUploadedIds): FlowUploadedAssetPatch {
+  return { ...ids, source: 'flow', flowMediaId: ids.uploadedMediaId };
+}
+
+/** Asset Flow sinh ra từ file local đã upload (còn file gốc, id Flow chính là id upload). */
+export function isUploadedLocalAsset(data: Record<string, unknown>): boolean {
+  return !!data.assetId && !!data.flowMediaId && data.flowMediaId === data.uploadedMediaId;
+}
+
 export function localAssetPatch(
   file: File,
   assetId: string,

@@ -67,7 +67,7 @@ Xem ảnh và ghi ra (trong suy nghĩ, không cần ghi file):
 - Nhân vật dùng model trong `studio3d/public/models/manifest.json` (`kind: "character"`), đặt `label` như "Nhân vật 1".
 - Di chuyển là thêm key `{ t, pos }`; nhân vật tự quay theo hướng đi, tự chọn clip `walk`/`idle`.
   Giữ quãng đi ngắn (vài bước, khoảng 1m mỗi shot) để nhân vật luôn nằm gọn trong khung của các góc máy; đi xa thì dễ ra khỏi khung hoặc quá sát máy.
-  Đổi động tác bằng `clip` (`wave`, `run`...) ở key bắt đầu động tác.
+  Đổi động tác bằng `clip` (`wave`, `run`, `sit`...) ở key bắt đầu động tác.
 - Luôn giữ camera `photo` (khớp ảnh gốc) và thêm các góc phục vụ kịch bản, ví dụ:
   - `wide`: toàn cảnh, đứng yên hoặc dolly chậm, 24-35mm.
   - `follow`: bám theo nhân vật, key camera trùng thời điểm với key nhân vật, `lookAt` vào ngực nhân vật (y khoảng 1,3).
