@@ -174,6 +174,7 @@ export const strings = {
   videoRefMissing: (label: string) =>
     `[${label}] không có media id Flow cũng không có file local. Chọn lại video cho asset.`,
   videoRefUploading: (name: string) => `Upload video ${name} lên Flow…`,
+  imageRefUploading: (name: string) => `Upload ảnh ${name} lên Flow…`,
   videoRefUploadFailed: (detail: string) => `Upload video lên Flow thất bại: ${detail}`,
   videoRefUploadTimeout:
     'Tab Flow không phản hồi lệnh upload video (tab mở từ trước khi cập nhật extension?). Reload tab flow.google.com rồi chạy lại.',
@@ -378,6 +379,7 @@ export const strings = {
   // Upload Flow một lần + panel phân tích
   assetUploading: 'Đang upload lên Flow…',
   assetUploaded: 'Đã có trên Flow',
+  assetUploadedFromLocal: 'đã upload từ file local',
   assetUploadError: (detail: string | null) =>
     `Upload lên Flow lỗi: ${detail?.trim() || 'không rõ nguyên nhân'}`,
   assetUploadRetry: 'Upload lại',

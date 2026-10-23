@@ -5,6 +5,7 @@ import { db } from '@/storage/db';
 import { assetRepo } from '@/storage/repos/assetRepo';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
 import { formatBytes, nanoid, slugifyFilename } from '@/shared/utils';
+import { isUploadedLocalAsset } from '@/shared/media';
 import { strings } from '@/shared/strings';
 
 /** Asset nodes backed by a local file. Flow assets are a media id only - nothing to pack or rematch. */
@@ -49,6 +50,12 @@ function stripRuntime(wf: Workflow): Workflow {
   for (const n of clone.nodes) {
     if (!isAssetNodeType(n.type)) continue;
     const data = n.data as Record<string, unknown>;
+    // Asset Flow từ file local: media id gắn với tài khoản người xuất - xuất lại thành file local.
+    if (isUploadedLocalAsset(data)) {
+      delete data.flowMediaId;
+      delete data.flowPreviewUrl;
+      data.source = 'local';
+    }
     for (const key of UPLOADED_FIELDS) delete data[key];
   }
   return clone;

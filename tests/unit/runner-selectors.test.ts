@@ -36,7 +36,7 @@ describe('buildRunnerView', () => {
   it('so o asset bang so node Asset; disabled bi an', () => {
     const view = buildRunnerView(
       wf([
-        node('a1', 'asset', { assetLabel: 'Character', kind: 'image' }),
+        node('a1', 'asset', { assetLabel: 'Model', kind: 'image' }),
         node('a2', 'asset', { assetLabel: 'Outfit', kind: 'image' }, { disabled: true }),
         node('n', 'note', { text: 'x' }),
       ]),
@@ -44,7 +44,7 @@ describe('buildRunnerView', () => {
     expect('graphError' in view).toBe(false);
     if ('graphError' in view) return;
     expect(view.assetSlots).toHaveLength(1);
-    expect(view.assetSlots[0]!.label).toBe('Character');
+    expect(view.assetSlots[0]!.label).toBe('Model');
   });
 
   it('thu tu clip theo order; node khong noi Merge xep sau', () => {

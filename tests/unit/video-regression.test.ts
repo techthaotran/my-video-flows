@@ -70,7 +70,7 @@ async function runOrder(
             medias: [{ kind: 'video', mime: 'video/mp4', dataBase64: btoa('clip'), mediaId: `media-of-${id}` }],
           };
         }
-        return { texts: ['enhanced: [Character] walks'] };
+        return { texts: ['enhanced: [Model] walks'] };
       },
     };
     outputs.set(id, await executors[n.type]!(ctx));
@@ -89,13 +89,13 @@ async function runVideoGraph(times: number) {
     nodes: [
       node('asset', 'asset', {
         kind: 'image',
-        assetLabel: 'Character',
+        assetLabel: 'Model',
         source: 'local',
         assetId: 'local-char',
       }),
       node('prompt', 'prompt', {
         preset: 'enhance',
-        instruction: '[Character] walks in soft light',
+        instruction: '[Model] walks in soft light',
         outputFormat: 'plain',
         newChat: true,
         // v5: no reusePrompt / forwardRefs - migrate sets reusePrompt false
@@ -134,7 +134,7 @@ async function runVideoGraph(times: number) {
       blobs: { 'local-char': blob },
       onDriver: (provider, action) => {
         if (provider === 'gemini' && action.name === 'prompt') {
-          return { texts: [`enhanced-${i}: [Character] walks in soft light`] };
+          return { texts: [`enhanced-${i}: [Model] walks in soft light`] };
         }
         if (action.name === 'generate') {
           return {
@@ -148,8 +148,8 @@ async function runVideoGraph(times: number) {
     flowCalls.push(...generateCalls);
 
     const payload = flowCalls[i]!.payload as FlowGeneratePayload;
-    expect(payload.refs?.[0]).toMatchObject({ kind: 'image', label: 'Character' });
-    expect(payload.prompt).toContain('[Character]');
+    expect(payload.refs?.[0]).toMatchObject({ kind: 'image', label: 'Model' });
+    expect(payload.prompt).toContain('[Model]');
     expect(payload.prompt).not.toContain('flow-content.google');
   }
 

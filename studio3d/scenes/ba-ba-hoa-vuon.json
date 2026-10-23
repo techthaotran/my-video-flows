@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "title": "Áo bà ba hoa - sảnh kính ra vườn (2 clip x 8s)",
+  "notes": "Dựng theo lookbook cửa kính khách sạn ra vườn ghế mây. Ước lượng: sảnh cao 3,2m, cửa mở rộng 1,2m, lối đi 1m. Máy clip 1 đi sau lưng 35mm; clip 2 3/4 ghế mây.\nCamera photo không nằm trong shots. Kịch bản: studio3d/scenes/ba-ba-hoa-vuon.kichban.md",
+  "fps": 30,
+  "size": {
+    "width": 720,
+    "height": 1280
+  },
+  "duration": 16,
+  "background": "#1b1d21",
+  "ground": true,
+  "style": "clay",
+  "reference": {
+    "image": "refs/ba-ba-hoa-vuon.jpg",
+    "camera": "photo",
+    "opacity": 0.5
+  },
+  "environment": {
+    "blocks": [
+      {
+        "id": "wall-l",
+        "label": "Tường sảnh trái",
+        "pos": [-2.15, 0, 1.6],
+        "size": [0.25, 3.2, 3.4]
+      },
+      {
+        "id": "wall-r",
+        "label": "Tường sảnh phải",
+        "pos": [2.15, 0, 1.6],
+        "size": [0.25, 3.2, 3.4]
+      },
+      {
+        "id": "frame-l",
+        "label": "Khung cửa trái",
+        "pos": [-1.05, 0, 0.02],
+        "size": [0.18, 2.6, 0.16]
+      },
+      {
+        "id": "frame-r",
+        "label": "Khung cửa phải",
+        "pos": [1.05, 0, 0.02],
+        "size": [0.18, 2.6, 0.16]
+      },
+      {
+        "id": "frame-top",
+        "label": "Đà cửa",
+        "pos": [0, 2.6, 0.02],
+        "size": [2.3, 0.18, 0.18]
+      },
+      {
+        "id": "door-l",
+        "label": "Cánh cửa trái",
+        "pos": [-1.55, 0, 0.55],
+        "size": [0.08, 2.4, 1.1],
+        "yaw": 55
+      },
+      {
+        "id": "door-r",
+        "label": "Cánh cửa phải",
+        "pos": [1.55, 0, 0.55],
+        "size": [0.08, 2.4, 1.1],
+        "yaw": -55
+      },
+      {
+        "id": "exit",
+        "label": "Đèn thoát hiểm",
+        "pos": [0, 2.85, 0.12],
+        "size": [0.35, 0.18, 0.08]
+      },
+      {
+        "id": "hedge-l",
+        "label": "Hàng rào trái",
+        "pos": [-2.0, 0, -3.2],
+        "size": [0.7, 1.35, 5.5]
+      },
+      {
+        "id": "hedge-r",
+        "label": "Hàng rào phải",
+        "pos": [2.05, 0, -3.2],
+        "size": [0.7, 1.35, 5.5]
+      },
+      {
+        "id": "tree-1",
+        "label": "Cây",
+        "shape": "cylinder",
+        "pos": [-1.7, 0, -5.4],
+        "size": [0.28, 4.5, 0.28]
+      },
+      {
+        "id": "tree-2",
+        "label": "Cây",
+        "shape": "cylinder",
+        "pos": [1.85, 0, -4.8],
+        "size": [0.32, 5.0, 0.32]
+      },
+      {
+        "id": "palm",
+        "label": "Cọ",
+        "shape": "cylinder",
+        "pos": [1.55, 0, -2.6],
+        "size": [0.35, 4.2, 0.35]
+      },
+      {
+        "id": "canopy",
+        "label": "Tán cây",
+        "shape": "sphere",
+        "pos": [-2.15, 3.6, -5.6],
+        "size": [1.6, 1.4, 1.6]
+      },
+      {
+        "id": "canopy-2",
+        "label": "Tán cây phải",
+        "shape": "sphere",
+        "pos": [2.2, 3.8, -5.0],
+        "size": [1.5, 1.3, 1.5]
+      },
+      {
+        "id": "lounge",
+        "label": "Ghế mây",
+        "pos": [0.45, 0, -3.15],
+        "size": [0.72, 0.4, 1.65]
+      },
+      {
+        "id": "lounge-2",
+        "label": "Ghế mây sau",
+        "pos": [0.9, 0, -4.4],
+        "size": [0.72, 0.4, 1.5]
+      },
+      {
+        "id": "pole",
+        "label": "Cột ô",
+        "shape": "cylinder",
+        "pos": [0.95, 0, -3.5],
+        "size": [0.08, 2.3, 0.08]
+      },
+      {
+        "id": "building",
+        "label": "Nhà phía xa",
+        "pos": [0.3, 0, -8.2],
+        "size": [6.0, 8.0, 1.2]
+      }
+    ]
+  },
+  "actors": [
+    {
+      "id": "model",
+      "model": "human",
+      "label": "Người mẫu",
+      "height": 1.65,
+      "yaw": 180,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0, 0, 0.95],
+          "clip": "walk"
+        },
+        {
+          "t": 7.4,
+          "pos": [0, 0, -0.15],
+          "ease": "easeOut"
+        },
+        {
+          "t": 7.99,
+          "pos": [0, 0, -0.15],
+          "clip": "idle"
+        },
+        {
+          "t": 8,
+          "pos": [0.42, 0.45, -2.7],
+          "clip": "sit"
+        },
+        {
+          "t": 8.4,
+          "pos": [0.42, 0.45, -2.55],
+          "clip": "sit"
+        },
+        {
+          "t": 12.4,
+          "pos": [0.42, 0.45, -2.55],
+          "clip": "sit"
+        },
+        {
+          "t": 12.75,
+          "pos": [-0.35, 0.45, -1.85],
+          "clip": "idle"
+        },
+        {
+          "t": 13.2,
+          "pos": [-0.35, 0, -1.85],
+          "clip": "idle",
+          "ease": "easeOut"
+        },
+        {
+          "t": 16,
+          "pos": [-0.35, 0, -1.85]
+        }
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": "photo",
+      "label": "Góc ảnh gốc",
+      "focal": 28,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0, 1.35, 3.4],
+          "lookAt": [0, 1.15, 0.2]
+        }
+      ]
+    },
+    {
+      "id": "take1",
+      "label": "Clip 1 - Đi ra cửa",
+      "focal": 35,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0.05, 1.48, 4.4],
+          "lookAt": [0, 0.85, 0.95]
+        },
+        {
+          "t": 4.5,
+          "pos": [0.08, 1.48, 3.7],
+          "lookAt": [0, 0.85, 0.3],
+          "ease": "easeInOut"
+        },
+        {
+          "t": 8,
+          "pos": [0.1, 1.48, 3.15],
+          "lookAt": [0, 0.88, -0.15],
+          "ease": "easeOut"
+        }
+      ]
+    },
+    {
+      "id": "take2",
+      "label": "Clip 2 - Ghế mây",
+      "focal": 35,
+      "keys": [
+        {
+          "t": 8,
+          "pos": [-1.55, 1.12, -0.95],
+          "lookAt": [0.35, 0.82, -2.5]
+        },
+        {
+          "t": 12.4,
+          "pos": [-1.45, 1.15, -0.8],
+          "lookAt": [0.4, 0.85, -2.5],
+          "ease": "easeInOut"
+        },
+        {
+          "t": 16,
+          "pos": [-1.5, 1.28, -0.2],
+          "lookAt": [-0.3, 0.98, -1.85],
+          "ease": "easeInOut"
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "t": 0,
+      "camera": "take1",
+      "note": "Cảnh quay liền 8s, 35mm: đi ra cửa kính mở, máy theo sau lưng, quần trắng bay, nhìn nghiêng qua vai.",
+      "prompt": "Lookbook thời trang, generic stock, một cảnh quay liền.\nFictional AI fashion model, not a real person, not a celebrity.\nCùng một [Model] như mọi video lookbook này: mặt oval, da sáng hồng hào, tóc đen dài sóng ngôi giữa phủ vai, lông mày đậm, mắt hạnh nhân, môi đầy. Không thay mặt khác.\n[Model] mặc đúng áo bà ba hoa ombre cam-xanh và quần ống rộng trắng, sandal nude, tay cầm quạt giấy gỗ xếp. Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo này. Không túi, không nón, không đầm.\nKhí chất: thanh lịch, điềm đạm, kiêu hãnh kín đáo, dịu dàng mà có nội tâm. Ảnh chân dung thời trang chân thực như phim điện ảnh, sang trọng, quý phái.\nHành động: đi ra cửa kính mở, quay lưng với máy, quần trắng bay nhẹ; gần ngưỡng cửa nhìn nghiêng qua vai phải. Ánh mắt có hồn, có catchlight, khoé môi cong rất nhẹ, môi khép, không cười rộng, không lộ răng.\nDáng: vai mở, cổ dài, lưng thẳng thả lỏng, bước chậm, trọng lượng chuyển đều, bàn tay tự nhiên, năm ngón rõ.\nÁnh sáng mềm có hướng, từ sảnh ra nắng vườn, tạo khối sáng tối nhẹ, nền có chiều sâu, da thật.\nCamera: 35mm, theo sau toàn thân, dolly chậm, sàn sảnh bóng rồi vườn nắng, hàng rào và cây."
+    },
+    {
+      "t": 8,
+      "camera": "take2",
+      "note": "Cảnh quay liền 8s, 35mm: ngồi ghế mây quạt giơ ngang mặt nhìn máy, đứng dậy tay đặt nhẹ bên eo, máy đẩy vào.",
+      "prompt": "Lookbook thời trang, generic stock, một cảnh quay liền.\nFictional AI fashion model, not a real person, not a celebrity.\nCùng một [Model] như mọi video lookbook này: mặt oval, da sáng hồng hào, tóc đen dài sóng ngôi giữa phủ vai, lông mày đậm, mắt hạnh nhân, môi đầy. Không thay mặt khác.\n[Model] mặc đúng áo bà ba hoa ombre và quần ống rộng trắng, sandal nude, tay cầm quạt giấy gỗ xếp. Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo này. Không túi, không nón, không đầm.\nKhí chất: thanh lịch, điềm đạm, kiêu hãnh kín đáo, dịu dàng mà có nội tâm. Ảnh chân dung thời trang chân thực như phim điện ảnh, sang trọng, quý phái.\nHành động: ngồi ghế mây, quạt giơ ngang mặt, nhìn ống kính hơi trầm, khoé môi cong rất nhẹ, môi khép, không cười rộng, không lộ răng; rồi đứng dậy, một tay đặt nhẹ bên eo, tay kia hạ quạt, khoe cổ tim, hàng nút và eo.\nDáng: vai mở, cằm hơi nâng, cổ dài, lưng thẳng thả lỏng, bàn tay tự nhiên, năm ngón rõ.\nÁnh mắt có hồn, có catchlight. Ánh sáng mềm xiên một bên, khối sáng tối nhẹ trên mặt và cổ, nền có chiều sâu, da thật, thấy lỗ chân lông nhẹ.\nCamera: 35mm, 3/4 trước, nắng ấm, hàng rào và cọ phía sau. Đẩy chậm vào nửa người lúc đứng."
+    }
+  ],
+  "flow": {
+    "character": "refs/ba-ba-hoa-vuon-model.jpg",
+    "characterPrompt": "[Model]: người mẫu thời trang hư cấu do AI, fictional stock model, not a real person, not a celebrity. Cùng một người ở mọi video lookbook này: mặt oval, da sáng hồng hào tự nhiên, tóc đen dài sóng ngôi giữa phủ vai, lông mày đậm, mắt hạnh nhân, môi đầy, trang điểm nhẹ. Khí chất: thanh lịch, điềm đạm, kiêu hãnh kín đáo, dịu dàng mà có nội tâm. Ánh mắt có hồn, có catchlight, nhìn hơi trầm, khoé môi cong rất nhẹ, môi khép, không cười rộng, không lộ răng. Mặc áo bà ba cách tân cổ tim tay dài chiết eo, ombre cam san hô xuống xanh ngọc, hoa mẫu đơn hồng tím, nút ngọc trai, tà xẻ nhẹ; quần ống rộng trắng; sandal gót trụ nude quai trong. Tay cầm quạt giấy gỗ xếp. Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo này. Không túi, không nón.",
+    "common": [
+      "Fictional stock character only; not a real person, not a celebrity.",
+      "Cùng một [Model] ở mọi clip và mọi video lookbook: cùng khuôn mặt, tóc, trang điểm. Không thay người mẫu khác.",
+      "Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo bà ba hoa ombre; giữ nguyên quần ống rộng trắng. Không ám màu, không cháy sáng.",
+      "Khí chất quý phái thanh nhã: biểu cảm tiết chế, không cười rộng, không lộ răng. Dáng vững thả lỏng, cổ dài, lưng thẳng, bàn tay tự nhiên.",
+      "Ánh sáng mềm có hướng, xiên từ một bên, khối sáng tối nhẹ trên mặt và cổ. Nền có chiều sâu, xoá phông vừa, chủ thể tách nền. Da thật, không mịn da quá mức.",
+      "Một phụ kiện: quạt giấy gỗ xếp. Không nón lá, không túi, không đầm, không trang sức rối.",
+      "Setting: hotel glass lobby doors opening onto a sunny garden with hedges, trees and rattan loungers."
+    ],
+    "model": "Omni Flash",
+    "resolution": 720
+  }
+}

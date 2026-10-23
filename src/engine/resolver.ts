@@ -3,7 +3,7 @@ import { flowMediaUrl } from '@/providers/flow/media';
 import type { NodeOutputValue } from '@/engine/types';
 
 const SLUG_RE = /@([a-zA-Z0-9_]+)/g;
-/** [Character], [Outfit], [Video reference], ... */
+/** [Model], [Outfit], [Video reference], ... */
 const LABEL_RE = /\[([^\]]+)\]/g;
 
 export function extractSlugs(text: string): string[] {
@@ -72,10 +72,10 @@ export function normalizeLabel(label: string): string {
 export const REFERENCE_LIST_HEADER = 'Danh sách tham chiếu';
 
 /**
- * English note for Flow's prominent-people filter when [Character] rides a media id.
- * Injected only on RPC submit ({@link ensureCharacterAiOriginNote}), not into stored prompts.
+ * English note for Flow's prominent-people filter when [Model] rides a media id.
+ * Injected only on RPC submit ({@link ensureModelAiOriginNote}), not into stored prompts.
  */
-export const CHARACTER_AI_ORIGIN_NOTE =
+export const MODEL_AI_ORIGIN_NOTE =
   'AI-generated from text-only (fictional character, not a real person)';
 
 const FLOW_MEDIA_URL_RE =
@@ -303,26 +303,26 @@ export function replaceAssetLabels(content: string, refs: AssetRef[]): string {
 }
 
 /**
- * Tell Google Flow the Character reference is synthetic (text-only AI), not a real photo.
+ * Tell Google Flow the Model reference is synthetic (text-only AI), not a real photo.
  * Call only on RPC submit after {@link annotateAssetLabels}. Idempotent.
  */
-export function ensureCharacterAiOriginNote(prompt: string, refs: AssetRef[]): string {
-  const hasCharacterMedia = refs.some(
-    (r) => !!r.flowMediaId && normalizeLabel(r.label) === 'character',
+export function ensureModelAiOriginNote(prompt: string, refs: AssetRef[]): string {
+  const hasModelMedia = refs.some(
+    (r) => !!r.flowMediaId && normalizeLabel(r.label) === 'model',
   );
-  if (!hasCharacterMedia) return prompt;
-  if (prompt.includes(CHARACTER_AI_ORIGIN_NOTE)) return prompt;
+  if (!hasModelMedia) return prompt;
+  if (prompt.includes(MODEL_AI_ORIGIN_NOTE)) return prompt;
 
-  const characterLine = /^(\[Character\]:\s*)(.*)$/im;
-  if (characterLine.test(prompt)) {
-    return prompt.replace(characterLine, (_full, prefix: string, rest: string) => {
+  const modelLine = /^(\[Model\]:\s*)(.*)$/im;
+  if (modelLine.test(prompt)) {
+    return prompt.replace(modelLine, (_full, prefix: string, rest: string) => {
       const body = rest.trim();
-      if (!body) return `${prefix}${CHARACTER_AI_ORIGIN_NOTE}`;
-      return `${prefix}${CHARACTER_AI_ORIGIN_NOTE}. ${body}`;
+      if (!body) return `${prefix}${MODEL_AI_ORIGIN_NOTE}`;
+      return `${prefix}${MODEL_AI_ORIGIN_NOTE}. ${body}`;
     });
   }
 
-  return `${CHARACTER_AI_ORIGIN_NOTE} for [Character].\n\n${prompt}`;
+  return `${MODEL_AI_ORIGIN_NOTE} for [Model].\n\n${prompt}`;
 }
 
 /** Prompt output: prompt upstream nối trước (đã bỏ legend cũ), instruction sau cùng. */

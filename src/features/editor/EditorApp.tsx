@@ -924,7 +924,7 @@ function Inspector({ node }: { node: FlowNode }) {
         <>
           <SelectField
             label={strings.assetLabel}
-            value={(d.assetLabel as string) ?? 'Character'}
+            value={(d.assetLabel as string) ?? 'Model'}
             options={[...ASSET_LABELS]}
             onChange={(v) =>
               update(node.id, {
@@ -1016,7 +1016,7 @@ function Inspector({ node }: { node: FlowNode }) {
               className="h-[200px] w-full max-w-[500px] resize-y rounded border border-input bg-background px-2 py-1 text-sm"
               value={(d.instruction as string) ?? ''}
               onChange={(e) => update(node.id, { instruction: e.target.value })}
-              placeholder="nhân vật [Character] đang mặc một [Outfit]"
+              placeholder="nhân vật [Model] đang mặc một [Outfit]"
             />
           </label>
           <label className="block space-y-1">

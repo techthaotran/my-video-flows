@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "title": "Áo bà ba hoa - lookbook phòng gỗ (1 clip x 8s)",
+  "notes": "Dựng theo nhịp video lookbook nội thất ấm (sàn gỗ, hoa đào, rèm trắng). Ước lượng: phòng rộng 4,4m, sâu 6,5m, trần 3,2m. Máy clip 35mm, bắt đầu sát sàn rồi tilt lên.\nCamera photo không nằm trong shots. Một cảnh quay liền 8s. Kịch bản: studio3d/scenes/ba-ba-hoa-phong.kichban.md",
+  "fps": 30,
+  "size": {
+    "width": 720,
+    "height": 1280
+  },
+  "duration": 8,
+  "background": "#1b1d21",
+  "ground": true,
+  "style": "clay",
+  "reference": {
+    "image": "refs/ba-ba-hoa-phong.jpg",
+    "camera": "photo",
+    "opacity": 0.5
+  },
+  "environment": {
+    "blocks": [
+      {
+        "id": "wall-back",
+        "label": "Tường sau",
+        "pos": [0, 0, -4.4],
+        "size": [5.2, 3.2, 0.2]
+      },
+      {
+        "id": "wall-left",
+        "label": "Tường trái",
+        "pos": [-2.3, 0, -1.4],
+        "size": [0.2, 3.2, 6.2]
+      },
+      {
+        "id": "wall-right",
+        "label": "Tường phải",
+        "pos": [2.3, 0, -1.4],
+        "size": [0.2, 3.2, 6.2]
+      },
+      {
+        "id": "banner-l",
+        "label": "Tranh chữ",
+        "pos": [-1.55, 1.1, -4.28],
+        "size": [0.7, 1.6, 0.04]
+      },
+      {
+        "id": "banner-r",
+        "label": "Tranh chữ",
+        "pos": [1.55, 1.1, -4.28],
+        "size": [0.7, 1.6, 0.04]
+      },
+      {
+        "id": "table-l",
+        "label": "Kệ gỗ trái",
+        "pos": [-1.55, 0, -2.4],
+        "size": [0.55, 0.55, 0.4]
+      },
+      {
+        "id": "lamp",
+        "label": "Đèn bàn",
+        "shape": "cylinder",
+        "pos": [-1.55, 0.55, -2.4],
+        "size": [0.18, 0.7, 0.18]
+      },
+      {
+        "id": "bench",
+        "label": "Ghế gỗ",
+        "pos": [1.35, 0, -1.6],
+        "size": [0.5, 0.45, 1.1]
+      },
+      {
+        "id": "jar-r",
+        "label": "Chum đất",
+        "shape": "cylinder",
+        "pos": [1.7, 0, -0.4],
+        "size": [0.5, 0.7, 0.5]
+      },
+      {
+        "id": "blossom-l",
+        "label": "Cành đào trái",
+        "shape": "sphere",
+        "pos": [-1.7, 1.5, -2.8],
+        "size": [1.4, 1.4, 1.4]
+      },
+      {
+        "id": "blossom-r",
+        "label": "Cành đào phải",
+        "shape": "sphere",
+        "pos": [1.75, 1.6, -2.6],
+        "size": [1.5, 1.5, 1.5]
+      },
+      {
+        "id": "blossom-back",
+        "label": "Cành đào sau",
+        "shape": "sphere",
+        "pos": [0.2, 2.1, -4.0],
+        "size": [2.2, 1.6, 0.8]
+      },
+      {
+        "id": "curtain-l",
+        "label": "Rèm trái",
+        "pos": [-1.05, 0, 0.35],
+        "size": [0.85, 2.5, 0.08]
+      },
+      {
+        "id": "curtain-r",
+        "label": "Rèm phải",
+        "pos": [1.05, 0, 0.35],
+        "size": [0.85, 2.5, 0.08]
+      },
+      {
+        "id": "curtain-rod",
+        "label": "Thanh rèm",
+        "pos": [0, 2.5, 0.35],
+        "size": [3.0, 0.06, 0.08]
+      }
+    ]
+  },
+  "actors": [
+    {
+      "id": "model",
+      "model": "human",
+      "label": "Người mẫu",
+      "height": 1.65,
+      "yaw": 0,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0, 0, -1.15],
+          "clip": "walk"
+        },
+        {
+          "t": 3.6,
+          "pos": [0, 0, -0.2],
+          "ease": "easeOut"
+        },
+        {
+          "t": 5.0,
+          "pos": [0, 0, -0.2],
+          "clip": "idle"
+        },
+        {
+          "t": 5.3,
+          "pos": [0, 0, -0.2],
+          "clip": "walk"
+        },
+        {
+          "t": 7.4,
+          "pos": [0, 0, 0.55],
+          "ease": "easeInOut"
+        },
+        {
+          "t": 8,
+          "pos": [0, 0, 0.58],
+          "clip": "idle"
+        }
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": "photo",
+      "label": "Góc ảnh gốc",
+      "focal": 35,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0.05, 1.1, 2.9],
+          "lookAt": [0, 0.85, -0.4]
+        }
+      ]
+    },
+    {
+      "id": "take1",
+      "label": "Clip 1 - Tilt lên",
+      "focal": 35,
+      "keys": [
+        {
+          "t": 0,
+          "pos": [0.04, 0.28, 1.55],
+          "lookAt": [0, 0.12, -1.1]
+        },
+        {
+          "t": 2.4,
+          "pos": [0.06, 1.02, 2.35],
+          "lookAt": [0, 0.82, -0.7],
+          "ease": "easeInOut"
+        },
+        {
+          "t": 5.0,
+          "pos": [0.08, 1.12, 2.55],
+          "lookAt": [0, 0.92, -0.2],
+          "ease": "easeOut"
+        },
+        {
+          "t": 8,
+          "pos": [0.06, 1.22, 1.85],
+          "lookAt": [0, 1.18, 0.5],
+          "ease": "easeInOut"
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "t": 0,
+      "camera": "take1",
+      "note": "Cảnh quay liền 8s, 35mm: cận giày tilt lên toàn thân, bước 1m, dừng khoe ngực và nút, rồi bước qua khe rèm, máy đẩy vào.",
+      "prompt": "Lookbook thời trang, generic stock, một cảnh quay liền.\nFictional AI fashion model, not a real person, not a celebrity.\nCùng một [Model] như mọi video lookbook này: mặt oval, da sáng hồng hào, tóc đen dài sóng ngôi giữa phủ vai, lông mày đậm, mắt hạnh nhân, môi đầy. Không thay mặt khác.\n[Model] mặc đúng áo bà ba hoa ombre cam-xanh và quần ống rộng trắng, giày cao gót mũi nhọn bạc. Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo này. Không túi, không nón, không đầm, không quạt.\nKhí chất: thanh lịch, điềm đạm, kiêu hãnh kín đáo, dịu dàng mà có nội tâm. Ảnh chân dung thời trang chân thực như phim điện ảnh, sang trọng, quý phái.\nHành động: bước chậm trên sàn gỗ bóng; máy bắt đầu từ giày rồi tilt lên toàn thân; đi khoảng 1m về phía máy, dừng, hai tay đặt nhẹ bên eo, khoe cổ tim và hàng nút; rồi bước qua khe rèm voan trắng, một tay vén rèm. Ánh mắt có hồn, có catchlight, khoé môi cong rất nhẹ, môi khép, không cười rộng, không lộ răng.\nDáng: vai mở, cằm hơi nâng, cổ dài, lưng thẳng thả lỏng, bàn tay tự nhiên, năm ngón rõ.\nÁnh sáng ấm trong nhà, xiên mềm, nền có chiều sâu, da thật.\nCamera: 35mm, tilt từ chân lên, giữ toàn thân lúc đi, rồi đẩy chậm vào nửa người."
+    }
+  ],
+  "flow": {
+    "character": "refs/ba-ba-hoa-phong-model.jpg",
+    "characterPrompt": "[Model]: người mẫu thời trang hư cấu do AI, fictional stock model, not a real person, not a celebrity. Cùng một người ở mọi video lookbook này: mặt oval, da sáng hồng hào tự nhiên, tóc đen dài sóng ngôi giữa phủ vai, lông mày đậm, mắt hạnh nhân, môi đầy, trang điểm nhẹ. Khí chất: thanh lịch, điềm đạm, kiêu hãnh kín đáo, dịu dàng mà có nội tâm. Ánh mắt có hồn, có catchlight, nhìn hơi trầm, khoé môi cong rất nhẹ, môi khép, không cười rộng, không lộ răng. Mặc áo bà ba cách tân cổ tim tay dài chiết eo, ombre cam san hô xuống xanh ngọc, hoa mẫu đơn hồng tím, nút ngọc trai, tà xẻ nhẹ; quần ống rộng trắng; giày cao gót mũi nhọn bạc. Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo này. Không túi, không nón, không quạt.",
+    "common": [
+      "Fictional stock character only; not a real person, not a celebrity.",
+      "Cùng một [Model] ở mọi clip và mọi video lookbook: cùng khuôn mặt, tóc, trang điểm. Không thay người mẫu khác.",
+      "Giữ nguyên 100% hoa văn, màu và kiểu dáng của chiếc áo bà ba hoa ombre; giữ nguyên quần ống rộng trắng. Không ám màu, không cháy sáng.",
+      "Khí chất quý phái thanh nhã: biểu cảm tiết chế, không cười rộng, không lộ răng. Dáng vững thả lỏng, cổ dài, lưng thẳng, bàn tay tự nhiên.",
+      "Ánh sáng mềm có hướng, xiên từ một bên, khối sáng tối nhẹ trên mặt và cổ. Nền có chiều sâu, da thật, không mịn da quá mức.",
+      "Không nón lá, không túi, không đầm, không quạt, không trang sức rối.",
+      "Setting: warm wooden interior, table lamp, pink blossom branches, white voile curtains, glossy wood floor."
+    ],
+    "model": "Omni Flash",
+    "resolution": 720
+  }
+}

@@ -36,7 +36,7 @@ Giá vốn: áo 60.000đ, quần 60.000đ (bộ = 120.000đ).
 | Bộ bà ba quần ống suông | 49919068022 | 191.000đ | 42.300đ (22%) | 4,5 | 6 |
 | Áo màu xanh ngọc | 47769160030 | 115.000đ | 37.750đ (33%) | 3,0 | 5-6 |
 | Áo màu vàng | 50119136248 | 115.000đ | 37.750đ (33%) | 3,0 | 5-6 |
-| Áo chủ lực | 55269058428 | 97.500đ | 22.900đ (23,5%) | 4,3 | 4,9 hiện tại, nâng khi tăng giá |
+| Áo chủ lực | 55269058428 | 95.000 - 115.000đ theo phân loại, trung bình thực tế 99.444đ (13-19/10) | 24.500đ trung bình (95k: 20.750đ, 105k: 29.250đ, 115k: 37.750đ) | 4,1 trung bình (95k: 4,6, 105k: 3,6, 115k: 3,0) | 5 (đang đặt 4,9, biên mỏng) |
 | Áo màu tím | 54219136247 | chưa rõ | chưa tính | chưa tính | chưa đặt |
 | Áo màu đỏ | 44569165081 | chưa rõ | chưa tính | chưa tính | chưa đặt |
 | 3 listing "Thảo Ngọc" | 41635229400, 41635245403, 44235233814 | chưa rõ | chưa tính | chưa tính | chưa đặt |
@@ -70,6 +70,39 @@ Chiến dịch 1: chi 7.517đ, chưa có doanh số (ảnh chụp giao diện ng
 
 Cách xử lý: chưa kết luận gì, dữ liệu quá ít. Đánh giá lại sau 48 giờ, vào 21/10.
 Nếu chiến dịch 2 vẫn dưới khoảng 100 hiển thị mỗi ngày, hạ ROAS từ 6,0 xuống 5,0-5,5 rồi để chạy đủ 7 ngày.
+
+### Cập nhật 20/10/2026 11:24 (số liệu cả ngày 19/10)
+
+| Chỉ số 19/10 | Giá trị |
+|---|---|
+| Hiển thị / Nhấp / Truy cập | 4.954 / 91 / 68 |
+| CTR chung | 1,84% |
+| Đơn đặt | 1 đơn, 115.000đ (áo 55269058428, lúc 17h) |
+| Chi phí ads | 70.099đ (ROAS tùy chỉnh 64.640, tự động 4.041, Product Ads shop 1.418) |
+| ROAS theo đơn đặt | 1,64 |
+| Lợi nhuận ước tính (lãi 37.750 trừ ads) | khoảng -32.000đ |
+
+Chiến dịch nhóm đã phân phối bình thường (khoảng 3.900 hiển thị ads cho nhóm ROAS tùy chỉnh), nên lo ngại "gần như chưa phân phối" ở bản 09h04 không còn.
+Một ngày 1 đơn, 68 lượt truy cập, chưa đủ để kết luận tỉ lệ chuyển đổi hay ROAS từng chiến dịch.
+Đánh giá lại vào 21/10 như đã hẹn, nhìn cả 3 ngày 19-21/10.
+
+### Cập nhật 20/10/2026 (báo cáo sản phẩm 13-19/10, file parentskudetail)
+
+Tổng 13-19/10: 14 đơn, 1.699.000đ (khớp nhật ký).
+
+| Sản phẩm | Doanh số | Hiển thị | Nhấp | CTR | Truy cập | Đơn | Chuyển đổi | Thoát trang |
+|---|---|---|---|---|---|---|---|---|
+| Áo chủ lực 55269058428 | 895.000 | 9.246 | 304 | 3,29% | 166 | 9 | 5,4% | 11,5% |
+| Bộ bà ba 49919068022 | 574.000 | 6.320 | 93 | 1,47% | 51 | 3 | 5,9% | 23,5% |
+| Áo xanh ngọc 47769160030 | 115.000 | 3.386 | 83 | 2,45% | 46 | 1 | 2,2% | 28,3% |
+| Áo vàng 50119136248 | 115.000 | 3.055 | 67 | 2,19% | 30 | 1 | 3,3% | 13,3% |
+| Áo tím 54219136247 | 0 | 2.944 | 52 | 1,77% | 34 | 0 | 0% | 26,5% |
+| Áo đỏ 44569165081 | 0 | 2.402 | 36 | 1,50% | 22 | 0 | 0% | 40,9% |
+
+Áo chủ lực chiếm 53% doanh số.
+8 trên 14 đơn là size 4-5 (63-85kg).
+Áo chủ lực bán tốt nhất ở màu tím (4 trên 9 đơn), màu đỏ 0 đơn.
+Áo chủ lực có 26 lượt thêm giỏ nhưng chỉ 9 đơn.
 
 ## 4. Quy tắc theo dõi
 
@@ -109,6 +142,7 @@ Nếu chiến dịch 2 vẫn dưới khoảng 100 hiển thị mỗi ngày, hạ
 
 ## 7. Câu hỏi còn mở
 
+- Báo cáo 19/10 ghi bộ bà ba 49919068022 bán 197.000đ, bảng mục 2 ghi 191.000đ. Cần xác nhận giá hiện tại (áo 55269058428 có giá 95.000 - 115.000đ theo phân loại).
 - Ngày 13/10 có 4 đơn từ nguồn "Khác" (380.000đ, chuyển đổi 11,4%). Hôm đó đã đăng link ở đâu để lặp lại.
 - 5 đơn chưa thanh toán (719.000đ) có phải COD không.
 - Giá vốn đã gồm hộp, túi, tem, công đóng gói chưa. Nếu chưa, cộng khoảng 3.000 - 5.000đ/đơn.

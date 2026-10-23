@@ -57,8 +57,8 @@ export const nodeDefinitions: NodeDefinition[] = [
     dataSchema: AssetNodeDataSchema,
     defaultData: () =>
       AssetNodeDataSchema.parse({
-        assetLabel: 'Character',
-        kind: defaultKindForLabel('Character'),
+        assetLabel: 'Model',
+        kind: defaultKindForLabel('Model'),
       }),
     getPorts: (data) => ({
       inputs: [],

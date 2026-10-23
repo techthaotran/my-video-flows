@@ -158,6 +158,8 @@ export class Stage {
       const entry = manifest.models.find((m) => m.id === actor.model);
       if (!entry) continue;
       const rig = await this.buildRig(actor, entry, loader, baseUrl);
+      const start = actorStateAt(actor, 0);
+      this.applyClip(rig, start.clip ?? 'idle', 0);
       if (actor.label) {
         const top = new THREE.Box3().setFromObject(rig.root).max.y;
         rig.root.add(this.buildLabel(actor.label, top));
@@ -543,16 +545,34 @@ export class Stage {
       const legR = limb(0.14, 0.85, 0.11, 0.85);
       root.add(torso, head, armL, armR, legL, legR);
       rig.pose = (clip, t) => {
+        const sitting = clip === 'sit';
+        const drop = sitting ? 0.65 * k : 0;
         const freq = clip === 'run' ? 3.2 : 1.8;
-        const amp = clip === 'run' ? 0.9 : clip === 'walk' ? 0.55 : 0;
+        const amp = sitting ? 0 : clip === 'run' ? 0.9 : clip === 'walk' ? 0.55 : 0;
         const s = Math.sin(t * Math.PI * 2 * freq) * amp;
-        legL.rotation.x = s;
-        legR.rotation.x = -s;
-        armL.rotation.x = -s * 0.8;
-        armR.rotation.x = s * 0.8;
-        armR.rotation.z = 0;
+        const bob =
+          sitting || clip === 'idle'
+            ? Math.sin(t * 2) * 0.004
+            : Math.abs(Math.sin(t * Math.PI * 2 * freq)) * 0.03 * k;
+        torso.position.y = 1.15 * k - drop + bob;
+        head.position.y = 1.62 * k - drop;
+        armL.position.y = 1.42 * k - drop;
+        armR.position.y = 1.42 * k - drop;
+        legL.position.y = 0.85 * k - drop;
+        legR.position.y = 0.85 * k - drop;
+        if (sitting) {
+          // Ngồi nhìn +Z: đùi gập về -Z (vào lòng thuyền / ghế), không đâm về phía máy.
+          legL.rotation.set(-Math.PI * 0.5, 0, 0);
+          legR.rotation.set(-Math.PI * 0.5, 0, 0);
+          armL.rotation.set(Math.PI * 0.18, 0, Math.PI * 0.16);
+          armR.rotation.set(-Math.PI * 0.72, 0, -Math.PI * 0.22);
+          return;
+        }
+        legL.rotation.set(s, 0, 0);
+        legR.rotation.set(-s, 0, 0);
+        armL.rotation.set(-s * 0.8, 0, 0);
+        armR.rotation.set(s * 0.8, 0, 0);
         if (clip === 'wave') armR.rotation.set(0, 0, Math.PI * 0.85 + Math.sin(t * 9) * 0.3);
-        torso.position.y = 1.15 * k + (clip === 'idle' ? Math.sin(t * 2) * 0.004 : Math.abs(Math.sin(t * Math.PI * 2 * freq)) * 0.03 * k);
       };
     } else {
       const [sx, sy, sz] = fb.size;

@@ -1,6 +1,6 @@
 /**
  * Dựng workflow Google Flow (định dạng import .xflow.zip của extension) từ một cảnh Studio 3D:
- * một Asset Character (ảnh người mẫu đóng gói kèm), mỗi shot một nhánh Prompt -> Generate Video,
+ * một Asset Model (ảnh người mẫu đóng gói kèm), mỗi shot một nhánh Prompt -> Generate Video,
  * ghép bằng Merge Video rồi Auto Download.
  * Có previz (video mô hình trắng cắt theo shot) thì mỗi clip thêm Asset `Video reference` nối thẳng vào
  * Generate Video: Omni chỉnh sửa video theo chuyển động và góc máy của previz.
@@ -9,6 +9,7 @@
 
 import {
   ASPECT_RATIOS,
+  AUDIO_ASSET_LABEL,
   FORMAT_VERSION,
   SCHEMA_VERSION,
   VIDEO_DURATIONS,
@@ -38,6 +39,15 @@ export interface FlowPrevizClip {
   originalName: string;
 }
 
+/** Nhạc nền đã đọc từ đĩa (mp3/m4a/wav) */
+export interface FlowAudio {
+  sha256: string;
+  mime: string;
+  size: number;
+  originalName: string;
+  ext: string;
+}
+
 export interface FlowPackage {
   manifest: ExportManifest;
   workflow: Workflow;
@@ -45,6 +55,8 @@ export interface FlowPackage {
   imagePath: string;
   /** Đường dẫn từng clip previz trong zip, theo thứ tự shot (rỗng khi không có previz) */
   previzPaths: string[];
+  /** Đường dẫn nhạc nền trong zip, nếu có */
+  audioPath?: string;
 }
 
 /** Nhãn asset của clip previz; Omni chỉ nhận video tham chiếu qua chỉnh sửa video (tối đa 10s). */
@@ -53,11 +65,11 @@ const PREVIZ_TAG = `[${PREVIZ_LABEL}]`;
 /** Dòng dẫn đầu prompt khi clip có previz: chỉ rõ video là tham chiếu chuyển động, không phải hình. */
 const PREVIZ_LEAD = [
   `Dùng ${PREVIZ_TAG} (mô hình trắng dựng 3D) làm tham chiếu chuyển động và góc máy: giữ đúng đường đi, tư thế, nhịp bước, vị trí và chuyển động máy quay, khung hình theo từng giây.`,
-  'Thay ma-nơ-canh bằng [Character] thật, thay các khối xám bằng bối cảnh thật. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
+  'Thay ma-nơ-canh bằng [Model] (người mẫu hư cấu do AI, fictional stock model, không phải người thật, không giống người nổi tiếng). Thay các khối xám bằng bối cảnh photoreal. Không giữ màu xanh, khối trơn hay bất kỳ dấu vết mô hình 3D nào.',
   '',
 ];
 
-const CHARACTER_TAG = '[Character]';
+const MODEL_TAG = '[Model]';
 /** Shot dài hơn thời lượng chọn được ít hơn mức này thì vẫn chấp nhận (sai số làm tròn) */
 const DURATION_TOLERANCE = 0.05;
 const APP_VERSION = '0.1.0';
@@ -70,8 +82,8 @@ export function flowProblems(scene: SceneDef, opts: { previz?: boolean } = {}): 
   if (opts.previz && !isOmniFlashModel(scene.flow.model)) {
     problems.push(`flow.model là "${scene.flow.model}": chỉ Omni Flash nhận video previz làm tham chiếu`);
   }
-  if (!scene.flow.characterPrompt.includes(CHARACTER_TAG)) {
-    problems.push(`flow.characterPrompt phải có ${CHARACTER_TAG} để neo ảnh người mẫu`);
+  if (!scene.flow.characterPrompt.includes(MODEL_TAG)) {
+    problems.push(`flow.characterPrompt phải có ${MODEL_TAG} để neo ảnh người mẫu`);
   }
   if (scene.shots.length === 0) problems.push('Cảnh chưa có shots: mỗi shot là một clip Flow');
   scene.shots.forEach((shot, i) => {
@@ -130,6 +142,7 @@ export function buildFlowPackage(
   image: FlowImage,
   now: number,
   previz: FlowPrevizClip[] = [],
+  audio?: FlowAudio,
 ): FlowPackage {
   const withPreviz = previz.length > 0;
   // Mỗi clip có thêm node previz dưới Prompt nên hàng cao hơn.
@@ -158,7 +171,9 @@ export function buildFlowPackage(
           withPreviz
             ? 'Ảnh người mẫu và clip previz từng shot đã có sẵn: Omni theo chuyển động, góc máy của previz. Bấm Generate trên từng clip, ưng hết thì bấm Ghép video.'
             : 'Ảnh người mẫu đã có sẵn. Bấm Generate trên từng clip, ưng hết thì bấm Ghép video (không tốn thêm lượt Flow).',
-          'Chữ trên màn hình thêm trong CapCut. Lời thoại: thêm Asset Audio voice (mp3) nối vào node ghép.',
+          audio
+            ? 'Nhạc nền đã tách từ video gốc và nối vào node ghép (thay tiếng của clip). Chữ trên màn hình thêm trong CapCut.'
+            : 'Chữ trên màn hình thêm trong CapCut. Lời thoại: thêm Asset Audio voice (mp3) nối vào node ghép.',
         ].join('\n'),
       },
     },
@@ -170,7 +185,7 @@ export function buildFlowPackage(
       position: { x: 40, y: LAYOUT.top + ((spans.length - 1) * row) / 2 },
       data: {
         kind: 'image',
-        assetLabel: 'Character',
+        assetLabel: 'Model',
         slug: 'character',
         source: 'local',
         sha256: image.sha256,
@@ -268,6 +283,33 @@ export function buildFlowPackage(
     },
   );
   edges.push({ id: 'e-download', source: 'merge', sourceHandle: 'out:video', target: 'download', targetHandle: 'in:any', type: 'video' });
+  const audioPath = audio ? `assets/${audio.sha256}${audio.ext}` : undefined;
+  if (audio && audioPath) {
+    nodes.push({
+      id: 'asset-audio',
+      type: 'asset',
+      slug: 'nhac',
+      label: 'Nhạc nền',
+      position: { x: LAYOUT.merge, y: middle + 220 },
+      data: {
+        kind: 'audio',
+        assetLabel: AUDIO_ASSET_LABEL,
+        slug: 'nhac',
+        source: 'local',
+        sha256: audio.sha256,
+        mime: audio.mime,
+        originalName: audio.originalName,
+      },
+    });
+    edges.push({
+      id: 'e-audio-merge',
+      source: 'asset-audio',
+      sourceHandle: 'out:audio',
+      target: 'merge',
+      targetHandle: 'in:audio',
+      type: 'audio',
+    });
+  }
 
   const workflow: Workflow = {
     id,
@@ -301,8 +343,11 @@ export function buildFlowPackage(
         path: previzPaths[i],
         originalName: clip.originalName,
       })),
+      ...(audio && audioPath
+        ? [{ sha256: audio.sha256, mime: audio.mime, size: audio.size, path: audioPath, originalName: audio.originalName }]
+        : []),
     ],
     includes: { assets: true, outputs: false, runs: false },
   };
-  return { manifest, workflow, imagePath, previzPaths };
+  return { manifest, workflow, imagePath, previzPaths, audioPath };
 }

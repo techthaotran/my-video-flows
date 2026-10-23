@@ -68,7 +68,7 @@ describe('editVideoRequest (jIps6)', () => {
   it('lists anchored images in item[8] in prompt order, after the video slot', () => {
     const parts: PromptPart[] = [
       { type: 'text', text: 'Thay ma-nơ-canh bằng ' },
-      { type: 'image', mediaId: IMAGE, name: 'Character' },
+      { type: 'image', mediaId: IMAGE, name: 'Model' },
       { type: 'text', text: ', giữ góc máy' },
     ];
     const inner = decodeFreqInner(
@@ -107,7 +107,7 @@ describe('editVideoRequest (jIps6)', () => {
 describe('describeSubmit jIps6', () => {
   const parts: PromptPart[] = [
     { type: 'text', text: 'Thay bằng ' },
-    { type: 'image', mediaId: IMAGE, name: 'Character' },
+    { type: 'image', mediaId: IMAGE, name: 'Model' },
   ];
 
   it('puts the input video and image refs on the wire with nothing missing', () => {
@@ -115,10 +115,10 @@ describe('describeSubmit jIps6', () => {
     const d = describeSubmit({
       rpcid: RPC_GEN_VIDEO_EDIT,
       freq,
-      prompt: 'Thay bằng [Character]',
+      prompt: 'Thay bằng [Model]',
       refs: [
         { kind: 'video', source: 'upload', mediaId: VIDEO, label: 'Video reference' },
-        { kind: 'image', source: 'flow', mediaId: IMAGE, label: 'Character' },
+        { kind: 'image', source: 'flow', mediaId: IMAGE, label: 'Model' },
       ],
     });
     expect(d.wireMediaIds).toEqual([VIDEO, IMAGE]);

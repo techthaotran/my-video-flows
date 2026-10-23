@@ -18,7 +18,7 @@ export interface NodeOutputValue {
    * only ever referenced by `flowMediaId`; without one it is refused, never uploaded.
    */
   fromFlow?: boolean;
-  /** Asset label ([Character], [Outfit]…) used for placeholder replacement. */
+  /** Asset label ([Model], [Outfit]…) used for placeholder replacement. */
   assetLabel?: string;
   /** Node this value came out of — Merge Video orders its clips by it. */
   sourceNodeId?: string;

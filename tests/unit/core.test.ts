@@ -13,8 +13,8 @@ import {
   extractSlugs,
   buildSlugIndex,
   annotateAssetLabels,
-  ensureCharacterAiOriginNote,
-  CHARACTER_AI_ORIGIN_NOTE,
+  ensureModelAiOriginNote,
+  MODEL_AI_ORIGIN_NOTE,
   stripAssetLegend,
   stripFlowMediaUrls,
   composePrompt,
@@ -193,90 +193,90 @@ describe('resolver', () => {
   });
 
   it('keeps [Label] tags and appends mediaId lines for linked Flow assets', () => {
-    const out = annotateAssetLabels('nhân vật [Character] đang mặc một [outfit] ở [Background]', [
-      { label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
+    const out = annotateAssetLabels('nhân vật [Model] đang mặc một [outfit] ở [Background]', [
+      { label: 'Model', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
       { label: 'Outfit', kind: 'image', flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
       { label: 'Background', kind: 'image' },
     ]);
     expect(out).toBe(
-      'nhân vật [Character] đang mặc một [outfit] ở [Background]\n\n' +
+      'nhân vật [Model] đang mặc một [outfit] ở [Background]\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
+        '[Model]: mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
         '[Outfit]: mediaId fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
 
   it('turns [Label]: description into a legend line with Flow mediaId (no CDN URL)', () => {
     const out = annotateAssetLabels(
-      '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng.',
-      [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
+      '[Model]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng.',
+      [{ label: 'Model', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
       'Danh sách tham chiếu\n' +
-        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Model]: Người mẫu nữ Đông Á (20-25 tuổi), gương mặt thanh tú, trang điểm tự nhiên nhẹ nhàng. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
   it('restores wrongly inlined Flow URLs then keeps the description with mediaId', () => {
     const out = annotateAssetLabels(
       'https://flow-content.google/image/6fc34631-b4e9-4304-a555-cac7a03fd65c: Người mẫu nữ Đông Á (20-25 tuổi).',
-      [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
+      [{ label: 'Model', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
       'Danh sách tham chiếu\n' +
-        '[Character]: Người mẫu nữ Đông Á (20-25 tuổi). · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Model]: Người mẫu nữ Đông Á (20-25 tuổi). · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
   it('keeps narrative tags and moves definitions into the reference list with mediaId', () => {
     const out = annotateAssetLabels(
-      '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á.\n\n' +
-        'Shot of [Character] smiling.',
-      [{ label: 'Character', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
+      '[Model]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á.\n\n' +
+        'Shot of [Model] smiling.',
+      [{ label: 'Model', kind: 'image', flowMediaId: '6fc34631-b4e9-4304-a555-cac7a03fd65c' }],
     );
     expect(out).toBe(
-      'Shot of [Character] smiling.\n\n' +
+      'Shot of [Model] smiling.\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
+        '[Model]: Giới tính & độ tuổi: Nữ, phong cách trẻ trung Đông Á. · mediaId 6fc34631-b4e9-4304-a555-cac7a03fd65c',
     );
   });
 
   it('strips a previous reference legend before re-annotating', () => {
     const once = annotateAssetLabels(
-      '[Character]: Cô gái Đông Á.\n\n[Character] waves',
-      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+      '[Model]: Cô gái Đông Á.\n\n[Model] waves',
+      [{ label: 'Model', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
     );
     const again = annotateAssetLabels(once, [
-      { label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
+      { label: 'Model', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
       { label: 'Outfit', kind: 'image', flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
     ]);
-    expect(stripAssetLegend(once)).toBe('[Character] waves\n\n[Character]: Cô gái Đông Á.');
+    expect(stripAssetLegend(once)).toBe('[Model] waves\n\n[Model]: Cô gái Đông Á.');
     expect(again).toBe(
-      '[Character] waves\n\n' +
+      '[Model] waves\n\n' +
         'Danh sách tham chiếu\n' +
-        '[Character]: Cô gái Đông Á. · mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
+        '[Model]: Cô gái Đông Á. · mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427\n\n' +
         '[Outfit]: mediaId fcf16651-14f3-4335-9557-0a808bd11946',
     );
   });
 
-  it('ensureCharacterAiOriginNote marks Character media as AI text-only on submit', () => {
+  it('ensureModelAiOriginNote marks Model media as AI text-only on submit', () => {
     const refs = [
-      { label: 'Character', kind: 'image' as const, flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
+      { label: 'Model', kind: 'image' as const, flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' },
       { label: 'Outfit', kind: 'image' as const, flowMediaId: 'fcf16651-14f3-4335-9557-0a808bd11946' },
     ];
-    const annotated = annotateAssetLabels('[Character] walks', refs);
-    const forSubmit = ensureCharacterAiOriginNote(annotated, refs);
+    const annotated = annotateAssetLabels('[Model] walks', refs);
+    const forSubmit = ensureModelAiOriginNote(annotated, refs);
     expect(forSubmit).toContain(
-      `[Character]: ${CHARACTER_AI_ORIGIN_NOTE}. mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427`,
+      `[Model]: ${MODEL_AI_ORIGIN_NOTE}. mediaId 5ef8278f-a08d-4b30-a45c-bdd946b37427`,
     );
-    expect(ensureCharacterAiOriginNote(forSubmit, refs)).toBe(forSubmit);
-    expect(ensureCharacterAiOriginNote(annotated, [refs[1]!])).toBe(annotated);
+    expect(ensureModelAiOriginNote(forSubmit, refs)).toBe(forSubmit);
+    expect(ensureModelAiOriginNote(annotated, [refs[1]!])).toBe(annotated);
   });
 
   it('leaves descriptive [Label]: text alone when stripping URL legends', () => {
     const body =
       '[Background]: A cozy aesthetic bedroom with soft warm ambient lighting.\n\n' +
-      '[Character]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427';
+      '[Model]: Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427';
     expect(stripAssetLegend(body)).toBe(
       '[Background]: A cozy aesthetic bedroom with soft warm ambient lighting.',
     );
@@ -285,9 +285,9 @@ describe('resolver', () => {
   it('stripFlowMediaUrls turns matching URLs into [Label] and reports orphans', () => {
     const { text, orphanUrls } = stripFlowMediaUrls(
       `See https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427 and https://flow-content.google/image/99999999-9999-9999-9999-999999999999`,
-      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+      [{ label: 'Model', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
     );
-    expect(text).toContain('[Character]');
+    expect(text).toContain('[Model]');
     expect(orphanUrls).toEqual([
       'https://flow-content.google/image/99999999-9999-9999-9999-999999999999',
     ]);
@@ -296,11 +296,11 @@ describe('resolver', () => {
   it('keeps narrative lines that end with Tham khảo while stripping legend suffixes', () => {
     const { text } = stripFlowMediaUrls(
       'Xin xem phần Tham khảo\n\n' +
-        '[Character]: mô tả. Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
-      [{ label: 'Character', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
+        '[Model]: mô tả. Tham khảo https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
+      [{ label: 'Model', kind: 'image', flowMediaId: '5ef8278f-a08d-4b30-a45c-bdd946b37427' }],
     );
     expect(text).toContain('Xin xem phần Tham khảo');
-    expect(text).toContain('[Character]: mô tả.');
+    expect(text).toContain('[Model]: mô tả.');
     expect(text).not.toContain('flow-content.google');
   });
 
@@ -312,19 +312,19 @@ describe('resolver', () => {
 describe('assertGeminiPromptPreserved', () => {
   it('rejects output that drops input labels or adds Flow URLs', () => {
     expect(() =>
-      assertGeminiPromptPreserved('[Character] walks', 'a person walks'),
+      assertGeminiPromptPreserved('[Model] walks', 'a person walks'),
     ).toThrow(/làm mất nhãn/);
     expect(() =>
       assertGeminiPromptPreserved(
-        '[Character] walks',
-        '[Character] at https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
+        '[Model] walks',
+        '[Model] at https://flow-content.google/image/5ef8278f-a08d-4b30-a45c-bdd946b37427',
       ),
     ).toThrow(/link Flow/);
   });
 
   it('accepts output that keeps labels', () => {
     expect(() =>
-      assertGeminiPromptPreserved('[Character] walks', '[Character] walks slowly'),
+      assertGeminiPromptPreserved('[Model] walks', '[Model] walks slowly'),
     ).not.toThrow();
   });
 });

@@ -31,7 +31,7 @@ Riêng bước dựng cảnh 3D từ ảnh: skill `.claude/skills/studio3d-scene
   Nhãn trên đầu nhân vật lọt vào previz thì Omni có thể vẽ lại cả chữ.
 - **Model của khối `flow` phải là Omni Flash** khi có previz: chỉ Omni nhận video tham chiếu (chỉnh sửa video `jIps6` / `abra_edit`).
   Clip ra dài đúng bằng đoạn previz, không theo thời lượng của node.
-- **Ảnh `[Character]` nên là ảnh người mẫu đã qua Flow/AI** (ảnh gen, ảnh lookbook), tránh ảnh người thật có thể nhận diện.
+- **Ảnh `[Model]` nên là ảnh người mẫu đã qua Flow/AI** (ảnh gen, ảnh lookbook), tránh ảnh người thật có thể nhận diện.
   Flow chặn với lỗi lọc người nổi tiếng (`PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`) khi video hoặc ảnh tham chiếu là người thật; previz ma-nơ-canh thì không bị.
 - **Không tự retry khi Flow lỗi**: đọc lỗi trên node, sửa prompt hoặc ảnh rồi mới bấm lại.
   Mỗi clip Omni 720p khoảng 20 credit.
@@ -44,7 +44,7 @@ Riêng bước dựng cảnh 3D từ ảnh: skill `.claude/skills/studio3d-scene
 | Node treo ở bước upload video | Tab Flow mở từ trước bản cập nhật, content script cũ không biết lệnh upload | Extension báo lỗi sau 3 phút; reload tab Flow rồi chạy lại |
 | Chạy nhầm project | Có nhiều tab Flow mở | Chỉ để một tab Flow, đúng project cần dùng |
 | Clip ra ngắn hơn previz | Đoạn previz đếm sai số khung | Đã sửa: extension đọc fps thật của clip (Studio 3D export 30 fps) |
-| "Google Flow từ chối vì… lọc người nổi tiếng" | Video hoặc ảnh tham chiếu là người thật | Dùng previz ma-nơ-canh và ảnh `[Character]` do AI tạo |
+| "Google Flow từ chối vì… lọc người nổi tiếng" | Video hoặc ảnh tham chiếu là người thật | Dùng previz ma-nơ-canh và ảnh `[Model]` do AI tạo |
 
 ## Dùng Studio 3D
 
@@ -75,14 +75,14 @@ Quy ước đặt toạ độ khi dựng từ ảnh: xem skill `studio3d-scene`.
 - `actors[]`: nhân vật hoặc vật thể. `model` là id trong manifest, `label` là nhãn hiện trên đầu.
   `keys[]` là các mốc `{ t, pos, clip?, ease? }`, tăng dần theo `t`.
   Nhân vật tự quay theo hướng đi.
-  `clip` bỏ trống thì tự chọn `walk` khi đang đi, `idle` khi đứng.
+  `clip` bỏ trống thì tự chọn `walk` khi đang đi, `idle` khi đứng; ma-nơ-canh khối còn có `wave` và `sit` (ngồi, chân duỗi trước).
 - `cameras[]`: nhiều góc camera, mỗi góc `{ id, label?, focal?, fov?, keys[] }` với key `{ t, pos, lookAt, focal?, fov?, ease? }`.
   `focal` là tiêu cự tương đương full-frame (mm), ưu tiên hơn `fov`, và được nội suy theo mm.
   Khung dọc (9:16) tính theo cạnh cảm biến 36mm cho khớp cách hiểu tiêu cự của điện thoại.
   `ease` đặt ở key đích, áp cho đoạn đi tới key đó (`linear`, `easeIn`, `easeOut`, `easeInOut`).
   File cũ chỉ có `camera` (một góc) vẫn đọc được, tự thành camera `main`.
 - `shots[]`: danh sách cắt cảnh `{ t, camera, note?, prompt? }`, từ `t` trở đi dùng camera đó.
-  `note` là mô tả ngắn hiện trong mục Kịch bản; `prompt` là diễn biến và máy quay gửi Flow (có `[Character]`).
+  `note` là mô tả ngắn hiện trong mục Kịch bản; `prompt` là diễn biến và máy quay gửi Flow (có `[Model]`).
   Bỏ trống thì dùng camera đầu tiên suốt cảnh.
 - `flow`: thiết lập xuất workflow Flow, xem mục dưới.
 - `notes`: ghi chú chung của cảnh (giả định, số ước lượng), hiện trong mục "Ghi chú cảnh" thu gọn.
@@ -92,7 +92,7 @@ Di chuyển nhân vật hay camera đều là thêm key mới.
 ## Kiểm tra cảnh (`pnpm studio3d:check [file...]`)
 
 Không truyền file thì kiểm mọi file trong `studio3d/scenes/`.
-`LỖI` (thoát mã 1): JSON hỏng, sai schema, id trùng, keys không tăng dần, model/camera không tồn tại, thiếu ảnh reference; có khối `flow` thì thêm thiếu prompt, thiếu `[Character]`, thiếu ảnh người mẫu, shot dài quá 10 giây.
+`LỖI` (thoát mã 1): JSON hỏng, sai schema, id trùng, keys không tăng dần, model/camera không tồn tại, thiếu ảnh reference; có khối `flow` thì thêm thiếu prompt, thiếu `[Model]`, thiếu ảnh người mẫu, shot dài quá 10 giây.
 `CẢNH BÁO`: nhân vật đi xuyên khối cao từ 0,2m trở lên (thảm, bậc thấp được bỏ qua).
 Cuối mỗi file in tóm tắt kích thước bối cảnh để soát tỉ lệ.
 Logic nằm ở `src/studio3d/analysis.ts`.
@@ -129,14 +129,15 @@ Chưa có audio.
 Đóng gói cảnh thành `studio3d/flows/<slug>.xflow.zip` (không commit vì chứa ảnh cá nhân).
 Import trong side panel của extension là có ngay ảnh người mẫu, previz từng clip, prompt và các node nối sẵn, chỉ còn bấm Generate.
 
-- Cảnh cần khối `flow`: `character` (ảnh người mẫu dưới `studio3d/public/`), `characterPrompt` (bắt đầu bằng `[Character]:`), `common` (các dòng chung: giữ trang phục, bối cảnh, ánh sáng), `model` (mặc định Omni Flash), `resolution`.
-- Mỗi shot là một clip Flow và cần `prompt` (diễn biến + máy quay, có `[Character]`).
+- Cảnh cần khối `flow`: `character` (ảnh người mẫu dưới `studio3d/public/`), `characterPrompt` (bắt đầu bằng `[Model]:`), `common` (các dòng chung: giữ trang phục, bối cảnh, ánh sáng), `model` (mặc định Omni Flash), `resolution`.
+- Mỗi shot là một clip Flow và cần `prompt` (diễn biến + máy quay, có `[Model]`).
   Shot dài quá 10 giây bị báo lỗi.
 - `--previz <mp4>`: file export "Theo shots" của cả cảnh.
   Script kiểm độ dài khớp cảnh (lệch tối đa 0,15 giây), cắt từng shot bằng `ffmpeg` (encode lại để cắt đúng khung, bỏ tiếng) rồi gắn mỗi đoạn làm Asset `Video reference` nối thẳng vào Generate Video của clip đó.
   Cần `ffmpeg` (`brew install ffmpeg`) và `flow.model` là Omni.
-- Prompt gửi Flow = dòng tiêu đề tự sinh (tỉ lệ, thời lượng) + (có previz: hai dòng dẫn "dùng `[Video reference]` làm tham chiếu chuyển động và góc máy, thay ma-nơ-canh bằng `[Character]`") + `prompt` của shot + `common` + `characterPrompt`.
-- Workflow: Asset Character -> Prompt -> Generate Video cho từng clip (+ Asset previz -> Generate Video), rồi Merge Video -> Auto Download; `retry: 0`.
+- Prompt gửi Flow = dòng tiêu đề tự sinh (tỉ lệ, thời lượng) + (có previz: hai dòng dẫn "dùng `[Video reference]` làm tham chiếu chuyển động và góc máy, thay ma-nơ-canh bằng `[Model]`") + `prompt` của shot + `common` + `characterPrompt`.
+- `--audio <mp3|m4a|wav>`: file nhạc đã tách sẵn. Node ghép tự nạp (Asset Audio voice, thay tiếng clip).
+- Workflow: Asset Model -> Prompt -> Generate Video cho từng clip (+ Asset previz -> Generate Video), rồi Merge Video -> Auto Download; `retry: 0`.
 - Không có previz: bố cục và góc máy chỉ đi qua chữ trong prompt (Omni dùng ảnh tham chiếu `MZZa6b`).
 - Logic ở `src/studio3d/flowWorkflow.ts` (có test import thật qua `parseImportFile`/`commitImport`), cắt previz ở `scripts/studio3d-flow.ts`.
 - Không đặt file workflow trong `studio3d/scenes/`: Studio đọc mọi `*.json` ở đó như file cảnh.

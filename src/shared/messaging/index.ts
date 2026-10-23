@@ -35,6 +35,12 @@ export interface FlowUploadedIds {
   uploadedSha256: string;
 }
 
+/** Patch áp vào node Asset sau khi upload: node thành asset Flow dùng media id vừa upload. */
+export interface FlowUploadedAssetPatch extends FlowUploadedIds {
+  source: 'flow';
+  flowMediaId: string;
+}
+
 export interface RunDoneEvent {
   runId: string;
   /** Optional để tương thích nơi phát cũ. */
@@ -156,7 +162,7 @@ export interface FlowMediaItem {
 
 export interface FlowGenerateRef {
   kind: 'image' | 'video' | 'audio';
-  /** Label asset ([Character]…) — giữ trong prompt; media id đi qua slot RPC. */
+  /** Label asset ([Model]…) — giữ trong prompt; media id đi qua slot RPC. */
   label?: string;
   /** Media đã có trên Flow: dùng thẳng, không upload. */
   mediaId?: string;

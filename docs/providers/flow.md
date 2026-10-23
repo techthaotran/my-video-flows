@@ -24,6 +24,7 @@
 | Captcha | MAIN-world `grecaptcha.enterprise` (`IMAGE_GENERATION` / `VIDEO_GENERATION`). Trang Flow ghi đè `execute` thành action `extension_hijack_detected`; mint phải giữ action thật, không thì submit trả `PUBLIC_ERROR_UNUSUAL_ACTIVITY`. |
 | POST | `chrome.scripting.executeScript({ world: 'MAIN' })` → `/_/AiSandboxAngularFrontend/data/batchexecute` với cookie + `at` (`WIZ_global_data.SNlM0e`) |
 | Image | upload refs local nếu có (`maseQ`) → `ogiZ0b` → URL inline → base64. Asset Flow **không** upload lại |
+| Upload ảnh local | JPEG/PNG ≤ 1,2MB và cạnh ≤ 1536px gửi nguyên file gốc; ảnh lớn hơn hoặc định dạng khác mới vẽ lại thành JPEG (`canUploadOriginal`). Upload xong node Asset ảnh thành asset Flow trên id đó (`source: flow`, `flowMediaId` = `uploadedMediaId`), vẫn giữ file local để xem trước, gửi Gemini và đóng gói khi xuất; xuất `.xflow` trả node về file local |
 | Video | **Không** tạo ảnh trung gian (`ogiZ0b`). Prompt **không** chứa link CDN. Omni text → `YhhmEf`. Omni + ảnh → `MZZa6b` (ảnh neo trong structured prompt). Veo → đúng 1 start frame → `eb1hJf` → poll… |
 | Text-only video | Omni Flash (`abra_t2v_*`). Veo không có start frame → lỗi (không tự gen ảnh) |
 | Asset Flow | Chỉ `flowMediaId` trong slot RPC / mảnh image. Mất id → `FLOW_ASSET_NO_UPLOAD`, **không bao giờ** `maseQ` |
@@ -91,7 +92,7 @@ Wire (bắt từ UI, chặn trước khi gửi nên không tốn credit; fixture
   App neo mọi ảnh tại `[Label]` (UI có thể gửi ảnh không neo); `[Video reference]` thay bằng chữ vì video không phải mảnh ảnh.
 - Độ dài clip ra theo đoạn video (UI: "Length based on ingredient"), không có thời lượng trong payload.
 - Response / poll giống `MZZa6b` (`readTextVideoSubmit` + `jwpduf`): đã chạy thật qua extension 2026-10-19 (upload → `jIps6` → poll → clip).
-  Video thử quay người thật bị `PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`; previz ma-nơ-canh Studio 3D + `[Character]` ra clip đúng dáng đứng, bước tới và máy đẩy vào.
+  Video thử quay người thật bị `PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`; previz ma-nơ-canh Studio 3D + `[Model]` ra clip đúng dáng đứng, bước tới và máy đẩy vào.
 
 Upload video local (không phải `maseQ`; asset Flow vẫn **không** upload lại) - Scotty resumable cùng origin, chạy trong content script (`rpc/videoUpload.ts`, message `flow.uploadVideo`):
 
@@ -117,7 +118,7 @@ Upload video local (không phải `maseQ`; asset Flow vẫn **không** upload l�
 
 1. Trước mỗi submit: `payload → MZZa6b (abra_r2v_4s) ref 2/2 vào wire, 0 link`.
 2. `wireMediaIds` = `item[1]`; `anchoredMediaIds` = mảnh image trong structured prompt — phải khớp thứ tự.
-3. `prompt` dạng chữ với `⟦ảnh [Character] 5ef8…⟧` tại chỗ neo; `urlsInPrompt` chỉ quét mảnh text.
+3. `prompt` dạng chữ với `⟦ảnh [Model] 5ef8…⟧` tại chỗ neo; `urlsInPrompt` chỉ quét mảnh text.
 4. `missingRefs` hoặc `urlsInPrompt > 0` → warn và **không** submit.
 
 ## DOM / listing (không generate)
@@ -150,15 +151,15 @@ Upload video local (không phải `maseQ`; asset Flow vẫn **không** upload l�
 ## Manual smoke / E2E
 
 1. Mở `https://flow.google.com/project/<uuid>` và đăng nhập.
-2. Nano Banana + Character: log `ogiZ0b`, `urlsInPrompt: 0`, `wireMediaIds` đủ.
+2. Nano Banana + Model: log `ogiZ0b`, `urlsInPrompt: 0`, `wireMediaIds` đủ.
 3. Omni Flash text-only: `YhhmEf`, không ảnh Nano Banana mới.
 4. Video Veo với đúng 1 ảnh start frame (i2v).
-5. Character + Outfit (asset Flow) → Prompt → Omni: `MZZa6b`, `abra_r2v_*`, `item[1]` = 2 id, không `maseQ`, đúng mặt/outfit.
-6. Character + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`.
+5. Model + Outfit (asset Flow) → Prompt → Omni: `MZZa6b`, `abra_r2v_*`, `item[1]` = 2 id, không `maseQ`, đúng mặt/outfit.
+6. Model + Outfit (file local) → Omni: `maseQ` mỗi ảnh 1 lần rồi `MZZa6b`; lần sau node đã thành asset Flow, không `maseQ`.
 7. Omni > `OMNI_MAX_REFS` ảnh / Veo + 2 ảnh / Veo + video / Omni + 2 video / video > 10s: lỗi rõ, không submit.
-8. Scene tiếp (Veo hoặc Omni, + Character/Outfit tùy chọn): `maseQ` frame cuối + `MZZa6b` (`veo_3_1_r2v_*` / `abra_r2v_*`); `item[1]` = frame cuối rồi Character/Outfit/Background. Không `eb1hJf`.
+8. Scene tiếp (Veo hoặc Omni, + Model/Outfit tùy chọn): `maseQ` frame cuối + `MZZa6b` (`veo_3_1_r2v_*` / `abra_r2v_*`); `item[1]` = frame cuối rồi Model/Outfit/Background. Không `eb1hJf`.
 9. Workflow cũ có link trong prompt: link khớp asset → `[Label]`; link lạ → lỗi.
-10. Omni + Video reference (file local ≤ 10s) + Character: `flow.uploadVideo` một lần, chờ `as29s`, rồi `jIps6` (`abra_edit`); `wireMediaIds` = video rồi ảnh; clip ra theo chuyển động/góc máy của video.
+10. Omni + Video reference (file local ≤ 10s) + Model: `flow.uploadVideo` một lần, chờ `as29s`, rồi `jIps6` (`abra_edit`); `wireMediaIds` = video rồi ảnh; clip ra theo chuyển động/góc máy của video.
 
 ### Kiểm chứng live Omni refs (plan 7.2)
 
@@ -168,8 +169,8 @@ Ghi kết quả sau khi chạy trên tài khoản dự án (khoảng 7 credit / 
 |---|---|---|---|
 | L1 | Omni 4s + 1 asset, prompt không mô tả chủ thể | HTTP 200, mặt giống ảnh, `MZZa6b` + `abra_r2v_4s` | _chưa chạy_ |
 | L2 | Như L1 không asset (text) | Nhân vật khác ảnh rõ | _chưa chạy_ |
-| L3 | Character + Outfit | Đúng mặt và outfit | _chưa chạy_ |
-| L4 | Prompt bắt đầu bằng `[Character]` | Nhận hoặc cần text dẫn | _chưa chạy_ |
+| L3 | Model + Outfit | Đúng mặt và outfit | _chưa chạy_ |
+| L4 | Prompt bắt đầu bằng `[Model]` | Nhận hoặc cần text dẫn | _chưa chạy_ |
 | L5 | 7 vs 8 ảnh | 7 chạy, 8 bị app chặn | _chưa chạy_ |
 
 Cập nhật khi wire format đổi; chạy `diagnose()` từ content script (`window.__myXFlowsFlow` trong DEV).

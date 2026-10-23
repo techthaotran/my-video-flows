@@ -436,18 +436,18 @@
       "t": 0,
       "camera": "take1",
       "note": "Cảnh quay liền 8s, 50mm: vén tóc, bước 2-3 bước về phía máy (máy lùi theo), rồi máy đẩy vào nửa người thấy cổ tim và nút ngọc.",
-      "prompt": "Phong cách thời trang thực tế.\nDiễn biến: [Character] đứng trên vỉa hè, vén tóc ra sau tai và mỉm cười nhìn máy; sau đó bước 2-3 bước thong thả về phía máy rồi dừng lại; cuối clip đứng yên, đầu ngón tay chạm nhẹ hàng nút ngọc trên áo.\nMáy quay: ống 50mm, ngang hông. Đầu clip đẩy vào chậm; khi người mẫu bước tới thì máy lùi theo, luôn thấy trọn người; cuối clip máy đẩy vào tới khung từ thắt lưng trở lên, thấy rõ cổ tim, hàng nút ngọc và chấm bi."
+      "prompt": "Phong cách thời trang thực tế.\nDiễn biến: [Model] đứng trên vỉa hè, vén tóc ra sau tai và mỉm cười nhìn máy; sau đó bước 2-3 bước thong thả về phía máy rồi dừng lại; cuối clip đứng yên, đầu ngón tay chạm nhẹ hàng nút ngọc trên áo.\nMáy quay: ống 50mm, ngang hông. Đầu clip đẩy vào chậm; khi người mẫu bước tới thì máy lùi theo, luôn thấy trọn người; cuối clip máy đẩy vào tới khung từ thắt lưng trở lên, thấy rõ cổ tim, hàng nút ngọc và chấm bi."
     },
     {
       "t": 8,
       "camera": "take2",
       "note": "Cảnh quay liền 8s, 35mm: máy vòng sang bên khoe tà áo và quần, lùi ra thấy hiên quán khi người mẫu đi về phía ghế mây, quay lại vẫy tay chào.",
-      "prompt": "Phong cách thời trang thực tế.\nDiễn biến: [Character] đứng nghiêng nhẹ, gió làm tà áo xẻ và ống quần rộng lay động; sau đó đi khoảng một mét về phía dãy ghế mây và bàn tròn, quay lại nhìn máy, cười tươi và vẫy tay chào.\nMáy quay: ống 35mm. Máy đi vòng mượt từ phía trước sang bên phải người mẫu ở ngang hông, rồi lùi ra và nâng lên ngang tầm mắt để thấy cả hiên quán, ghế mây, cây xanh; cuối clip đẩy vào nhẹ về phía người mẫu đang vẫy tay."
+      "prompt": "Phong cách thời trang thực tế.\nDiễn biến: [Model] đứng nghiêng nhẹ, gió làm tà áo xẻ và ống quần rộng lay động; sau đó đi khoảng một mét về phía dãy ghế mây và bàn tròn, quay lại nhìn máy, cười tươi và vẫy tay chào.\nMáy quay: ống 35mm. Máy đi vòng mượt từ phía trước sang bên phải người mẫu ở ngang hông, rồi lùi ra và nâng lên ngang tầm mắt để thấy cả hiên quán, ghế mây, cây xanh; cuối clip đẩy vào nhẹ về phía người mẫu đang vẫy tay."
     }
   ],
   "flow": {
     "character": "refs/cafe-street.jpg",
-    "characterPrompt": "[Character]: Người mẫu nữ trẻ người Việt trong ảnh tham chiếu, tóc đen dài thẳng, trang điểm nhẹ, cười tươi. Mặc áo bà ba cách tân màu hồng chấm bi trắng, cổ tim, tay dài raglan, hàng nút ngọc trai phía trước, chiết eo, xẻ tà hai bên; quần đen ống rộng mềm rủ; giày cao gót quai trong đế gỗ; tay cầm quạt gỗ nhỏ.",
+    "characterPrompt": "[Model]: Người mẫu nữ trẻ người Việt trong ảnh tham chiếu, tóc đen dài thẳng, trang điểm nhẹ, cười tươi. Mặc áo bà ba cách tân màu hồng chấm bi trắng, cổ tim, tay dài raglan, hàng nút ngọc trai phía trước, chiết eo, xẻ tà hai bên; quần đen ống rộng mềm rủ; giày cao gót quai trong đế gỗ; tay cầm quạt gỗ nhỏ.",
     "common": [
       "Giữ nguyên gương mặt, kiểu tóc và từng chi tiết trang phục như ảnh tham chiếu; không thêm, bớt hay đổi màu quần áo và phụ kiện.",
       "Bối cảnh: vỉa hè lát đá trước quán cà phê có ghế mây, bàn tròn mặt đá, mái hiên và cây xanh.",

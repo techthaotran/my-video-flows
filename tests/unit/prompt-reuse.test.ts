@@ -254,7 +254,7 @@ describe('promptExecutor reusePrompt', () => {
           id: 'asset-model',
           type: 'asset' as const,
           position: { x: 0, y: 0 },
-          data: { kind: 'image', assetLabel: 'Character', source: 'flow', flowMediaId: MODEL },
+          data: { kind: 'image', assetLabel: 'Model', source: 'flow', flowMediaId: MODEL },
         },
         {
           id: 'prompt-scene',
@@ -552,7 +552,7 @@ describe('fashion roles through Prompt nodes', () => {
     c.inputs = {
       'in:text': [
         { kind: 'text', role: 'prompt', text: modelJson },
-        flowRef('m-model', 'Character', { fashionRole: 'model' }),
+        flowRef('m-model', 'Model', { fashionRole: 'model' }),
         { kind: 'text', role: 'prompt', text: outfitJson },
         flowRef('m-outfit', 'Outfit', { fashionRole: 'outfit' }),
         { kind: 'text', role: 'prompt', text: sceneJson },
@@ -567,7 +567,7 @@ describe('fashion roles through Prompt nodes', () => {
     ]);
     const text = out.find((v) => v.kind === 'text')!.text!;
     expect(text).toContain('Chỉnh sửa ảnh [Background]');
-    expect(text).toContain('khuôn mặt trong [Character]');
+    expect(text).toContain('khuôn mặt trong [Model]');
     expect(text).toContain('trang phục trong [Outfit]');
   });
 });
@@ -577,7 +577,7 @@ describe('Chỉ node này (reuseSavedPrompt)', () => {
     const callDriver = vi.fn(async () => ({ texts: ['không được gọi'] }));
     const c = ctx(
       { preset: 'fashionModel', formattedOutput: '{"type":"model"}', reuseHash: 'hash-cũ', reusePrompt: true },
-      [{ kind: 'image', role: 'ref', flowMediaId: 'ảnh-mới', assetLabel: 'Character' }],
+      [{ kind: 'image', role: 'ref', flowMediaId: 'ảnh-mới', assetLabel: 'Model' }],
       callDriver,
     );
     c.reuseSavedPrompt = true;

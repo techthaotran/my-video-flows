@@ -11,6 +11,7 @@ import { promptSystem } from '@/engine/presets/system';
 import { annotateAssetLabels, composePrompt, extractLabels, resolveTemplate, type AssetRef } from '@/engine/resolver';
 import type { FlowGenerateRef } from '@/shared/messaging';
 import { parseFlowMediaUrl } from '@/providers/flow/media';
+import { uploadedFlowAssetPatch } from '@/shared/media';
 import { strings } from '@/shared/strings';
 import { blobToBase64, hashBlobContent, extractJsonPayload } from '@/shared/utils';
 import { orderedClipIds } from '@/media/layout';
@@ -168,9 +169,18 @@ export const assetExecutor: NodeExecutor = async (ctx) => {
   const label = data.assetLabel;
 
   if (data.flowMediaId) {
-    return [
-      { kind: data.kind ?? 'image', flowMediaId: data.flowMediaId, assetLabel: label, name: label, fromAsset: true, fromFlow: true },
-    ];
+    const flowRef: NodeOutputValue = {
+      kind: data.kind ?? 'image',
+      flowMediaId: data.flowMediaId,
+      assetLabel: label,
+      name: label,
+      fromAsset: true,
+      fromFlow: true,
+    };
+    // Asset Flow từ file local đã upload: Flow nhận media id, Gemini đọc thẳng file gốc.
+    const localBlob = data.assetId && !data.missing ? await ctx.getAsset(data.assetId) : undefined;
+    if (!localBlob) return [flowRef];
+    return [{ ...flowRef, blob: localBlob, mime: localBlob.type, localAssetId: data.assetId }];
   }
   if (data.source === 'flow') {
     throw fail(
@@ -439,17 +449,19 @@ async function toFlowRef(ctx: ExecutorContext, ref: NodeOutputValue): Promise<Fl
   };
 }
 
-/** Persist new Flow upload ids onto the Asset nodes that produced them. */
+/**
+ * Persist new Flow upload ids onto the Asset nodes that produced them. An uploaded image
+ * becomes a Flow asset on that media id; other media only remember the upload.
+ */
 async function persistFlowUploads(
   ctx: ExecutorContext,
   uploads: NonNullable<Awaited<ReturnType<ExecutorContext['callDriver']>>['uploads']>,
 ): Promise<void> {
   for (const u of uploads) {
-    await ctx.patchNodeById(u.nodeId, {
-      uploadedMediaId: u.mediaId,
-      uploadedProjectId: u.projectId,
-      uploadedSha256: u.sha256,
-    });
+    const ids = { uploadedMediaId: u.mediaId, uploadedProjectId: u.projectId, uploadedSha256: u.sha256 };
+    const node = ctx.workflow.nodes.find((n) => n.id === u.nodeId);
+    const isImage = node?.type === 'asset' && ((node.data as AssetData).kind ?? 'image') === 'image';
+    await ctx.patchNodeById(u.nodeId, isImage ? uploadedFlowAssetPatch(ids) : ids);
   }
 }
 

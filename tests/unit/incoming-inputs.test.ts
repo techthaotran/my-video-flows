@@ -64,7 +64,7 @@ describe('Prompt preview with Gemini presets', () => {
     const nodes = [
       flowNode('a', 'asset', { assetLabel: 'Background', flowMediaId: 'm-scene', kind: 'image' }),
       flowNode('s', 'prompt', { preset: 'fashionScene', formattedOutput: scene, forwardRefs: false }),
-      flowNode('b', 'asset', { assetLabel: 'Character', flowMediaId: 'm-model', kind: 'image' }),
+      flowNode('b', 'asset', { assetLabel: 'Model', flowMediaId: 'm-model', kind: 'image' }),
       flowNode('m', 'prompt', { preset: 'fashionModel', formattedOutput: model }),
       flowNode('c', 'prompt', { preset: 'fashionCompose' }),
     ];

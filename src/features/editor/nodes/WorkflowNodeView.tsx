@@ -14,7 +14,7 @@ import {
   type AssetLabel,
 } from '@/shared/schema';
 import { assetRepo } from '@/storage/repos/assetRepo';
-import { MEDIA_ACCEPT, localAssetPatch, mediaKindOf } from '@/shared/media';
+import { MEDIA_ACCEPT, isUploadedLocalAsset, localAssetPatch, mediaKindOf } from '@/shared/media';
 import { workflowRepo } from '@/storage/repos/workflowRepo';
 import { ImagePlus, Clapperboard, Square, Copy, Check } from 'lucide-react';
 import { FlowAssetPicker } from '@/features/editor/FlowAssetPicker';
@@ -26,7 +26,7 @@ import {
   type IncomingItem,
 } from '@/features/editor/incomingInputs';
 import { ReferencedAssetsStrip } from '@/features/editor/IncomingAssets';
-import { sendToSw } from '@/shared/messaging';
+import { sendToSw, type FlowUploadedAssetPatch } from '@/shared/messaging';
 import { GenerateMediaStage, NodeVideoPlayer } from '@/features/editor/nodes/MediaPreview';
 import { MergeVideoBody } from '@/features/editor/nodes/MergeVideoBody';
 import { useMediaDuration, useNodeOutputUrl } from '@/features/editor/nodes/useMediaUrl';
@@ -167,7 +167,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
             className={NODE_TEXTAREA_CLASS}
             value={(data.data.content as string) ?? ''}
             onChange={(e) => updateNodeData(id, { content: e.target.value })}
-            placeholder="Nội dung… hỗ trợ [Character], @slug"
+            placeholder="Nội dung… hỗ trợ [Model], @slug"
           />
         )}
         {data.nodeType === 'prompt' && (
@@ -410,7 +410,7 @@ function PromptBody({
         className={NODE_TEXTAREA_CLASS}
         value={instruction}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="vd: [Character] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
+        placeholder="vd: [Model] mặc [Outfit] đi bộ… - giữ [Label], mô tả ở khối tham chiếu"
       />
       {unresolved.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -451,7 +451,7 @@ function AssetBody({
   data: Record<string, unknown>;
   onChange: (d: Record<string, unknown>) => void;
 }) {
-  const label = (data.assetLabel as AssetLabel) || 'Character';
+  const label = (data.assetLabel as AssetLabel) || 'Model';
   const kind = (data.kind as 'image' | 'video' | 'audio') || defaultKindForLabel(label);
   const flowMediaId = data.flowMediaId as string | undefined;
   const [localUrl, setLocalUrl] = useState<string | null>(null);
@@ -464,7 +464,8 @@ function AssetBody({
     let revoked: string | null = null;
     void (async () => {
       const assetId = data.assetId as string | undefined;
-      if (flowMediaId || !assetId || data.missing) {
+      // Asset Flow từ file local đã upload vẫn còn file gốc - xem trước bằng file đó.
+      if (!assetId || data.missing) {
         setLocalUrl(null);
         return;
       }
@@ -477,7 +478,7 @@ function AssetBody({
     return () => {
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [data.assetId, data.missing, flowMediaId]);
+  }, [data.assetId, data.missing]);
 
   useEffect(() => setPreviewBroken(false), [data.flowPreviewUrl]);
 
@@ -486,10 +487,9 @@ function AssetBody({
     if (data.uploadedMediaId) setUploadStatus('idle');
   }, [data.uploadedMediaId]);
 
+  const fromLocalUpload = isUploadedLocalAsset(data);
   const previewUrl = flowMediaId
-    ? previewBroken
-      ? null
-      : ((data.flowPreviewUrl as string | undefined) ?? null)
+    ? (localUrl ?? (previewBroken ? null : ((data.flowPreviewUrl as string | undefined) ?? null)))
     : localUrl;
   const flowWithoutId = !flowMediaId && data.source === 'flow';
   const hasAsset = !!flowMediaId || (!flowWithoutId && !!data.assetId && !data.missing);
@@ -502,11 +502,7 @@ function AssetBody({
     setUploadError(null);
     // SW đọc node từ IndexedDB - lưu bản đang sửa trước, nếu không nó thấy ảnh cũ/không có ảnh.
     await saveEditorIfDirty();
-    const res = await sendToSw<{
-      uploadedMediaId: string;
-      uploadedProjectId: string;
-      uploadedSha256: string;
-    }>({
+    const res = await sendToSw<FlowUploadedAssetPatch>({
       type: 'asset.uploadToFlow',
       workflowId: wfId,
       nodeId,
@@ -596,7 +592,9 @@ function AssetBody({
 
       {hasAsset && flowMediaId && (
         <div className="truncate text-[11px] text-muted-foreground" title={flowMediaId}>
-          {`Google Flow · ${flowMediaId.slice(0, 8)}${previewBroken ? ' · preview hết hạn' : ''}`}
+          {`Google Flow · ${flowMediaId.slice(0, 8)}${
+            fromLocalUpload ? ` · ${strings.assetUploadedFromLocal}` : previewBroken ? ' · preview hết hạn' : ''
+          }`}
         </div>
       )}
       {hasAsset && !flowMediaId && (
